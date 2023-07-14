@@ -1,34 +1,42 @@
-function [x_list,fval_list,node_list]=girdAdapt1D(fcn,low_bou,up_bou,torl,max_level)
+function [x_list,fval_list,node_list]=girdAdapt1D(fcn,low_bou,up_bou,torl,max_level,fval_num)
+% Binary-tree
 % adapt capture function value
 % ensure error of linear interplation will less than torl
 %
+if nargin < 6
+    fval_num=1;
+end
 
 % node_list which is a matrix store all node
-% a node is a array, contain level, x, fval, node_low_bou_index, node_up_bou_index, left_index, right_index
+% a node is a array, contain level, index_1, index_2, index_c, node_index_1, node_index_2
+% place:
+% 1-c-2
+% cell:
+% 1-2
 % if children node is empty, left_index or right_index will be zero
-node_add_num=50; % node_list will be extend only when node_list is not enough
-node_list=zeros(node_add_num,7);
+list_add_num=50; % node_list will be extend only when node_list is not enough
+node_list=zeros(list_add_num,6,'int64');
 
-% add low_bou data and up_bou data
-% root will start from index 3
-node_list(1,:)=[0,low_bou,fcn(low_bou),0,0,0,0];
-node_list(2,:)=[0,up_bou,fcn(up_bou),0,0,0,0];
+% data_list use to sort all float data include coodinate, function value
+data_list=zeros(list_add_num,fval_num+1);
 
-x=(low_bou+up_bou)/2;
-fval=fcn(x);
-level=0;
-node_list(3,:)=[level,x,fval,1,2,0,0]; % root
+% add vertex of cell into data_list first
+data_list(1,:)=[low_bou,fcn(low_bou)];
+data_list(2,:)=[up_bou,fcn(up_bou)];
 
-node_num=createNodeTree(3); % create node tree from root
+% create base root
+node_list(1,:)=[0,1,2,0,0,0];
+
+node_num=createNodeTree(1,2); % create node tree from root
 node_list=node_list(1:node_num,:);
-[x_list,fval_list]=traversalInorder(3); % from small to large get list
+[x_list,fval_list]=traversalInorder(1); % from small to large get list
 
 % add boundary info
-x_list=[node_list(1,2),x_list,node_list(2,2)];
-fval_list=[node_list(1,3),fval_list,node_list(2,3)];
+x_list=[data_list(1,1),x_list,data_list(2,1)];
+fval_list=[data_list(1,2:end)',fval_list,data_list(2,2:end)'];
 
-    function node_num=createNodeTree(root_idx)
-        %
+    function node_num=createNodeTree(root_idx,data_num)
+        % create node tree from root
         %
         stack=root_idx;
         node_num=root_idx;
@@ -39,52 +47,46 @@ fval_list=[node_list(1,3),fval_list,node_list(2,3)];
             node=node_list(node_idx,:);
             stack=stack(1:end-1);
 
-            % check left
-            x_left=(node_list(node(4),2)+node(2))/2;
-            fval_left=fcn(x_left);
-            fval_left_pred=(node_list(node(4),3)+node(3))/2;
-            if abs(fval_left-fval_left_pred) > torl && node(1) < max_level
-                % create new node
-                node_left_index=node_num+1;
-                node_left=[node(1)+1,x_left,fval_left,node(4),node_idx,0,0];
+            if node(1) < max_level
+                % judge if linear predict if accptable
+                % if not, create children cell
+                %
+                coord_c=(data_list(node(2),1)+data_list(node(3),1))/2;
+                fval_c=fcn(coord_c);
+                fval_c_pred=(data_list(node(2),2:end)+data_list(node(3),2:end))/2;
+                if any(abs(fval_c-fval_c_pred) > torl)
+                    % add 1 new data into data_list
+                    data_new_idx=data_num+1;
+                    if data_num+1 > size(data_list,1)
+                        data_list=[data_list;zeros(list_add_num,fval_num+1)];
+                    end
+                    data_list(data_new_idx,:)=[coord_c,fval_c];
+                    node(4)=data_new_idx;
+                    data_num=data_num+1;
 
-                if node_left_index > size(node_list,1)
-                    node_list=[node_list;zeros(node_add_num,7)];
+                    % add 2 new node to node_list
+                    node_new_idx=node_num+[1,2];
+                    if node_num+2 > size(node_list,1)
+                        node_list=[node_list;zeros(list_add_num,6)];
+                    end
+                    node_list(node_new_idx,:)=[
+                        node(1)+1,node(2),node(4),0,0,0;
+                        node(1)+1,node(4),node(3),0,0,0];
+                    node([5,6])=node_new_idx;
+                    node_num=node_num+2;
+
+                    % add to stack
+                    stack=[stack,node_new_idx];
+                    node_list(node_idx,:)=node;
                 end
-                node_list(node_left_index,:)=node_left;
-                node_num=node_num+1;
-
-                stack=[stack,node_left_index];
-            else
-                node_left_index=0;
             end
-
-            % check right
-            x_right=(node_list(node(5),2)+node(2))/2;
-            fval_right=fcn(x_right);
-            fval_right_pred=(node_list(node(5),3)+node(3))/2;
-            if abs(fval_right-fval_right_pred) > torl && node(1) < max_level
-                % create new node
-                node_right_index=node_num+1;
-                node_right=[node(1)+1,x_right,fval_right,node_idx,node(5),0,0];
-
-                if node_right_index > size(node_list,1) 
-                    node_list=[node_list;zeros(node_add_num,7)];
-                end
-                node_list(node_right_index,:)=node_right;
-                node_num=node_num+1;
-
-                stack=[stack,node_right_index];
-            else
-                node_right_index=0;
-            end
-
-            % add children index into current node data
-            node_list(node_idx,6:7)=[node_left_index,node_right_index];
         end
     end
 
     function [x_list,fval_list]=traversalInorder(root_idx)
+        % inorder traversal node tree to obtain data
+        % inorder will make sure x_list is from small to large
+        %
         stack=[];
         x_list=[];
         fval_list=[];
@@ -95,16 +97,19 @@ fval_list=[node_list(1,3),fval_list,node_list(2,3)];
                 stack=[stack,node_idx];
 
                 % node=node.left;
-                node_idx=node_list(node_idx,6);
+                node_idx=node_list(node_idx,5);
             end
 
             node_idx=stack(end);
             stack=stack(1:end-1);
-            x_list=[x_list,node_list(node_idx,2)];
-            fval_list=[fval_list,node_list(node_idx,3)];
+            data_idx=node_list(node_idx,4);
+            if data_idx ~= 0
+                x_list=[x_list,data_list(data_idx,1)];
+                fval_list=[fval_list,data_list(data_idx,2:end)'];
+            end
 
             % node=node.right;
-            node_idx=node_list(node_idx,7);
+            node_idx=node_list(node_idx,6);
         end
     end
 end
