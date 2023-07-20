@@ -1,11 +1,15 @@
-function runSU2DEF(mesh_filestr,cfg_filestr,dat_filestr,mesh_out_filestr,partitions,DEF_config,...
-    dir_temp,description,remove_dump,out_logger)
+function SU2_DEF_info=runSU2DEF...
+    (mesh_filestr,cfg_filestr,dat_filestr,mesh_out_filestr,partitions,DEF_config,...
+    dir_temp,run_description,remove_dump,out_logger)
+% interface of SU2_DEF
+% base on input filestr and DEF_config to run SU2_DEF
+%
 if nargin < 10
     out_logger=[];
     if nargin < 9
         remove_dump=[];
         if nargin < 8
-            description=[];
+            run_description=[];
             if nargin < 7
                 dir_temp=[];
                 if nargin < 6
@@ -27,10 +31,6 @@ end
 
 if isempty(remove_dump)
     remove_dump=false(1);
-end
-
-if isempty(out_logger)
-    out_logger=Logger(fullfile(str_filedir__,'SU2.log'));
 end
 
 dir_cur=pwd();
@@ -59,8 +59,10 @@ if ~isempty(DEF_config)
 end
 
 procid=feature('getpid');
-out_logger.info(['SU2 calculating ... procid=',num2str(procid)]);
-dir_work=fullfile(dir_temp,[description,'_',num2str(procid)]);
+if ~isempty(out_logger)
+    out_logger.info(['SU2 calculating ... procid=',num2str(procid)]);
+end
+dir_work=fullfile(dir_temp,[run_description,'_',num2str(procid)]);
 
 safeMakeDirs(dir_work,out_logger);
 % copy mesh file to dir work
@@ -72,14 +74,18 @@ safeCopyDirs({dat_filename},dat_filedir,dir_work,out_logger);
 config.dump(fullfile(dir_work,'config_DEF.cfg'));
 % state=SU2.io.State()
 % out_logger.info(state)
-out_logger.info(['mesh input file: ',mesh_filestr]);
-out_logger.info(['cfg file: ',cfg_filestr]);
-out_logger.info(['dat file: ',dat_filestr]);
-out_logger.info(['mesh input file: ',mesh_out_filestr]);
+if ~isempty(out_logger)
+    out_logger.info(['mesh input file: ',mesh_filestr]);
+    out_logger.info(['cfg file: ',cfg_filestr]);
+    out_logger.info(['dat file: ',dat_filestr]);
+    out_logger.info(['mesh input file: ',mesh_out_filestr]);
+end
 
 % run SU2 DEF
 % SU2.run.DEF(config)
-out_logger.info('begin run SU2 DEF');
+if ~isempty(out_logger)
+    out_logger.info('begin run SU2 DEF');
+end
 
 if ispc()
     run_command='SU2_DEF config_DEF.cfg';
@@ -87,16 +93,16 @@ else
     run_command=['mpirun -np ',num2str(config.getParameter('NUMBER_PART')),' SU2_DEF config_DEF.cfg'];
 end
 
-% run SU2 deform mesh
+% run command
 cd(dir_work);
-[status,cmdout]=system(run_command);
+[status,SU2_DEF_info]=system(run_command);
 cd(dir_cur);
 if status ~= 0
-    error_message=cmdout;
+    error_message=SU2_DEF_info;
 else
     error_message=[];
     info_file=fopen(fullfile(dir_work,'SU2_DEF_info.log'),'w');
-    fprintf(info_file,'%s',cmdout);
+    fprintf(info_file,'%s',SU2_DEF_info);
     fclose(info_file);
     clear('info_file');
 end
@@ -105,17 +111,19 @@ retry_time=0;
 while (~isempty(error_message) && (retry_time < 2))
     if contains(error_message,'retrying')
         % retry again
-        out_logger.warning('node busy,retry run SU2 DEF');
+        if ~isempty(out_logger)
+            out_logger.warning('node busy,retry run SU2 DEF');
+        end
 
         cd(dir_work);
-        [status,cmdout]=system(run_command);
+        [status,SU2_DEF_info]=system(run_command);
         cd(dir_cur);
         if status ~= 0
-            error_message=cmdout;
+            error_message=SU2_DEF_info;
         else
             error_message=[];
             info_file=fopen(fullfile(dir_work,'SU2_DEF_info.log'),'w');
-            fprintf(info_file,'%s',cmdout);
+            fprintf(info_file,'%s',SU2_DEF_info);
             fclose(info_file);
             clear('info_file');
         end
@@ -126,19 +134,25 @@ while (~isempty(error_message) && (retry_time < 2))
         fprintf(info_file,'%s',error_message);
         fclose(err_file);
         clear('err_file');
-        out_logger.error([dir_work,error_message,'\n']);
+        if ~isempty(out_logger)
+            out_logger.error([dir_work,error_message,'\n']);
+        end
         error(['runSU2DEF: fatal error with SU2 DEF,proid=',num2str(procid)]);
     end
 end
 
-out_logger.info('end run SU2 DEF');
+if ~isempty(out_logger)
+    out_logger.info('end run SU2 DEF');
+end
 
 % move out
 safeCopyDirs({config.getParameter('MESH_OUT_FILENAME')},dir_work,mesh_out_filedir,out_logger);
 
 % delete temp file
 if remove_dump
-    out_logger.info('cleaning temp files...');
+    if ~isempty(out_logger)
+        out_logger.info('cleaning temp files...');
+    end
     rmdir(dir_work,'s');
 end
 

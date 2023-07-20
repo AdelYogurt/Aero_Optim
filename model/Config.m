@@ -22,7 +22,7 @@ classdef Config < handle
                 error('Config: cfg file do not exist');
             end
 
-            [self.config_filedir,temp_filename,~]=fileparts(which(config_filestr));
+            [self.config_filedir,temp_filename,~]=fileparts(config_filestr);
             self.config_filename=[temp_filename,'.cfg'];
 
             self.configRead();

@@ -17,7 +17,7 @@ from model.EvalAtmos import getAtmosphereEnvironment
 
 WDB_logger = MyLogger("WDB_prblem.log")
 
-class WDBProblem():
+class WWDProblem():
     def __init__(self, SU2_partitions, AOA=8, SIDESLIP_ANGLE=0, Ma=13.8, P=143.9885, T=264.9206, T_w=300):
         self.partitions = SU2_partitions
         self.AOA = AOA
@@ -33,7 +33,7 @@ class WDBProblem():
         self.coneq_num = 0
 
         # problem constraint define
-        self.Q_max = 8e6
+        self.HF_max = 8e6
         self.Cl_min = 0.04
         self.V_eff_min = 0.23
 
@@ -245,7 +245,7 @@ class WDBProblem():
             SU2_CONV = 'True'
             Cl = SU2_out['CL']
             CD = SU2_out['CD']
-            Q = SU2_out['maxHF']
+            HF = SU2_out['maxHF']
             CEff = Cl/CD
         except:
             SU2_fail = True
@@ -264,7 +264,7 @@ class WDBProblem():
                     SU2_CONV = 'True'
                     Cl = SU2_out['CL']
                     CD = SU2_out['CD']
-                    Q = SU2_out['maxHF']
+                    HF = SU2_out['maxHF']
                     CEff = Cl/CD
                     SU2_fail = False
                 except:
@@ -284,7 +284,7 @@ class WDBProblem():
                         SU2_CONV = 'False'
                         Cl = SU2_out['CL']
                         CD = SU2_out['CD']
-                        Q = SU2_out['maxHF']
+                        HF = SU2_out['maxHF']
                         CEff = Cl/CD
                         SU2_RANS='SA'
                         
@@ -294,7 +294,7 @@ class WDBProblem():
                     WDB_logger.logger.info(
                         'all SU2 analysis fail, instead by SHABP')
                     # instead by SHABP
-                    fval, con, coneq,  SHABP_out, Q = self._LF_model(xMat)
+                    fval, con, coneq,  SHABP_out, HF = self._LF_model(xMat)
                     Cl = SHABP_out['clift']
                     Cd = SHABP_out['cdrag']
                     CEff = -2
@@ -308,7 +308,7 @@ class WDBProblem():
         S, V, V_eff = self.calGEO(xMat)
 
         fval = -CEff
-        con = [(Q-self.Q_max)/8e6, self.Cl_min-Cl, self.V_eff_min-V_eff]
+        con = [(HF-self.HF_max)/8e6, self.Cl_min-Cl, self.V_eff_min-V_eff]
         coneq = []
 
         return fval, con, coneq, SU2_out, SU2_history, SU2_RANS, SU2_CONV
@@ -390,17 +390,17 @@ class WDBProblem():
         # convert to y=f(xMat) can calculate xMat=0 point curvature
         radius_head_XY = 2**(1/par_T-2) * 2*par_width/(1/par_T/2)
 
-        Q = (infStagHeat(radius_head_ZX, radius_head_ZX,
+        HF = (infStagHeat(radius_head_ZX, radius_head_ZX,
                          self.Ma, self.P, self.T, self.T_w, None, Q_method))
 
         S, V, V_eff = self.calGEO(xMat)
 
         fval = -Cl/Cd
-        con = [(Q-self.Q_max)/8e6, self.Cl_min -
+        con = [(HF-self.HF_max)/8e6, self.Cl_min -
                Cl, self.V_eff_min-V_eff]
         coneq = []
 
-        return fval, con, coneq, SHABP_out, Q
+        return fval, con, coneq, SHABP_out, HF
 
     def calGEO(self, xMat):
         total_length = 4

@@ -1,18 +1,18 @@
-classdef AirfoilProblem < handle
+classdef WWDProblem < handle
     % initial problem parameter
     properties
         % run paramter
         partitions;
 
         % geomertry
-        class_par_Y=[0.5,1];
-        dat_filestr='model/airfoil_deform.dat';
+        total_length=4;
+        dat_filestr='model/WWD_deform.dat';
 
         % DEF parameter
-        airfoil_coord;
+        WWD_coord;
         mesh_filestr;
         DEF_config_filestr;
-        mesh_out_filestr='model/airfoil_deform.su2';
+        mesh_out_filestr='model/WWD_deform.su2';
 
         % CFD
         CFD_config_filestr;
@@ -24,10 +24,32 @@ classdef AirfoilProblem < handle
         run_description=[];
     end
 
+    % optimal problem define
+    properties
+        % basical parameter
+        vari_num=16;
+        con_num=4;
+        coneq_num=0;
+        low_bou=[0.7,0.7, ...
+            2.4,0.4,0.5,0.5, ...
+            0.1,0.1,0.005, ...
+            0.4,0.4,0.4,0.6,0.5,0.01,0.01];
+        up_bou=[1.0,1.0, ...
+            3.2,0.8,2.0,2.0, ...
+            0.5,0.5,0.02, ...
+            0.6,0.6,0.6,0.8,0.7,0.05,0.05];
+
+        % problem constraint define
+        CL_min=0.15;
+        CD_max=0.03;
+        V_eff_min=0.23;
+        HF_max=6e6;
+    end
+
     methods
         % problem setup function
-        function self=AirfoilProblem(partitions,...
-                airfoil_coord,mesh_filestr,DEF_config_filestr,CFD_config_filestr,...
+        function self=WWDProblem(partitions,...
+                WWD_coord,mesh_filestr,DEF_config_filestr,CFD_config_filestr,...
                 dat_filestr,mesh_out_filestr,flight_condition,restart_filestr,...
                 out_logger,run_description)
             if nargin < 11
@@ -48,27 +70,27 @@ classdef AirfoilProblem < handle
                     end
                 end
             end
-                        
+
             if ~isempty(dat_filestr),self.dat_filestr=dat_filestr;end
             if ~isempty(mesh_out_filestr),self.mesh_out_filestr=mesh_out_filestr;end
             if isempty(flight_condition)
-                flight_condition.MACH_NUMBER=0.63;
+                flight_condition.MACH_NUMBER=13.8;
                 flight_condition.SIDESLIP_ANGLE=0.0;
-                flight_condition.AOA=2.0;
-                flight_condition.FREESTREAM_TEMPERATURE=273.0;
-                flight_condition.FREESTREAM_PRESSURE=101325;
+                flight_condition.AOA=10.0;
+                flight_condition.FREESTREAM_TEMPERATURE=264.9206;
+                flight_condition.FREESTREAM_PRESSURE=143.9885;
             end
 
             % run paramter
             self.partitions=partitions;
 
             % geomertry
-
+            
             % DEF parameter
-            self.airfoil_coord=airfoil_coord;
+            self.WWD_coord=WWD_coord;
             self.mesh_filestr=mesh_filestr;
             self.DEF_config_filestr=DEF_config_filestr;
-
+            
             % CFD
             self.CFD_config_filestr=CFD_config_filestr;
             self.flight_condition=flight_condition;
@@ -80,12 +102,12 @@ classdef AirfoilProblem < handle
         end
 
         % CAD CAE function
-        function [mesh_point,mesh_out_filestr,SU2_DEF_info,SU2_history,SU2_surface,SU2_CFD_info]=solveAirfoilSU2...
-                (self,control_point,airfoil_coord,...
+        function [mesh_point,mesh_out_filestr,SU2_DEF_info,SU2_history,SU2_surface,SU2_CFD_info]=solveWWDSU2...
+                (self,geo_par,WWD_coord,...
                 mesh_filestr,DEF_config_filestr,...
                 CFD_config_filestr,flight_condition,...
                 dat_filestr,mesh_out_filestr,restart_filestr,run_description)
-            % call SU2 program to obtain airfoil aerodynamic parameter
+            % call SU2 program to obtain WWD aerodynamic parameter
             %
             if nargin < 11
                 run_description=[];
@@ -107,9 +129,9 @@ classdef AirfoilProblem < handle
 
             % step 1: CAD part
             % rebulid surface mesh point
-            airfoil=Airfoil2DCST(control_point.up,control_point.low);
-            mesh_point=airfoil.calMeshPoint(airfoil_coord);
-            writePoint(mesh_point,dat_filestr,2)
+            WWD=WaveriderWingDia(self.total_length,geo_par);
+            mesh_point=WWD.calMeshPoint(WWD_coord);
+            writePoint(mesh_point,dat_filestr,3);
 
             % step 2: CAD/CAE part
             % deform mesh
@@ -123,7 +145,41 @@ classdef AirfoilProblem < handle
             [SU2_history,SU2_surface,SU2_CFD_info]=runSU2CFD...
                 (mesh_filestr,CFD_config_filestr,self.partitions,flight_condition,restart_filestr,...
                 [],run_description,[],self.out_logger);
+
+        end
+
+        % optimization funciton
+        function [obj,con,coneq]=objcon_fcn(self,x)
+            % objcon function for optimize
+            %
+            % input:
+            % x
+            %
+            % output:
+            % obj, con, coneq
+            %
+
+            % analysis CFD parameter
+            geo_par=x;
+            [mesh_point,mesh_out_filestr,SU2_DEF_info,SU2_history,SU2_surface,SU2_CFD_info]=self.solveWWDSU2...
+                (geo_par,self.WWD_coord,...
+                self.mesh_filestr,self.DEF_config_filestr,...
+                self.CFD_config_filestr,self.flight_condition,...
+                self.dat_filestr,self.mesh_out_filestr,self.restart_filestr,self.run_description);
+
+            % objective
+            obj=-SU2_history.('CEff')(end);
+
+            % constaints
+            g1=self.CL_min-SU2_history.('CL')(end);
+            g2=SU2_history.('CD')(end)-self.CD_max;
+            g3=self.V_eff_min-V_eff;
+            g4=max(SU2_surface.('HF'))-self.HF_max;
+            con=[g1,g2,g3,g4];
+            coneq=[];
+
         end
     end
+    
 end
 
