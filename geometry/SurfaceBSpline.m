@@ -1,69 +1,91 @@
 classdef SurfaceBSpline
+    % B-spline surface 
+    % define reference to step standard
+    %
     properties
+        name='';
+        u_degree;
+        v_degree;
+
         control_X;
         control_Y;
         control_Z;
         control_rank_number;
         control_colume_number;
+    end
+
+    properties
         u_list;
         v_list;
+
         node_X;
         node_Y;
         node_Z;
         node_rank_number;
         node_colume_number;
-        order;
-        dimension=3;
     end
 
+    % main function
     methods
-        function self=SurfaceBSpline(control_X,control_Y,control_Z,...
-                node_X,node_Y,node_Z,order,u_list,v_list)
+        function self=SurfaceBSpline(name,control_X,control_Y,control_Z,...
+                node_X,node_Y,node_Z,u_degree,v_degree,u_list,v_list)
             % generate BSpline surface by input control point or node point
             %
             % notice:
             % colume of X, Y, Z is LaWGS format
             % colume of node_X, node_Y, node_Z will by reseve calculate
+            % colume direction is u(x), rank direction is v(y)
             %
             % input:
             %
             %
-            if nargin < 9
+            if nargin < 11
                 v_list = [];
-                if nargin < 8
+                if nargin < 10
                     u_list = [];
                 end
             end
+            self.name=name;
 
             if isempty(control_X) && isempty(control_Y) && isempty(control_Z)
-                order=3;
                 [node_rank_number,node_colume_number]=size(node_X);
                 if any(size(node_Y) ~= [node_rank_number,node_colume_number]) ||...
                         any(size(node_Z) ~= [node_rank_number,node_colume_number])
                     error('SurfaceBSpline: size of control_X, control_Y, control_Z do not equal');
+                end
+                if node_colume_number == 2
+                    u_degree=1;
+                else
+                    u_degree=3;
+                end
+                if node_rank_number == 2
+                    v_degree=1;
+                else
+                    v_degree=3;
                 end
                 self.node_X=node_X;
                 self.node_Y=node_Y;
                 self.node_Z=node_Z;
                 self.node_rank_number=node_rank_number;
                 self.node_colume_number=node_colume_number;
-                self.order=order;
+                self.u_degree=u_degree;
+                self.v_degree=v_degree;
 
-                control_rank_number=node_rank_number+order-1;
-                control_colume_number=node_colume_number+order-1;
+                control_rank_number=node_rank_number+v_degree-1;
+                control_colume_number=node_colume_number+u_degree-1;
                 control_X=zeros(control_rank_number,control_colume_number);
                 control_Y=zeros(control_rank_number,control_colume_number);
                 control_Z=zeros(control_rank_number,control_colume_number);
 
                 % create control point by colume of node_X, node_Y, node_Z
-                temp_control_X=zeros(control_rank_number,control_colume_number-order+1);
-                temp_control_Y=zeros(control_rank_number,control_colume_number-order+1);
-                temp_control_Z=zeros(control_rank_number,control_colume_number-order+1);
+                temp_control_X=zeros(control_rank_number,control_colume_number-u_degree+1);
+                temp_control_Y=zeros(control_rank_number,control_colume_number-u_degree+1);
+                temp_control_Z=zeros(control_rank_number,control_colume_number-u_degree+1);
                 if isempty(v_list)
-                    v_list=[zeros(1,order),linspace(0,1,control_rank_number-order+1),ones(1,order)];
+                    v_list=[zeros(1,v_degree),linspace(0,1,control_rank_number-v_degree+1),ones(1,v_degree)];
                 end
                 for colume_index=1:node_colume_number
-                    curve=CurveBSpline([],[node_X(:,colume_index),node_Y(:,colume_index),node_Z(:,colume_index)],order,v_list);
+                    curve=CurveBSpline('',[],[node_X(:,colume_index),node_Y(:,colume_index),node_Z(:,colume_index)],v_degree,v_list);
                     temp_control_X(:,colume_index)=curve.control_list(:,1);
                     temp_control_Y(:,colume_index)=curve.control_list(:,2);
                     temp_control_Z(:,colume_index)=curve.control_list(:,3);
@@ -71,10 +93,10 @@ classdef SurfaceBSpline
 
                 % create control point by colume of node_X, node_Y, node_Z
                 if isempty(u_list)
-                    u_list=[zeros(1,order),linspace(0,1,control_colume_number-order+1),ones(1,order)];
+                    u_list=[zeros(1,u_degree),linspace(0,1,control_colume_number-u_degree+1),ones(1,u_degree)];
                 end
                 for rank_index=1:control_rank_number
-                    curve=CurveBSpline([],[temp_control_X(rank_index,:)',temp_control_Y(rank_index,:)',temp_control_Z(rank_index,:)'],order,u_list);
+                    curve=CurveBSpline('',[],[temp_control_X(rank_index,:)',temp_control_Y(rank_index,:)',temp_control_Z(rank_index,:)'],u_degree,u_list);
                     control_X(rank_index,:)=curve.control_list(:,1)';
                     control_Y(rank_index,:)=curve.control_list(:,2)';
                     control_Z(rank_index,:)=curve.control_list(:,3)';
@@ -91,42 +113,43 @@ classdef SurfaceBSpline
 
             elseif ~isempty(control_X) && ~isempty(control_Y) && ~isempty(control_Z)
                 % generate B spline by control point
-                % input control_list, order, u_list(optional)
+                % input control_list, u_degree,v_degree, u_list(optional)
                 %
                 [control_rank_number,control_colume_number]=size(control_X);
                 if any(size(control_Y) ~= [control_rank_number,control_colume_number]) ||...
                         any(size(control_Z) ~= [control_rank_number,control_colume_number])
                     error('SurfaceBSpline: size of control_X, control_Y, control_Z do not equal');
                 end
-                if control_rank_number < (order+1) || control_colume_number < (order+1)
-                   error('SurfaceBSpline: control_number less than order+1'); 
+                if control_rank_number < (v_degree+1) || control_colume_number < (u_degree+1)
+                   error('SurfaceBSpline: control_number less than degree+1'); 
                 end
                 self.control_X=control_X;
                 self.control_Y=control_Y;
                 self.control_Z=control_Z;
                 self.control_rank_number=control_rank_number;
                 self.control_colume_number=control_colume_number;
-                self.order=order;
+                self.u_degree=u_degree;
+                self.v_degree=v_degree;
                 
                 if isempty(u_list)
-                    u_list=[zeros(1,order),linspace(0,1,control_colume_number-order+1),ones(1,order)];
+                    u_list=[zeros(1,u_degree),linspace(0,1,control_colume_number-u_degree+1),ones(1,u_degree)];
                 end
                 if isempty(v_list)
-                    v_list=[zeros(1,order),linspace(0,1,control_rank_number-order+1),ones(1,order)];
+                    v_list=[zeros(1,v_degree),linspace(0,1,control_rank_number-v_degree+1),ones(1,v_degree)];
                 end
 
-                if (length(u_list) ~= control_colume_number+order+1) ||...
-                        (length(v_list) ~= control_rank_number+order+1)
-                    error('CurveBSpline: length of do not equal to control_number+order+1');
+                if (length(u_list) ~= control_colume_number+u_degree+1) ||...
+                        (length(v_list) ~= control_rank_number+v_degree+1)
+                    error('CurveBSpline: length of do not equal to control_number+degree+1');
                 end
 
                 self.u_list=u_list;
                 self.v_list=v_list;
 
                 % calculate node point list
-                node_rank_number=control_rank_number-order+1;
-                node_colume_number=control_colume_number-order+1;
-                [U_x,V_x]=meshgrid(u_list(order+1:control_colume_number+1),v_list(order+1:control_rank_number+1));
+                node_rank_number=control_rank_number-v_degree+1;
+                node_colume_number=control_colume_number-u_degree+1;
+                [U_x,V_x]=meshgrid(u_list(u_degree+1:control_colume_number+1),v_list(v_degree+1:control_rank_number+1));
                 [self.node_X,self.node_Y,self.node_Z]=self.calPoint(U_x,V_x);
                 self.node_rank_number=node_rank_number;
                 self.node_colume_number=node_colume_number;
@@ -151,7 +174,7 @@ classdef SurfaceBSpline
             end
         end
 
-        function [step_str,object_index,OPEN_SHELL_index]=getStep(self,object_index)
+        function [step_str,object_index,ADVANCED_FACE_index]=getStep(self,object_index)
             % write BSpline into step file
             %
             if nargin < 2
@@ -179,16 +202,16 @@ classdef SurfaceBSpline
 
             % generate B_SPLINE_CURVE
             B_SPLINE_CURVE_index=object_index;
-            str=getCurveStep(((1:ctrl_colume_num)-1)*ctrl_rank_num+CARTESIAN_POINT_index);
+            str=getCurveStep(((1:ctrl_colume_num)-1)*ctrl_rank_num+CARTESIAN_POINT_index,self.u_degree);
             step_str=[step_str,str];
             object_index=object_index+1;
-            str=getCurveStep((((ctrl_colume_num-1)*ctrl_rank_num+1):ctrl_colume_num*ctrl_rank_num)+CARTESIAN_POINT_index-1);
+            str=getCurveStep((((ctrl_colume_num-1)*ctrl_rank_num+1):ctrl_colume_num*ctrl_rank_num)+CARTESIAN_POINT_index-1,self.v_degree);
             step_str=[step_str,str];
             object_index=object_index+1;
-            str=getCurveStep(((ctrl_colume_num:-1:1))*ctrl_rank_num+CARTESIAN_POINT_index-1);
+            str=getCurveStep(((ctrl_colume_num:-1:1))*ctrl_rank_num+CARTESIAN_POINT_index-1,self.u_degree);
             step_str=[step_str,str];
             object_index=object_index+1;
-            str=getCurveStep((ctrl_rank_num:-1:1)+CARTESIAN_POINT_index-1);
+            str=getCurveStep((ctrl_rank_num:-1:1)+CARTESIAN_POINT_index-1,self.v_degree);
             step_str=[step_str,str];
             object_index=object_index+1;
 
@@ -293,31 +316,22 @@ classdef SurfaceBSpline
             % generate ADVANCED_FACE
             ADVANCED_FACE_index=object_index;
             str=[num2str(object_index,'#%d'),' = ADVANCED_FACE ',...
-                num2str([FACE_OUTER_BOUND_index,B_SPLINE_SURFACE_index],'( ''NONE'', ( #%d ), #%d, .T. );'),'\n'];
+                '( ''',self.name,''', ',num2str([FACE_OUTER_BOUND_index,B_SPLINE_SURFACE_index],'( #%d ), #%d, .T. );'),'\n'];
             step_str=[step_str,str];
             object_index=object_index+1;
 
             step_str=[step_str,'\n'];
 
-            % generate OPEN_SHELL
-            OPEN_SHELL_index=object_index;
-            str=[num2str(object_index,'#%d'),' = OPEN_SHELL ',...
-                num2str(ADVANCED_FACE_index,'( ''NONE'', ( #%d ) );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-
-            function str=getCurveStep(index_list)
+            function str=getCurveStep(index_list,degree)
                 str=[num2str(object_index,'#%d ='),' B_SPLINE_CURVE(''NONE'', ',...
-                    num2str(self.order,'%d, '),...
+                    num2str(degree,'%d, '),...
                     '( ',num2str(index_list(1:end-1),'#%d, '),' ',num2str(index_list(end),'#%d'),' ),',...
                     '.UNSPECIFIED., .F., .F.',...
                     ');\n'];
             end
         end
 
-        function [step_str,object_index,OPEN_SHELL_index]=getStepNode(self,object_index)
+        function [step_str,object_index,ADVANCED_FACE_index]=getStepNode(self,object_index)
             % write BSpline into step file
             %
             if nargin < 2
@@ -326,8 +340,31 @@ classdef SurfaceBSpline
             step_str=[];
             node_rank_num=self.node_rank_number;
             node_colume_num=self.node_colume_number;
-            u_node_list=self.u_list(self.order+1:self.control_colume_number+1);
-            v_node_list=self.v_list(self.order+1:self.control_rank_number+1);
+            if node_colume_num == 2 || node_colume_num == 3
+                u_node_list=[0,1];
+            else
+                u_node_list=linspace(0,1,node_colume_num-2);
+            end
+            if node_rank_num == 2 || node_rank_num == 3
+                v_node_list=[0,1];
+            else
+                v_node_list=linspace(0,1,node_rank_num-2);
+            end
+
+            if node_colume_num == 2
+                u_degree_out=1;
+            elseif node_colume_num == 3
+                u_degree_out=2;
+            else
+                u_degree_out=3;
+            end
+            if node_rank_num == 2
+                v_degree_out=1;
+            elseif node_rank_num == 3
+                v_degree_out=2;
+            else
+                v_degree_out=3;
+            end
             
             % generate CARTESIAN_POINT
             CARTESIAN_POINT_index=object_index;
@@ -350,20 +387,19 @@ classdef SurfaceBSpline
             B_SPLINE_CURVE_WITH_KNOTS_index=object_index;
 
             str=getCurveStep(((1:node_colume_num)-1)*node_rank_num+CARTESIAN_POINT_index,...
-                node_colume_num,u_node_list);
+                node_colume_num,u_degree_out,u_node_list);
             step_str=[step_str,str];
             object_index=object_index+1;
             str=getCurveStep((((node_colume_num-1)*node_rank_num+1):(node_colume_num*node_rank_num))+CARTESIAN_POINT_index-1,...
-                node_rank_num,v_node_list);
+                node_rank_num,v_degree_out,v_node_list);
             step_str=[step_str,str];
             object_index=object_index+1;
             str=getCurveStep((node_colume_num:-1:1)*node_rank_num+CARTESIAN_POINT_index-1,...
-                node_colume_num,u_node_list);
+                node_colume_num,u_degree_out,u_node_list);
             step_str=[step_str,str];
             object_index=object_index+1;
-
             str=getCurveStep((node_rank_num:-1:1)+CARTESIAN_POINT_index-1,...
-                node_rank_num,v_node_list);
+                node_rank_num,v_degree_out,v_node_list);
             step_str=[step_str,str];
             object_index=object_index+1;
 
@@ -455,20 +491,17 @@ classdef SurfaceBSpline
 
             % generate B_SPLINE_SURFACE
             B_SPLINE_SURFACE_index=object_index;
-            str=[num2str(object_index,'#%d'),' = B_SPLINE_SURFACE_WITH_KNOTS ( ''NONE'', 3, 3, (\n'];
+            str=[num2str(object_index,'#%d'),' = B_SPLINE_SURFACE_WITH_KNOTS ( ''NONE'', ',num2str(v_degree_out,'%d,'),' ',num2str(u_degree_out,'%d,'),'(\n'];
             for rank_index=1:node_rank_num-1
                 str=[str,'( ',num2str((0:(node_colume_num-2))*node_rank_num+CARTESIAN_POINT_index+rank_index-1,'#%d, '),...
                     ' ',num2str((node_colume_num-1)*node_rank_num+CARTESIAN_POINT_index+rank_index-1,'#%d'),' ),\n'];
             end
             str=[str,'( ',num2str((0:(node_colume_num-2))*node_rank_num+CARTESIAN_POINT_index+node_rank_num-1,'#%d, '),...
                 ' ',num2str((node_colume_num-1)*node_rank_num+CARTESIAN_POINT_index+node_rank_num-1,'#%d'),' )'];
-
-            v_node_list=linspace(0,1,node_rank_num-2);
-            u_node_list=linspace(0,1,node_colume_num-2);
-
+            
             str=[str,'),\n.UNSPECIFIED., .F., .F., .F.,\n',...
-                '( 4, ',num2str(ones(1,node_rank_num-4),'%d, '),' 4 ), ',...
-                '( 4, ',num2str(ones(1,node_colume_num-4),'%d, '),' 4 ), ',...
+                '( ',num2str(v_degree_out+1,'%d,'),' ',num2str(ones(1,node_rank_num-4),'%d, '),num2str(v_degree_out+1,'%d,'),' ), ',...
+                '( ',num2str(u_degree_out+1,'%d,'),' ',num2str(ones(1,node_colume_num-4),'%d, '),num2str(u_degree_out+1,'%d,'),' ), ',...
                 '( ',num2str(v_node_list(1:end-1),'%.16f, '),num2str(v_node_list(end),'%.16f'),' ),',...
                 '( ',num2str(u_node_list(1:end-1),'%.16f, '),num2str(u_node_list(end),'%.16f'),' ),',...
                 ' \n.UNSPECIFIED.);\n'];
@@ -480,27 +513,18 @@ classdef SurfaceBSpline
             % generate ADVANCED_FACE
             ADVANCED_FACE_index=object_index;
             str=[num2str(object_index,'#%d'),' = ADVANCED_FACE ',...
-                num2str([FACE_OUTER_BOUND_index,B_SPLINE_SURFACE_index],'( ''NONE'', ( #%d ), #%d, .T. );'),'\n'];
+                '( ''',self.name,''', ',num2str([FACE_OUTER_BOUND_index,B_SPLINE_SURFACE_index],'( #%d ), #%d, .T. );'),'\n'];
             step_str=[step_str,str];
             object_index=object_index+1;
 
             step_str=[step_str,'\n'];
 
-            % generate OPEN_SHELL
-            OPEN_SHELL_index=object_index;
-            str=[num2str(object_index,'#%d'),' = OPEN_SHELL ',...
-                num2str(ADVANCED_FACE_index,'( ''NONE'', ( #%d ) );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-
-            function str=getCurveStep(index_list,node_number,u_node_list)
-                u_node_list=linspace(0,1,node_number-2);
+            function str=getCurveStep(index_list,node_number,degree,u_node_list)
                 str=[num2str(object_index,'#%d ='),' B_SPLINE_CURVE_WITH_KNOTS(''NONE'', ',...
-                    num2str(self.order,'%d, '),...
+                    num2str(degree,'%d, '),...
                     '( ',num2str(index_list(1:end-1),'#%d, '),' ',num2str(index_list(end),'#%d'),' ),\n',...
-                    '.UNSPECIFIED., .F., .F.,','( 4, ',num2str(ones(1,node_number-4),'%d, '),' 4 ), ',...
+                    '.UNSPECIFIED., .F., .F.,','( ',...
+                    num2str(degree+1,'%d, '),' ',num2str(ones(1,node_number-4),'%d, '),num2str(degree+1,'%d, '),' ), ',...
                     '( ',num2str(u_node_list(1:end-1),'%.16f, '),num2str(u_node_list(end),'%.16f'),' ), \n',...
                     '.UNSPECIFIED.);\n'];
             end
@@ -583,8 +607,8 @@ classdef SurfaceBSpline
             Y=zeros(rank_num,colume_num);
             Z=zeros(rank_num,colume_num);
 
-            N_u_list=zeros(self.order+1,1);
-            N_v_list=zeros(1,self.order+1);
+            N_u_list=zeros(self.u_degree+1,1);
+            N_v_list=zeros(1,self.v_degree+1);
             for rank_idx=1:rank_num
                 for colume_idx=1:colume_num
                     % local index of u_x in u_list, v_list
@@ -594,21 +618,25 @@ classdef SurfaceBSpline
                     %                     [index_end_v,index_end_u]=getIndex(); % y, x
 
                     index_end_u=self.control_colume_number; % is equal to the section index
-                    while index_end_u > self.order+1 && u_x < self.u_list(index_end_u)
+                    while index_end_u > self.u_degree+1 && u_x < self.u_list(index_end_u)
                         index_end_u=index_end_u-1;
                     end
                     index_end_v=self.control_rank_number; % is equal to the section index
-                    while index_end_v > self.order+1 && v_x < self.v_list(index_end_v)
+                    while index_end_v > self.v_degree+1 && v_x < self.v_list(index_end_v)
                         index_end_v=index_end_v-1;
                     end
 
-                    index_start_u=index_end_u-self.order;
-                    index_start_v=index_end_v-self.order;
+                    index_start_u=index_end_u-self.u_degree;
+                    index_start_v=index_end_v-self.v_degree;
 
                     % calculate base function
-                    for N_index=1:self.order+1
-                        N_u_list(N_index)=baseFunction(self.u_list,u_x,N_index+index_start_u-1,self.order);
-                        N_v_list(N_index)=baseFunction(self.v_list,v_x,N_index+index_start_v-1,self.order);
+                    for N_idx=1:self.u_degree+1
+                        N_u_list(N_idx)=baseFunction(self.u_list,u_x,N_idx+index_start_u-1,self.u_degree);
+                        
+                    end
+
+                    for N_idx=1:self.v_degree+1
+                        N_v_list(N_idx)=baseFunction(self.v_list,v_x,N_idx+index_start_v-1,self.v_degree);
                     end
 
                     X(rank_idx,colume_idx)=N_v_list*self.control_X(index_start_v:index_end_v,index_start_u:index_end_u)*N_u_list/sum(N_u_list)/sum(N_v_list);
@@ -618,8 +646,8 @@ classdef SurfaceBSpline
             end
 
 %             function [index_end_v,index_end_u]=getIndex()
-%                 for index_end_u=self.order+1:self.control_number % is equal to the section index
-%                     for index_end_v=self.order+1:self.control_number % is equal to the section index
+%                 for index_end_u=self.degree+1:self.control_number % is equal to the section index
+%                     for index_end_v=self.degree+1:self.control_number % is equal to the section index
 %                         if u_x >= self.U(index_end_v,index_end_u) && v_x >= self.V(index_end_v,index_end_u)
 %                             return;
 %                         end

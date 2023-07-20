@@ -1,52 +1,61 @@
 classdef CurveBezier < handle
+    % bezier curve 
+    % define reference to step standard
+    %
     properties
+        name='';
+        degree;
         control_list;
         control_number;
-        u_list;
-        order;
+    end
+
+    properties
         dimension;
     end
+
+    % define function
     methods
-        function self=CurveBezier(control_list,node_list,order,u_list)
+        function self=CurveBezier(name,control_list,node_list,degree,u_list)
             % generate Bezier
             %
             % input:
-            % [], node_list(Bezier will across), order, u_list(optional)
-            % control_list
+            % [], node_list(Bezier will across), degree, u_list(optional)
+            % control_list, [], [], []
             %
             % notice:
             % u_list default is linspace(0,1,node_number)
             %
-            if nargin < 4
+            if nargin < 5
                 u_list = [];
             end
+            self.name=name;
 
             if isempty(control_list)
                 % fitting Bezier by node point
-                % input node_list, order
+                % input node_list, degree
                 % fitting method is least square method
                 %
                 [node_number,dimension]=size(node_list);
 
-                if order > node_number-1
-                    error('CurveBezier: curve order large than node number-1')
+                if degree > node_number-1
+                    error('CurveBezier: curve degree large than node number-1')
                 end
 
                 self.dimension=dimension;
-                self.order=order;
+                self.degree=degree;
 
                 if isempty(u_list)
                     u_list=linspace(0,1,node_number);
                 end
 
                 % generate fitting matrix
-                matrix=zeros(node_number,order+1);
+                matrix=zeros(node_number,degree+1);
                 for node_index=1:node_number
                     matrix(node_index,:)=self.baseFunction(u_list(node_index));
                 end
 
                 control_list=matrix\node_list;
-                control_number=order+1;
+                control_number=degree+1;
 
                 self.control_list=control_list;
                 self.control_number=control_number;
@@ -59,11 +68,11 @@ classdef CurveBezier < handle
                     error('CurveBezier: control_number less than 2');
                 end
 
-                order=control_number-1;
+                degree=control_number-1;
 
                 self.control_list=control_list;
                 self.control_number=control_number;
-                self.order=order;
+                self.degree=degree;
                 self.dimension=dimension;
             end
         end
@@ -152,22 +161,22 @@ classdef CurveBezier < handle
     % base function
     methods
         function P_list=baseFunction(self,u_x)
-            order=self.order;
-            b_list=zeros(1,order+1);
-            x_list=zeros(1,order+1);
-            middle_index=ceil((order+1)/2);
+            degree=self.degree;
+            b_list=zeros(1,degree+1);
+            x_list=zeros(1,degree+1);
+            middle_index=ceil((degree+1)/2);
 
             % calculate binom
             for b_index=0:middle_index-1
-                b_list(b_index+1)=nchoosek(order,b_index);
+                b_list(b_index+1)=nchoosek(degree,b_index);
             end
 
             % symmetry
-            b_list(middle_index+1:end)=b_list(floor((order+1)/2):-1:1);
+            b_list(middle_index+1:end)=b_list(floor((degree+1)/2):-1:1);
 
             % calculate x
-            for x_index=0:order
-                x_list(x_index+1)=u_x^(x_index)*(1-u_x)^(order-x_index);
+            for x_index=0:degree
+                x_list(x_index+1)=u_x^(x_index)*(1-u_x)^(degree-x_index);
             end
 
             P_list=b_list.*x_list;

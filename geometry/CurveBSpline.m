@@ -1,167 +1,197 @@
 classdef CurveBSpline < handle
+    % B-spline curve 
+    % define reference to step standard
+    %
     properties
+        name='';
         control_list;
         control_number;
+        degree;
+    end
+
+    properties
         u_list;
         node_list;
         node_number;
-        order;
         dimension;
     end
 
+    % define function
     methods
-        function self=CurveBSpline(control_list,node_list,order,u_list)
+        function self=CurveBSpline(name,control_list,node_list,degree,u_list)
             % generate B spline
             %
             % input:
-            % [], node_list(Bspline will across), order, u_list(optional)
-            % control_list, [], order, u_list(optional)
+            % [], node_list(Bspline will across), degree, u_list(optional)
+            % control_list, [], degree, u_list(optional)
             %
             % notice:
-            % u_list default is [zeros(1,order),u_node_list,ones(1,order)];
+            % u_list default is [zeros(1,degree),u_node_list,ones(1,degree)];
             %
-            if nargin < 4
+            if nargin < 5
                 u_list = [];
             end
+            self.name=name;
 
             if isempty(control_list)
                 % base on node point list inverse control point list
                 [node_number,dimension]=size(node_list);
-                order=3;
-                control_number=node_number+order-1;
+                if node_number == 2
+                    degree=1;
+                    self.degree=degree;
+                    self.dimension=dimension;
 
-                self.order=order;
-                self.dimension=dimension;
-                
-                % base on curve curvature to calculate correct k of u_list
-                % modified sine length parameterization method
-                line_list=node_list(2:end,:)-node_list(1:(end-1),:);
-                length_list=sqrt(sum(line_list.^2,2));
-                line_vector_list=line_list./length_list;
-                
-                % calculate angle min(pi-theta,pi/2);
-                theta_list=zeros(node_number-2,1);
-                for theta_index=1:node_number-2
-                    cos_theta=line_vector_list(theta_index,:)*line_vector_list(theta_index+1,:)';
-                    if cos_theta > 1
-                        theta=0;
-                    elseif cos_theta < -1
-                        theta=pi;
-                    else
-                        theta=acos(cos_theta);
-                    end
-                    theta_list(theta_index)=min(pi-theta,pi/2);
-                end
-                
-                % calcuate curvature
-                curvature_list=zeros(node_number-1,1);
-                curvature_list(1)=1+3*(theta_list(1)*length_list(1)/(length_list(1)+length_list(2)));
-                for curvature_index=2:node_number-2
-                    curvature_list(curvature_index)=1+3/2*...
-                        (theta_list(curvature_index-1)*length_list(curvature_index-1)/(length_list(curvature_index)+length_list(curvature_index-1))+...
-                        theta_list(curvature_index)*length_list(curvature_index+1)/(length_list(curvature_index)+length_list(curvature_index+1)));
-                end
-                curvature_list(end)=1+3*(theta_list(end)*length_list(end)/(length_list(end)+length_list(end-1)));
-                
-%                 length_total=sum(length_list); % if just use
-                length_curvature_total=sum(length_list.*curvature_list);
-                
-                % calculate u list
-                if isempty(u_list)
-                    u_list=zeros(1,node_number+2*order);
-                    for i=node_number+order+1:node_number+2*order
-                        u_list(i)=1;
+                    u_list=[0,0,1,1];
+                    
+                    self.node_list=node_list;
+                    self.node_number=node_number;
+                    self.u_list=u_list;
+
+                    control_list=node_list;
+                    control_number=node_number;
+
+                    self.control_list=control_list;
+                    self.control_number=control_number;
+                else
+                    degree=3;
+                    control_number=node_number+degree-1;
+
+                    self.degree=degree;
+                    self.dimension=dimension;
+
+                    % base on curve curvature to calculate correct k of u_list
+                    % modified sine length parameterization method
+                    line_list=node_list(2:end,:)-node_list(1:(end-1),:);
+                    length_list=sqrt(sum(line_list.^2,2));
+                    line_vector_list=line_list./length_list;
+
+                    % calculate angle min(pi-theta,pi/2);
+                    theta_list=zeros(node_number-2,1);
+                    for theta_index=1:node_number-2
+                        cos_theta=line_vector_list(theta_index,:)*line_vector_list(theta_index+1,:)';
+                        if cos_theta > 1
+                            theta=0;
+                        elseif cos_theta < -1
+                            theta=pi;
+                        else
+                            theta=acos(cos_theta);
+                        end
+                        theta_list(theta_index)=min(pi-theta,pi/2);
                     end
 
-                    for i=order+2:node_number+order
-                        %                     u_list(i)=u_list(i-1)+length_list(i-order-1)/length_total;
-                        u_list(i)=u_list(i-1)+curvature_list(i-order-1)*length_list(i-order-1)/length_curvature_total;
+                    % calcuate curvature
+                    curvature_list=zeros(node_number-1,1);
+                    curvature_list(1)=1+3*(theta_list(1)*length_list(1)/(length_list(1)+length_list(2)));
+                    for curvature_index=2:node_number-2
+                        curvature_list(curvature_index)=1+3/2*...
+                            (theta_list(curvature_index-1)*length_list(curvature_index-1)/(length_list(curvature_index)+length_list(curvature_index-1))+...
+                            theta_list(curvature_index)*length_list(curvature_index+1)/(length_list(curvature_index)+length_list(curvature_index+1)));
                     end
-                end
+                    curvature_list(end)=1+3*(theta_list(end)*length_list(end)/(length_list(end)+length_list(end-1)));
 
-                if length(u_list) ~= control_number+order+1
-                    error('CurveBSpline: length of do not equal to control_number+order+1');
-                end
-                u_delta_list=u_list(2:end)-u_list(1:end-1);
-                
-                self.node_list=node_list;
-                self.node_number=node_number;
-                self.u_list=u_list;
+                    %                 length_total=sum(length_list); % if just use
+                    length_curvature_total=sum(length_list.*curvature_list);
 
-                % the start and end tangent vector is undefined
-                % use predict method to calculate
-                % concrete content see the reserve calculate of B-Spline
+                    % calculate u list
+                    if isempty(u_list)
+                        u_list=zeros(1,node_number+2*degree);
+                        for i=node_number+degree+1:node_number+2*degree
+                            u_list(i)=1;
+                        end
 
-                tangent_vector_list=zeros(node_number,dimension);
-                % % calculate tangent_vector beside start and end Fmill method
-                % for tangent_vector_index=2:node_number-1
-                %     vector_temp=node_list(tangent_vector_index+1,:)-node_list(tangent_vector_index-1,:);
-                %     tangent_vector_list(tangent_vector_index,:)=vector_temp/norm(vector_temp,2);
-                % end
-                
-                % calculate tangent_vector beside start and end Bessell method
-                % see [1]王飞.计算机图形学[M].北京邮电大学出版社,2011,124.
-                for tangent_vector_index=2:node_number-1
-                    u_length=u_delta_list(order+tangent_vector_index-1)+u_delta_list(order+tangent_vector_index);
-                    tangent_vector_list(tangent_vector_index,:)=...
-                        u_delta_list(order+tangent_vector_index)/u_length*...
-                        line_list(tangent_vector_index-1,:)/u_delta_list(order-1+tangent_vector_index)+...
-                        u_delta_list(order-1+tangent_vector_index)/u_length*...
-                        line_list(tangent_vector_index,:)/u_delta_list(order+tangent_vector_index);
-                end
-                
-                % calculate tangent_vector start and end
-                % use Parabolic end Boundary condition
-                % see [1]王飞.计算机图形学[M].北京邮电大学出版社,2011,125/128.
-                tangent_vector_list(1,:)=2*line_list(1,:)/u_delta_list(order+1)-tangent_vector_list(2,:);
-                tangent_vector_list(end,:)=2*line_list(end,:)/u_delta_list(node_number+order-1)-tangent_vector_list(end-1,:);
-                
-                matrix=zeros(control_number);
-                matrix(1,1)=1;
-                matrix(end,end)=1;
-                for rank_index=3:control_number-2
-                    u_x=u_list(rank_index+order-1);
-                    for k_index=1:order
-                        matrix(rank_index,k_index+rank_index-2)=baseFunction(u_list,u_x,k_index+rank_index-2,order)/2;
+                        for i=degree+2:node_number+degree
+                            %                     u_list(i)=u_list(i-1)+length_list(i-degree-1)/length_total;
+                            u_list(i)=u_list(i-1)+curvature_list(i-degree-1)*length_list(i-degree-1)/length_curvature_total;
+                        end
                     end
+
+                    if length(u_list) ~= control_number+degree+1
+                        error('CurveBSpline: length of do not equal to control_number+degree+1');
+                    end
+                    u_delta_list=u_list(2:end)-u_list(1:end-1);
+
+                    self.node_list=node_list;
+                    self.node_number=node_number;
+                    self.u_list=u_list;
+
+                    % the start and end tangent vector is undefined
+                    % use predict method to calculate
+                    % concrete content see the reserve calculate of B-Spline
+
+                    tangent_vector_list=zeros(node_number,dimension);
+                    % % calculate tangent_vector beside start and end Fmill method
+                    % for tangent_vector_index=2:node_number-1
+                    %     vector_temp=node_list(tangent_vector_index+1,:)-node_list(tangent_vector_index-1,:);
+                    %     tangent_vector_list(tangent_vector_index,:)=vector_temp/norm(vector_temp,2);
+                    % end
+
+                    % calculate tangent_vector beside start and end Bessell method
+                    % see [1]王飞.计算机图形学[M].北京邮电大学出版社,2011,124.
+                    for tangent_vector_index=2:node_number-1
+                        u_length=u_delta_list(degree+tangent_vector_index-1)+u_delta_list(degree+tangent_vector_index);
+                        tangent_vector_list(tangent_vector_index,:)=...
+                            u_delta_list(degree+tangent_vector_index)/u_length*...
+                            line_list(tangent_vector_index-1,:)/u_delta_list(degree-1+tangent_vector_index)+...
+                            u_delta_list(degree-1+tangent_vector_index)/u_length*...
+                            line_list(tangent_vector_index,:)/u_delta_list(degree+tangent_vector_index);
+                    end
+
+                    % calculate tangent_vector start and end
+                    % use Parabolic end Boundary condition
+                    % see [1]王飞.计算机图形学[M].北京邮电大学出版社,2011,125/128.
+                    tangent_vector_list(1,:)=2*line_list(1,:)/u_delta_list(degree+1)-tangent_vector_list(2,:);
+                    tangent_vector_list(end,:)=2*line_list(end,:)/u_delta_list(node_number+degree-1)-tangent_vector_list(end-1,:);
+
+                    % tangent_vector_list(1,:)=(3*line_list(1,:)/u_delta_list(degree+1)-tangent_vector_list(2,:))/2;
+                    % tangent_vector_list(end,:)=(3*line_list(end,:)/u_delta_list(node_number+degree-1)-tangent_vector_list(end-1,:))/2;
+
+                    matrix=zeros(control_number);
+                    matrix(1,1)=1;
+                    matrix(end,end)=1;
+                    for rank_index=3:control_number-2
+                        u_x=u_list(rank_index+degree-1);
+                        for k_index=1:degree
+                            matrix(rank_index,k_index+rank_index-2)=baseFunction(u_list,u_x,k_index+rank_index-2,degree)/2;
+                        end
+                    end
+                    matrix(2,1)=-1;matrix(2,2)=1;
+                    matrix(end-1,end-1)=-1;matrix(end-1,end)=1;
+                    colume=[node_list(1,:);
+                        tangent_vector_list(1,:)*u_delta_list(degree+1)/3;
+                        node_list(2:end-1,:);
+                        tangent_vector_list(end,:)*u_delta_list(node_number+degree-1)/3;
+                        node_list(end,:);];
+                    control_list=matrix\colume;
+
+                    self.control_list=control_list;
+                    self.control_number=control_number;
                 end
-                matrix(2,1)=-1;matrix(2,2)=1;
-                matrix(end-1,end-1)=-1;matrix(end-1,end)=1;
-                colume=[node_list(1,:);
-                    tangent_vector_list(1,:)*u_delta_list(order+1)/3;
-                    node_list(2:end-1,:);
-                    tangent_vector_list(end,:)*u_delta_list(node_number+order-1)/3;
-                    node_list(end,:);];
-                control_list=matrix\colume;
-                
-                self.control_list=control_list;
-                self.control_number=control_number;
             else
                 % generate B spline by control point
-                % input control_list, order, u_list(optional)
+                % input control_list, degree, u_list(optional)
                 %
                 [control_number,dimension]=size(control_list);
-                if control_number < (order+1)
-                   error('CurveBSpline: control_number less than order+1'); 
+                if control_number < (degree+1)
+                    error('CurveBSpline: control_number less than degree+1');
                 end
                 self.control_list=control_list;
                 self.control_number=control_number;
-                self.order=order;
+                self.degree=degree;
                 self.dimension=dimension;
-                
+
                 if isempty(u_list)
-                    u_list=[zeros(1,order),linspace(0,1,control_number-order+1),ones(1,order)];
+                    u_list=[zeros(1,degree),linspace(0,1,control_number-degree+1),ones(1,degree)];
                 end
 
-                if length(u_list) ~= control_number+order+1
-                    error('CurveBSpline: length of do not equal to control_number+order+1');
+                if length(u_list) ~= control_number+degree+1
+                    error('CurveBSpline: length of do not equal to control_number+degree+1');
                 end
 
                 self.u_list=u_list;
 
                 % calculate node point list
-                node_number=control_number-order+1;
-                node_list=self.calPoint(u_list(order+1:control_number+1));
+                node_number=control_number-degree+1;
+                node_list=self.calPoint(u_list(degree+1:control_number+1));
 
                 self.node_list=node_list;
                 self.node_number=node_number;
@@ -193,31 +223,31 @@ classdef CurveBSpline < handle
             point_number=length(u_x_list);
             point_list=zeros(point_number,self.dimension);
 
-            N_u_list=zeros(1,self.order+1);
+            N_u_list=zeros(1,self.degree+1);
             for point_index=1:point_number
 
                 % local u_x in u_list index
                 u_x=u_x_list(point_index);
                 index_end=self.control_number; % is equal to the section index
-                while index_end > self.order+1 && u_x < self.u_list(index_end)
+                while index_end > self.degree+1 && u_x < self.u_list(index_end)
                     index_end=index_end-1;
                 end
 
-%                 for index_end=self.order+1:self.control_number % is equal to the section index
-%                     if u_x >= self.u_list(index_end)
-%                         break;
-%                     end
-%                 end
+                %                 for index_end=self.degree+1:self.control_number % is equal to the section index
+                %                     if u_x >= self.u_list(index_end)
+                %                         break;
+                %                     end
+                %                 end
 
-                index_start=index_end-self.order;
+                index_start=index_end-self.degree;
 
-                for N_index=1:self.order+1
-                    N_u_list(N_index)=baseFunction(self.u_list,u_x,N_index+index_start-1,self.order);
+                for N_index=1:self.degree+1
+                    N_u_list(N_index)=baseFunction(self.u_list,u_x,N_index+index_start-1,self.degree);
                 end
 
-%                 if any(u_x == self.u_list(self.order+1:self.control_number+1))
-%                     N_u_list=N_u_list/2;
-%                 end
+                %                 if any(u_x == self.u_list(self.degree+1:self.control_number+1))
+                %                     N_u_list=N_u_list/2;
+                %                 end
 
                 point_list(point_index,:)=N_u_list*self.control_list(index_start:index_end,:)/sum(N_u_list);
             end
@@ -241,7 +271,7 @@ classdef CurveBSpline < handle
                     end
                 end
             end
-            
+
             if isempty(figure_handle)
                 figure_handle=figure(101);
             end
@@ -269,7 +299,7 @@ classdef CurveBSpline < handle
                 line(axes_handle,point_list(:,1),point_list(:,2),line_option);
                 line(axes_handle,self.node_list(:,1),self.node_list(:,2),node_option);
                 line(axes_handle,self.control_list(:,1),self.control_list(:,2),control_option);
-                
+
             elseif self.dimension == 3
                 line(axes_handle,point_list(:,1),point_list(:,2),point_list(:,3),line_option);
                 line(axes_handle,self.node_list(:,1),self.node_list(:,2),self.node_list(:,3),node_option);
@@ -302,7 +332,7 @@ else
     else
         B=(u_list(i+k+1)-u_x)/(u_list(i+k+1)-u_list(i+1));
     end
-    
+
     N=A*baseFunction(u_list,u_x,i,k-1)+B*baseFunction(u_list,u_x,i+1,k-1);
 end
 end

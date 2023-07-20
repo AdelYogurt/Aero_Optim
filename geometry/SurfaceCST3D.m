@@ -2,25 +2,39 @@ classdef SurfaceCST3D < handle
     % generate surface by CST parameter
     % process order:
     % generate origin surface, deform, rotation(global y z x), translation
+    %
     properties
+        % base parameter
+        name='';
         LX;
         LY;
         LZ;
-
-        % origin parameter
         deform_ID; % 1 is x, 2 is y
-        shape_fcn_X; % (PSI)
-        shape_fcn_Y; % (XI)
-        shape_fcn_Z; % (XI,PSI)
-        N1_fcn_Z; % (XI)
-        N2_fcn_Z; % (XI)
-        class_fcn_Z;
         symmetry_y;
 
+        % origin parameter
+        shape_fcn_X=[]; % (V)
+        shape_fcn_Y=[]; % (U)
+        shape_fcn_Z=[]; % (U, V)
+        N1_fcn_Z=[]; % (U)
+        N2_fcn_Z=[]; % (U)
+        class_fcn_Z=[]; % (N1_fcn_Z, N2_fcn_Z, V)
+
+        % origin gradient parameter
+        dshape_fcn_X=[]; % (V)
+        dshape_fcn_Y=[]; % (U)
+        dshape_fcn_Z=[]; % (U, V)
+        dclass_fcn_Z=[]; % (N1_fcn_Z, N2_fcn_Z, V)
+
         % deform parameter
-        tran_fcn_X=[]; % (PSI)
-        tran_fcn_Y=[]; % (XI)
-        tran_fcn_Z=[]; % (XI,PSI)
+        tran_fcn_X=[]; % (V)
+        tran_fcn_Y=[]; % (U)
+        tran_fcn_Z=[]; % (U,V)
+
+        % gradient deform parameter
+        dtran_fcn_X=[]; % (V)
+        dtran_fcn_Y=[]; % (U)
+        dtran_fcn_Z=[]; % (U,V)
 
         % rotation parameter
         rotation_matrix=[];
@@ -31,30 +45,29 @@ classdef SurfaceCST3D < handle
 
     % define surface function
     methods
-        function self=SurfaceCST3D(LX,LY,LZ,shape_par_X,shape_par_Y,shape_par_Z,class_par_Z,symmetry_y)
+        function self=SurfaceCST3D(name,LX,LY,LZ,shape_par_X,shape_par_Y,shape_par_Z,class_par_Z,symmetry_y)
             % generate 3D CST surface by LX,LY,LZ,shape_par_Y,shape_par_Z,class_par_Z
             %
-            % xi, x=X
-            % psi, y=Y(xi)
-            % zeta, z=Z(xi,psi)
+            % notice:
+            % if input N1, N2 == 0, shape_fun will equal to 1
+            % shape_fcn_X or shape_par_Y should be empty
+            % default function is (u/v)^N1*(1-u/v)^N2
+            % u, x=X(v), shape_fcn_X(V)
+            % v, y=Y(u), shape_fcn_Y(U)
+            % w, z=Z(u,v), shape_fcn_Z(U,V)(mainly control U direction), class_fcn_Z{N1_fcn_Z(U), N2_fcn_Z(U)}(mainly control V direction)
             %
             % input:
-            % LX,LY,LZ,shape_par_Y,shape_par_Z,class_par_Z,symmetry_y
+            % name, LX, LY, LZ, shape_par_X, shape_par_Y, shape_par_Z, class_par_Z, symmetry_y
             %
-            % notice:
-            % shape_fcn_X(PSI), shape_fcn_Y(XI), shape_fcn_Z(XI,PSI), class_fcn_Z{N1_fcn_Z(XI), N2_fcn_Z(XI)}
-            % if input N1, N2 == 0, shape_fun will equal to 1
-            % one of shape_fcn_X and shape_par_Y should be empty
-            %
-            if nargin < 8 || isempty(symmetry_y)
+            if nargin < 9 || isempty(symmetry_y)
                 self.symmetry_y=false(1);
-                if nargin < 7
+                if nargin < 8
                     class_par_Z=[];
-                    if nargin < 6
+                    if nargin < 7
                         shape_par_Z=[];
-                        if nargin < 5
+                        if nargin < 6
                             shape_par_Y=[];
-                            if nargin < 4
+                            if nargin < 5
                                 shape_par_X=[];
                             end
                         end
@@ -63,6 +76,7 @@ classdef SurfaceCST3D < handle
             else
                 self.symmetry_y=symmetry_y;
             end
+            self.name=name;
             self.LX=LX;
             self.LY=LY;
             self.LZ=LZ;
@@ -79,26 +93,26 @@ classdef SurfaceCST3D < handle
                 self.deform_ID=0;
             end
 
-            if isempty(shape_par_X)
-                self.shape_fcn_X=[];
-            elseif isnumeric(shape_par_X)
+            if ~isempty(shape_par_X) && isnumeric(shape_par_X)
                 % shape_par_Y only one cross-section parameter
-                self.shape_fcn_X=@(XI) self.defunShape...
-                    (XI,shape_par_X(1),shape_par_X(2));
-            else
+                self.shape_fcn_X=@(V) self.defunShape(V,shape_par_X(1),shape_par_X(2));
+                % self.dshape_fcn_X=@(V) self.defundShape(V,shape_par_X(1),shape_par_X(2));
+                self.dshape_fcn_X=@(V) self.differFcn(self.shape_fcn_X,V);
+            elseif isa(shape_par_X, 'function_handle')
                 % function handle
                 self.shape_fcn_X=shape_par_X;
+                self.dshape_fcn_X=@(V) self.differFcn(shape_par_X,V);
             end
 
-            if isempty(shape_par_Y)
-                self.shape_fcn_Y=[];
-            elseif isnumeric(shape_par_Y)
+            if ~isempty(shape_par_Y) && isnumeric(shape_par_Y)
                 % shape_par_Y only one cross-section parameter
-                self.shape_fcn_Y=@(XI) self.defunShape...
-                    (XI,shape_par_Y(1),shape_par_Y(2));
+                self.shape_fcn_Y=@(U) self.defunShape(U,shape_par_Y(1),shape_par_Y(2));
+                % self.dshape_fcn_Y=@(U) self.defundShape(U,shape_par_Y(1),shape_par_Y(2));
+                self.dshape_fcn_Y=@(U) self.differFcn(self.shape_fcn_Y,U);
             else
                 % function handle
                 self.shape_fcn_Y=shape_par_Y;
+                self.dshape_fcn_Y=@(U) self.differFcn(shape_par_Y,U);
             end
 
             if isempty(shape_par_Z) && isempty(class_par_Z)
@@ -107,48 +121,51 @@ classdef SurfaceCST3D < handle
                 self.N2_fcn_Z=[];
                 self.class_fcn_Z=[];
             else
-                if isempty(shape_par_Z)
-                    self.shape_fcn_Z=[];
-                elseif isnumeric(shape_par_Z)
-                    % shape_par_Z can have two parameter cross-section parameter
-                    % default shape function donot
-                    if size(shape_par_Z,1) == 1
-                        shape_par_Z=[shape_par_Z;shape_par_Z];
+                if ~isempty(shape_par_Z) && (isnumeric(shape_par_Z) || iscell(shape_par_Z))
+                    % shape_par_Z can have two parameter V direction cross-section parameter
+                    % {V section 1 parameter, V section 2 parameter}
+                    if isnumeric(shape_par_Z)
+                        shape_par_Z={shape_par_Z};
                     end
-                    self.shape_fcn_Z=@(XI,PSI) self.defunShapeZ...
-                        (XI,PSI,shape_par_Z(1,1),shape_par_Z(1,2),shape_par_Z(2,1),shape_par_Z(2,2));
-                else
+                    if length(shape_par_Z) == 1
+                        shape_par_Z=[shape_par_Z,shape_par_Z];
+                    end
+                    self.shape_fcn_Z=@(U,V) self.defunShapeZ(U,V,shape_par_Z{1},shape_par_Z{2});
+                    % self.dshape_fcn_Z=@(U,V) self.defundShapeZ(U,V,shape_par_Z{1},shape_par_Z{2});
+                    self.dshape_fcn_Z=@(U,V) self.differFcn2(self.shape_fcn_Z,U,V);
+                elseif isa(shape_par_Z, 'function_handle')
                     % function handle
                     self.shape_fcn_Z=shape_par_Z;
+                    self.dshape_fcn_Z=@(U,V) self.differFcn2(shape_par_Z,U,V);
                 end
 
                 if isa(class_par_Z, 'function_handle')
                     self.class_fcn_Z=class_par_Z;
-                else
-                    % class_par_Z is {N1,N2}, N1/N2 hace two parameter(means two cross-section)
+                elseif ~isempty(class_par_Z)
+                    % class_par_Z can have two parameter U direction cross-section parameter
+                    % {U section 1 parameter, U section 2 parameter}
                     if isnumeric(class_par_Z)
                         class_par_Z={class_par_Z,class_par_Z};
                     elseif iscell(class_par_Z) && length(class_par_Z) == 1
-                        class_par_Z={class_par_Z{1},class_par_Z{1}};
-                    elseif ~iscell(class_par_Z)
-                        error('calCST: z class function parameter error input')
+                        class_par_Z=[class_par_Z,class_par_Z];
                     end
 
                     if isnumeric(class_par_Z{1})
-                        self.N1_fcn_Z=@(XI) class_par_Z{1}(2).*XI+class_par_Z{1}(1).*(1-XI);
+                        self.N1_fcn_Z=@(U) class_par_Z{1}(1).*(1-U)+class_par_Z{2}(1).*U;
                     else
                         % function handle
                         self.N1_fcn_Z=class_par_Z{1};
                     end
 
                     if isnumeric(class_par_Z{2})
-                        self.N2_fcn_Z=@(XI) class_par_Z{2}(2).*XI+class_par_Z{2}(1).*(1-XI);
+                        self.N2_fcn_Z=@(U) class_par_Z{2}(2).*(1-U)+class_par_Z{1}(2).*U;
                     else
                         % function handle
                         self.N2_fcn_Z=class_par_Z{2};
                     end
-                    self.class_fcn_Z=@(XI,PSI) self.defunClassZ(XI,PSI);
+                    self.class_fcn_Z=@(U,V) self.defunClassZ(U,V);
                 end
+                self.dclass_fcn_Z=@(U,V) self.differFcn2(self.class_fcn_Z,U,V);
             end
 
         end
@@ -157,7 +174,7 @@ classdef SurfaceCST3D < handle
             % base on local coordinate deform or translation surface
             %
             % input:
-            % tran_fcn_X(PSI), tran_fcn_Y(XI), tran_fcn_Z(XI,PSI)
+            % tran_fcn_X(V), tran_fcn_Y(U), tran_fcn_Z(U,V)
             %
             if self.deform_ID == 1
                 if ~isempty(tran_fcn_Y)
@@ -172,6 +189,9 @@ classdef SurfaceCST3D < handle
             self.tran_fcn_X=tran_fcn_X;
             self.tran_fcn_Y=tran_fcn_Y;
             self.tran_fcn_Z=tran_fcn_Z;
+            self.dtran_fcn_X=@(V) self.differFcn(tran_fcn_X,V);
+            self.dtran_fcn_Y=@(U) self.differFcn(tran_fcn_Y,U);
+            self.dtran_fcn_Z=@(U,V) self.differFcn2(tran_fcn_Z,U,V);
         end
 
         function addRotation(self,ang_x,ang_y,ang_z)
@@ -222,31 +242,110 @@ classdef SurfaceCST3D < handle
 
     % common function
     methods
-        function S=defunShape(self,XI,N1,N2)
+        function S=defunShape(self,U,N1,N2)
             % default shape function of X and Y
             %
             NP=self.calNormPar(N1,N2);
-            S=XI.^N1.*(1-XI).^N2/NP;
+            S=U.^N1.*(1-U).^N2/NP;
         end
 
-        function S=defunShapeZ(self,XI,PSI,N11,N12,N21,N22)
+        function G=defundShape(self,U,N1,N2)
+            % default shape function of X and Y
+            %
+            NP=self.calNormPar(N1,N2);
+            G=(N1*U.^(N1-1).*(1-U).^N2-N2*U.^N1.*(1-U).^(N2-1))/NP;
+
+            % numerical stable
+            G(G < -1e4)=-1e4;
+            G(G > 1e4)=1e4;
+        end
+
+        function S=defunShapeZ(self,U,V,NS1,NS2)
             % default shape function of Z
-            % default N1, N2 is relation with PSI
+            % default N1, N2 is relation with V
             %
-            N1=N21.*PSI+N11.*(1-PSI);
-            N2=N22.*PSI+N12.*(1-PSI);
+            N1=NS1(1).*(1-V)+NS2(1).*V;
+            N2=NS1(2).*(1-V)+NS2(2).*V;
             NP=self.calNormPar(N1,N2);
-            S=XI.^N1.*(1-XI).^N2./NP;
+            S=U.^N1.*(1-U).^N2./NP;
         end
 
-        function C=defunClassZ(self,XI,PSI)
-            % default class function of Z
-            % default N1, N2 is relation with XI
+        function [G_U,G_V]=defundShapeZ(self,U,V,NS1,NS2)
+            % default shape function of Z
+            % default N1, N2 is relation with V
             %
-            N1=self.N1_fcn_Z(XI);
-            N2=self.N2_fcn_Z(XI);
+            N1=NS1(1).*(1-V)+NS2(1).*V;
+            N2=NS1(2).*(1-V)+NS2(2).*V;
             NP=self.calNormPar(N1,N2);
-            C=PSI.^N1.*(1-PSI).^N2./NP;
+            G_U=(N1.*U.^(N1-1).*(1-U).^N2-N2.*U.^N1.*(1-U).^(N2-1))./NP;
+
+            dN1_dV=-NS1(1)+NS2(1);
+            dN2_dV=-NS1(2)+NS2(2);
+            G_V=(dN1_dV.*log(U).*U.^N1.*(1-U).^N2+dN2_dV.*log(1-U).*U.^N1.*(1-U).^N2)./NP;
+            G_V(U == 0 | U == 1)=-1e4;
+
+            % numerical stable
+            G_U(G_U < -1e4)=-1e4;
+            G_U(G_U > 1e4)=1e4;
+            G_V(G_V < -1e4)=-1e4;
+            G_V(G_V > 1e4)=1e4;
+        end
+
+        function C=defunClassZ(self,U,V)
+            % default class function of Z
+            % default N1, N2 is relation with U
+            %
+            N1=self.N1_fcn_Z(U);
+            N2=self.N2_fcn_Z(U);
+            NP=self.calNormPar(N1,N2);
+            C=V.^N1.*(1-V).^N2./NP;
+        end
+
+        function G=differFcn(self,fcn,U)
+            % differ to get gradient
+            %
+            step=1e-5;
+            S=fcn(U);
+            S_F=fcn(U+step);
+            G=(S_F-S)/step;
+            bool=~isreal(G) | isnan(G);
+            if any(bool) %% try back walk differ
+                S_B=fcn(U(bool)-step);
+                G(bool)=(S(bool)-S_B)/step;
+            end
+
+            % numerical stable
+            G(G < -1e4)=-1e4;
+            G(G > 1e4)=1e4;
+        end
+
+        function [G_U,G_V]=differFcn2(self,fcn,U,V)
+            % differ to get gradient
+            %
+            step=1e-5;
+            S=fcn(U,V);
+
+            S_F=fcn(U+step,V);
+            G_U=(S_F-S)/step;
+            bool=~isreal(G_U) | isnan(G_U);
+            if any(bool) %% try back walk differ
+                S_B=fcn(U(bool)-step,V(bool));
+                G_U(bool)=(S(bool)-S_B)/step;
+            end
+
+            S_F=fcn(U,V+step);
+            G_V=(S_F-S)/step;
+            bool=~isreal(G_V) | isnan(G_V);
+            if any(bool) %% try back walk differ
+                S_B=fcn(U(bool),V(bool)-step);
+                G_V(bool)=(S(bool)-S_B)/step;
+            end
+
+            % numerical stable
+            G_U(G_U < -1e4)=-1e4;
+            G_U(G_U > 1e4)=1e4;
+            G_V(G_V < -1e4)=-1e4;
+            G_V(G_V > 1e4)=1e4;
         end
 
         function nomlz_par=calNormPar(self,N1,N2)
@@ -259,29 +358,29 @@ classdef SurfaceCST3D < handle
 
     % calculate grid coordinate function
     methods
-        function [X,Y,Z,XI,PSI]=calSurface(self,varargin)
-            % generate 3D CST matrix by XI, PSI or xi_gird_number, psi_gird_number
-            % X=CX*XI
-            % Y=CY*shape_fcn_Y.*PSI, if symmetry_y Y=CY*shape_fcn_Y.*(PSI-0.5)
+        function [X,Y,Z,U,V]=calSurface(self,varargin)
+            % generate 3D CST matrix by U, V or u_gird_number, v_gird_number
+            % X=CX*U
+            % Y=CY*shape_fcn_Y.*V, if symmetry_y, Y=CY*shape_fcn_Y.*(V-0.5)
             % Z=CZ*shape_fcn_Z.*class_fcn_Z
             %
             % default
-            % xi_list=linspace(0,1,xi_gird_num(default is 20)+1)
-            % psi_list=linspace(0,1,psi_gird_num(default is 20)+1), if symmetry_y psi_list=linspace(0.5,1,psi_gird_num+1);
-            % [XI,PSI]=meshgrid(xi_list,psi_list), colume is LaWGS format line
+            % u_list=linspace(0,1,u_gird_num(default is 20)+1)
+            % v_list=linspace(0,1,v_gird_num(default is 20)+1), if symmetry_y v_list=linspace(0.5,1,v_gird_num+1);
+            % [U,V]=meshgrid(u_list,v_list), colume is LaWGS format line
             % value_torl=1e-3
             %
-            % xi, x=X
-            % psi, y=Y(xi)
-            % zeta, z=Z(xi,psi)
+            % u, x=X
+            % v, y=Y(u)
+            % w, z=Z(u,v)
             %
             % input:
-            % XI, PSI
-            % xi_grid_number, psi_grid_number
+            % U, V
+            % u_grid_number, v_grid_number
             % value_torl
             %
             % notice:
-            % shape_fcn_Y(XI), shape_fcn_Z(XI,PSI), class_fcn_Z{N1_fcn_Z(XI), N2_fcn_Z(XI)}
+            % shape_fcn_Y(U), shape_fcn_Z(U,V), class_fcn_Z{N1_fcn_Z(U), N2_fcn_Z(U)}
             %
             % output:
             % X,Y,Z (colume is LaWGS format line)
@@ -296,109 +395,97 @@ classdef SurfaceCST3D < handle
                 end
                 max_level=50;
 
-                % adapt capture y
+                % adapt capture U, V
                 if self.symmetry_y
-                    low_bou_y=0.5;
+                    low_bou=[0,0.5];
                 else
-                    low_bou_y=0;
+                    low_bou=[0,0];
                 end
-                if ~isempty(self.shape_fcn_X)
-                    [psi_list,~,~]=girdAdapt1D(self.shape_fcn_X,low_bou_y,1,value_torl,max_level);
-                else
-                    psi_list=[];
-                end
-                if length(psi_list) < 21
-                    psi_list=linspace(low_bou_y,1,21);
-                end
-
-                % adapt capture x
-                if ~isempty(self.shape_fcn_Y)
-                    [xi_list,~,~]=girdAdapt1D(self.shape_fcn_Y,0,1,value_torl,max_level);
-                else
-                    xi_list=[];
-                end
-                if length(xi_list) < 21
-                    xi_list=linspace(0,1,21);
-                end
-
-                [XI,PSI]=meshgrid(xi_list,psi_list);
+                up_bou=[1,1];
+                [U,V,Fval,~]=girdAdapt2DM(@(x) coordFcn(self,x),low_bou,up_bou,value_torl,max_level,3);
+                X=Fval(:,:,1);
+                Y=Fval(:,:,2);
+                Z=Fval(:,:,3);
             elseif nargin == 3
-                % input is XI, PSI or xi_grid_number, psi_grid_number
+                % input is U, V or u_grid_number, v_grid_number
                 if length(varargin{1}) == 1
-                    XI=[];
-                    xi_grid_numebr=varargin{1};
+                    U=[];
+                    u_grid_numebr=varargin{1};
                 else
-                    % mean input XI matrix
-                    XI=varargin{1};
-                    xi_grid_numebr=size(XI,2)-1;
+                    % mean input U matrix
+                    U=varargin{1};
+                    u_grid_numebr=size(U,2)-1;
                 end
 
                 if length(varargin{2}) == 1
-                    PSI=[];
-                    psi_grid_numebr=varargin{2};
+                    V=[];
+                    v_grid_numebr=varargin{2};
                 else
-                    % mean input PSI matrix
-                    PSI=varargin{2};
-                    psi_grid_numebr=size(PSI,1)-1;
+                    % mean input V matrix
+                    V=varargin{2};
+                    v_grid_numebr=size(V,1)-1;
                 end
 
                 % calculate local coordinate matrix
-                if isempty(XI)
-                    xi_list=linspace(0,1,xi_grid_numebr+1);
-                    XI=repmat(xi_list,psi_grid_numebr+1,1);
+                if isempty(U)
+                    u_list=linspace(0,1,u_grid_numebr+1);
+                    U=repmat(u_list,v_grid_numebr+1,1);
                 end
-                if isempty(PSI)
-                    psi_list=linspace(0,1,psi_grid_numebr+1)';
+                if isempty(V)
+                    v_list=linspace(0,1,v_grid_numebr+1)';
                     if self.symmetry_y
-                        psi_list=psi_list/2+0.5;
+                        v_list=v_list/2+0.5;
                     end
-                    PSI=repmat(psi_list,1,xi_grid_numebr+1);
+                    V=repmat(v_list,1,u_grid_numebr+1);
                 end
+            
+                [X,Y,Z]=self.calPoint(U,V);
             end
-
-            [X,Y,Z]=self.calPoint(XI,PSI);
+            
+            function fval=coordFcn(self,x)
+                [x,y,z]=self.calPoint(x(1),x(2));
+                fval=[x,y,z];
+            end
         end
 
-        function [X,Y,Z]=calPoint(self,XI,PSI)
+        function [X,Y,Z]=calPoint(self,U,V)
             % calculate point on surface
             %
 
             % calculate origin surface matrix
-            X=self.LX*XI;
+            X=self.LX*U;
             if ~isempty(self.shape_fcn_X)
-                X=X.*self.shape_fcn_X(PSI);
+                X=X.*self.shape_fcn_X(V);
             end
 
             if self.symmetry_y
-                Y=self.LY*(PSI-0.5);
+                Y=self.LY*(V-0.5);
             else
-                Y=self.LY*PSI;
+                Y=self.LY*V;
             end
             if ~isempty(self.shape_fcn_Y)
-                Y=Y.*self.shape_fcn_Y(XI);
+                Y=Y.*self.shape_fcn_Y(U);
             end
 
             if isempty(self.shape_fcn_Z) && isempty(self.class_fcn_Z)
                 Z=zeros(size(X));
             elseif isempty(self.shape_fcn_Z)
-                Z=self.LZ*self.class_fcn_Z(XI,PSI);
+                Z=self.LZ*self.class_fcn_Z(U,V);
             elseif isempty(self.class_fcn_Z)
-                Z=self.LZ*self.shape_fcn_Z(XI,PSI);
+                Z=self.LZ*self.shape_fcn_Z(U,V);
             else
-                Z=self.LZ*self.shape_fcn_Z(XI,PSI).*self.class_fcn_Z(XI,PSI);
+                Z=self.LZ*self.shape_fcn_Z(U,V).*self.class_fcn_Z(U,V);
             end
 
             % deform surface
             if ~isempty(self.tran_fcn_X)
-                X=X+self.tran_fcn_X(PSI);
+                X=X+self.tran_fcn_X(V);
             end
-
             if ~isempty(self.tran_fcn_Y)
-                Y=Y+self.tran_fcn_Y(XI);
+                Y=Y+self.tran_fcn_Y(U);
             end
-
             if ~isempty(self.tran_fcn_Z)
-                Z=Z+self.tran_fcn_Z(XI,PSI);
+                Z=Z+self.tran_fcn_Z(U,V);
             end
 
             % rotation surface
@@ -419,9 +506,10 @@ classdef SurfaceCST3D < handle
 
         end
 
-        function [XI,PSI]=calCoordinate(self,X,Y,Z)
+        function [U,V,X,Y,Z]=calCoordinate(self,X,Y,Z)
             % base on X, Y, Z calculate local coordinate in surface
             %
+            XO=X;YO=Y;ZO=Z;geo_torl=1e-6;
 
             % undone translation surface
             if ~isempty(self.translation)
@@ -446,14 +534,14 @@ classdef SurfaceCST3D < handle
                     Y=max(Y,self.LY);Y=min(Y,0);
                 end
 
-                PSI=Y./self.LY;
+                V=Y./self.LY;
                 if self.symmetry_y
-                    PSI=PSI+0.5;
+                    V=V+0.5;
                 end
 
                 % re deform surface
                 if ~isempty(self.tran_fcn_X)
-                    X=X-self.tran_fcn_X(PSI);
+                    X=X-self.tran_fcn_X(V);
                 end
 
                 if self.LX > 0
@@ -461,108 +549,62 @@ classdef SurfaceCST3D < handle
                 else
                     X=min(X,0);
                 end
-                XI=X./self.LX;
+                U=X./self.LX;
                 if ~isempty(self.shape_fcn_X)
-                    shape=self.shape_fcn_X(PSI);
+                    shape=self.shape_fcn_X(V);
                     shape(shape==0)=1;
-                    XI=XI./shape;
+                    U=U./shape;
                 end
 
                 % judge local coordinate
-                XI=min(XI,1);
+                U=min(U,1);
             elseif self.deform_ID == 2
                 if self.LX > 0
                     X=max(X,0);X=min(X,self.LX);
                 else
-                    X=max(X,self.LX);Y=min(X,0);
+                    X=max(X,self.LX);X=min(X,0);
                 end
 
-                XI=X./self.LX;
+                U=X./self.LX;
 
                 % re deform surface
                 if ~isempty(self.tran_fcn_Y)
-                    Y=Y-self.tran_fcn_Y(XI);
+                    Y=Y-self.tran_fcn_Y(U);
                 end
 
-                PSI=Y./self.LY;
+                V=Y./self.LY;
                 if ~isempty(self.shape_fcn_Y)
-                    shape=self.shape_fcn_Y(XI);
+                    shape=self.shape_fcn_Y(U);
                     shape(shape==0)=1;
-                    PSI=PSI./shape;
+                    V=V./shape;
                 end
 
                 % judge local coordinate
                 if self.symmetry_y
-                    PSI=PSI+0.5;
+                    V=V+0.5;
                 end
-                PSI=min(PSI,1);
+                V=min(V,1);
             end
 
+            U=max(U,0);U=min(U,1);
+            V=max(V,0);V=min(V,1);
+
+            % use project function to adjust parameter
+            [X,Y,Z,U,V]=self.calProject(XO,YO,ZO,U,V,geo_torl);
         end
 
-    end
-
-    % discrete surface function
-    methods
-        function [X,Y,Z]=calPointDiscrete(self,XI,PSI,XI_surf,PSI_surf)
-            % calculate point on surface
-            %
-            [X_surf,Y_surf,Z_surf]=calSurface(self,XI_surf,PSI_surf);
-
-            xi_gird_num=length(XI_surf)-1;
-            psi_gird_num=length(PSI_surf)-1;
-
-            point_num=length(XI);
-            X=zeros(point_num,1);Y=zeros(point_num,1);Z=zeros(point_num,1);
-
-            for point_idx=1:point_num
-                xi=XI(point_idx);
-                psi=PSI(point_idx);
-
-                % locate point in which grid
-                xi_idx=1; % search start from last one, find out X samll than x
-                while ((xi_idx < xi_gird_num) && (XI_surf(xi_idx+1) < xi))
-                    xi_idx=xi_idx+1;
-                end
-                psi_idx=1; % search start from last one, find out X samll than x
-                while ((psi_idx < psi_gird_num) && (PSI_surf(psi_idx+1) < psi))
-                    psi_idx=psi_idx+1;
-                end
-
-                grid_xi=(xi-XI_surf(xi_idx))/(XI_surf(xi_idx+1)-XI_surf(xi_idx));
-                grid_psi=(psi-PSI_surf(psi_idx))/(PSI_surf(psi_idx+1)-PSI_surf(psi_idx));
-                N1=(1-grid_xi)*(1-grid_psi);
-                N2=grid_xi*(1-grid_psi);
-                N3=grid_xi*grid_psi;
-                N4=(1-grid_xi)*grid_psi;
-
-                idx_1=(psi_gird_num+1)*(xi_idx-1)+psi_idx;
-                idx_2=(psi_gird_num+1)*(xi_idx)+psi_idx;
-                idx_3=(psi_gird_num+1)*(xi_idx)+psi_idx+1;
-                idx_4=(psi_gird_num+1)*(xi_idx-1)+psi_idx+1;
-
-                X(point_idx)=X_surf(idx_1)*N1+X_surf(idx_2)*N2+X_surf(idx_3)*N3+X_surf(idx_4)*N4;
-                Y(point_idx)=Y_surf(idx_1)*N1+Y_surf(idx_2)*N2+Y_surf(idx_3)*N3+Y_surf(idx_4)*N4;
-                Z(point_idx)=Z_surf(idx_1)*N1+Z_surf(idx_2)*N2+Z_surf(idx_3)*N3+Z_surf(idx_4)*N4;
-            end
-        end
-
-        function [XI,PSI]=calCoordinateDiscrete(self,X,Y,Z,XI_bou,PSI_bou,check_flag)
+        function [U,V,X,Y,Z]=calCoordinateDiscrete(self,X,Y,Z,U_bou,V_bou)
             % base on X, Y, Z calculate local coordinate in surface
             % calculate local coordinate of point which surface is discrete
             %
-            if nargin < 7
-                check_flag=false(1);
-            end
-            geometry_torlance=1e-3;
-            X_origin=X;Y_origin=Y;Z_origin=Z;
+            XO=X;YO=Y;ZO=Z;geo_torl=1e-6;
 
-            if length(XI_bou) == 1
-                XI_bou=linspace(0,1,XI_bou+1);
+            if length(U_bou) == 1
+                U_bou=linspace(0,1,U_bou+1);
             end
 
-            if length(PSI_bou) == 1
-                PSI_bou=linspace(0,1,PSI_bou+1)';
+            if length(V_bou) == 1
+                V_bou=linspace(0,1,V_bou+1)';
             end
 
             % undone translation surface
@@ -588,15 +630,15 @@ classdef SurfaceCST3D < handle
                     Y=max(Y,self.LY);Y=min(Y,0);
                 end
 
-                PSI=Y./self.LY;
+                V=Y./self.LY;
                 if self.symmetry_y
-                    PSI=PSI+0.5;
+                    V=V+0.5;
                 end
 
                 % re deform surface
                 if ~isempty(self.tran_fcn_X)
                     % how to solve?
-                    X=X-calDicrete(self.tran_fcn_X,PSI,PSI_bou);
+                    X=X-calDicrete(self.tran_fcn_X,V,V_bou);
                 end
 
                 if self.LX > 0
@@ -604,16 +646,16 @@ classdef SurfaceCST3D < handle
                 else
                     X=min(X,0);
                 end
-                % base on up bou to re calculate PSI local coordinate
-                XI=X./self.LX;
+                % base on up bou to re calculate V local coordinate
+                U=X./self.LX;
                 if ~isempty(self.shape_fcn_X)
-                    shape=calDicrete(self.shape_fcn_X,PSI,PSI_bou);
+                    shape=calDicrete(self.shape_fcn_X,V,V_bou);
                     shape(shape==0)=1;
-                    XI=XI./shape;
+                    U=U./shape;
                 end
 
                 % judge local coordinate
-                XI=min(XI,1);
+                U=min(U,1);
 
             elseif self.deform_ID == 2
                 if self.LX > 0
@@ -622,11 +664,11 @@ classdef SurfaceCST3D < handle
                     X=max(X,self.LX);Y=min(X,0);
                 end
 
-                XI=X./self.LX;
+                U=X./self.LX;
 
                 % re deform surface
                 if ~isempty(self.tran_fcn_Y)
-                    Y=Y-calDicrete(self.tran_fcn_Y,XI,XI_bou);
+                    Y=Y-calDicrete(self.tran_fcn_Y,U,U_bou);
                 end
 
                 if self.LY > 0
@@ -634,38 +676,164 @@ classdef SurfaceCST3D < handle
                 else
                     Y=min(Y,0);
                 end
-                % base on up bou to re calculate PSI local coordinate
-                PSI=Y./self.LY;
+                % base on up bou to re calculate V local coordinate
+                V=Y./self.LY;
                 if ~isempty(self.shape_fcn_Y)
-                    shape=calDicrete(self.shape_fcn_Y,XI,XI_bou);
+                    shape=calDicrete(self.shape_fcn_Y,U,U_bou);
                     shape(shape==0)=1;
-                    PSI=PSI./shape;
+                    V=V./shape;
                 end
 
                 % judge local coordinate
                 if self.symmetry_y
-                    PSI=PSI+0.5;
+                    V=V+0.5;
                 end
-                PSI=min(PSI,1);
+                V=min(V,1);
 
             end
+            
+            U=max(U,0);U=min(U,1);
+            V=max(V,0);V=min(V,1);
 
-            if check_flag
-                [X_new,Y_new,Z_new]=self.calPointDiscrete(XI,PSI,XI_bou,PSI_bou);
-                boolean=(abs(X_origin-X_new)+abs(Y_origin-Y_new)+abs(Z_origin-Z_new)) > geometry_torlance;
-                recal_index=find(boolean);
+            % use project function to adjust parameter
+            [X,Y,Z,U,V]=self.calProject(XO,YO,ZO,U,V,geo_torl);
+        end
 
-                % re project point to surface and calculate coordinate
-                for idx=1:length(recal_index)
-                    obj_fcn=@(x) objFcn(x,X_origin(recal_index(idx)),Y_origin(recal_index(idx)),Z_origin(recal_index(idx)));
-                    x=fmincon(obj_fcn,[XI(recal_index(idx)),PSI(recal_index(idx))],[],[],[],[],[0,0],[1,1],[],optimoptions('fmincon','Display','none'));
-                    XI(recal_index(idx))=x(1);PSI(recal_index(idx))=x(2);
-                end
+    end
+
+    % calculate project point coordinate function
+    methods
+        function [dX_dU,dY_dU,dZ_dU,dX_dV,dY_dV,dZ_dV]=calGradient(self,U,V)
+            % calculate x, y, z gradient to u, v
+            %
+            
+            % calculate origin surface matrix gradient
+            dX_dU=self.LX*ones(size(U));
+            if ~isempty(self.shape_fcn_X)
+                dX_dU=dX_dU.*(self.shape_fcn_X(V));
+                dX_dV=dX_dU.*U.*self.dshape_fcn_X(V);
+            else
+                dX_dV=zeros(size(U));
             end
 
-            function obj=objFcn(x,x_origin,y_origin,z_origin)
-                [x_new,y_new,z_new]=self.calPointDiscrete(x(1),x(2),XI_bou,PSI_bou);
-                obj=(abs(x_origin-x_new)+abs(y_origin-y_new)+abs(z_origin-z_new));
+            dY_dV=self.LY*ones(size(V));
+            if ~isempty(self.shape_fcn_Y)
+                dY_dV=dY_dV.*(self.shape_fcn_Y(U));
+                dY_dU=dY_dV.*V.*self.dshape_fcn_Y(U);
+            else
+                dY_dU=zeros(size(V));
+            end
+
+            if isempty(self.shape_fcn_Z) && isempty(self.class_fcn_Z)
+                dZ_dU=zeros(size(U));dZ_dV=zeros(size(V));
+            elseif isempty(self.shape_fcn_Z)
+                [dZ_dU,dZ_dV]=self.dclass_fcn_Z(U,V);
+                dZ_dU=dZ_dU*self.LZ;dZ_dV=dZ_dV*self.LZ;
+            elseif isempty(self.class_fcn_Z)
+                [dZ_dU,dZ_dV]=self.dshape_fcn_Z(U,V);
+                dZ_dU=dZ_dU*self.LZ;dZ_dV=dZ_dV*self.LZ;
+            else
+                [dSZ_dU,dSZ_dV]=self.dshape_fcn_Z(U,V);
+                [dCZ_dU,dCZ_dV]=self.dclass_fcn_Z(U,V);
+                dZ_dU=(dSZ_dU.*self.class_fcn_Z(U,V)+self.shape_fcn_Z(U,V).*dCZ_dU)*self.LZ;
+                dZ_dV=(dSZ_dV.*self.class_fcn_Z(U,V)+self.shape_fcn_Z(U,V).*dCZ_dV)*self.LZ;
+            end
+
+            % calculate deform surface gradient
+            if ~isempty(self.tran_fcn_X)
+                dX_dV=dX_dV+self.dtran_fcn_X(V);
+            end
+            if ~isempty(self.tran_fcn_Y)
+                dY_dU=dY_dU+self.dtran_fcn_Y(U);
+            end
+            if ~isempty(self.tran_fcn_Z)
+                [dTZ_dU,dTZ_dV]=self.dtran_fcn_Z(U,V);
+                dZ_dU=dZ_dU+dTZ_dU;
+                dZ_dV=dZ_dU+dTZ_dV;
+            end
+
+            % calculate rotation surface gradient
+            if ~isempty(self.rotation_matrix)
+                matrix=self.rotation_matrix;
+                dX_dU_old=dX_dU;dY_dU_old=dY_dU;dZ_dU_old=dZ_dU;
+                dX_dV_old=dX_dV;dY_dV_old=dY_dV;dZ_dV_old=dZ_dV;
+                dX_dU=matrix(1,1)*dX_dU_old+matrix(1,2)*dY_dU_old+matrix(1,3)*dZ_dU_old;
+                dX_dV=matrix(1,1)*dX_dV_old+matrix(1,2)*dY_dV_old+matrix(1,3)*dZ_dV_old;
+                dY_dU=matrix(2,1)*dX_dU_old+matrix(2,2)*dY_dU_old+matrix(2,3)*dZ_dU_old;
+                dY_dV=matrix(2,1)*dX_dV_old+matrix(2,2)*dY_dV_old+matrix(2,3)*dZ_dV_old;
+                dZ_dU=matrix(3,1)*dX_dU_old+matrix(3,2)*dY_dU_old+matrix(3,3)*dZ_dU_old;
+                dZ_dV=matrix(3,1)*dX_dV_old+matrix(3,2)*dY_dV_old+matrix(3,3)*dZ_dV_old;
+            end
+
+        end
+
+        function [dX_dU,dY_dU,dZ_dU,dX_dV,dY_dV,dZ_dV]=calGradientDiffer(self,U,V,X,Y,Z)
+            % use differ ot calculate gradient
+            %
+            if nargin < 5
+                [X,Y,Z]=self.calPoint(U,V);
+            end
+            step=1e-5;
+
+            [X_UF,Y_UF,Z_UF]=self.calPoint(U+step,V);
+            dX_dU=(X_UF-X)/step;dY_dU=(Y_UF-Y)/step;dZ_dU=(Z_UF-Z)/step;
+            bool=~isreal(dX_dU) | isnan(dX_dU) |...
+                ~isreal(dY_dU) | isnan(dY_dU) |...
+                ~isreal(dZ_dU) | isnan(dZ_dU);
+            if any(bool) %% try back walk differ
+                [X_UB,Y_UB,Z_UB]=self.calPoint(U(bool)-step,V(bool));
+                dX_dU(bool)=(X(bool)-X_UB)/step;dY_dU(bool)=(Y(bool)-Y_UB)/step;dZ_dU(bool)=(Z(bool)-Z_UB)/step;
+            end
+
+            [X_VF,Y_VF,Z_VF]=self.calPoint(U,V+step);
+            dX_dV=(X_VF-X)/step;dY_dV=(Y_VF-Y)/step;dZ_dV=(Z_VF-Z)/step;
+            bool=~isreal(dX_dV) | isnan(dX_dV) |...
+                ~isreal(dY_dV) | isnan(dY_dV) |...
+                ~isreal(dZ_dV) | isnan(dZ_dV);
+            if any(bool) %% try back walk differ
+                [X_VB,Y_VB,Z_VB]=self.calPoint(U(bool),V(bool)-step);
+                dX_dV(bool)=(X(bool)-X_VB)/step;dY_dV(bool)=(Y(bool)-Y_VB)/step;dZ_dV(bool)=(Z(bool)-Z_VB)/step;
+            end
+        end
+
+        function [X,Y,Z,U,V]=calProject(self,XO,YO,ZO,U,V,geo_torl)
+            % adjust u, v by Jacobian transformation
+            % also can project point to surface
+            %
+            if nargin < 7
+                geo_torl=1e-6;
+            end
+
+            iter=0;
+            iter_max=10;
+
+            [X,Y,Z]=self.calPoint(U,V);
+%             scatter3(X,Y,Z);
+            dX=XO-X;dY=YO-Y;dZ=ZO-Z;
+            boolean=(abs(dX)+abs(dY)+abs(dZ)) > geo_torl;
+            while any(boolean) && iter < iter_max
+                [dX_dU,dY_dU,dZ_dU,dX_dV,dY_dV,dZ_dV]=self.calGradientDiffer(U(boolean),V(boolean),X(boolean),Y(boolean),Z(boolean));
+
+                RU_RU=dX_dU.^2+dY_dU.^2+dZ_dU.^2;
+                RV_RV=dX_dV.^2+dY_dV.^2+dZ_dV.^2;
+                RU_RV=dX_dU.*dX_dV+dY_dU.*dY_dV+dZ_dU.*dZ_dV;
+                RU_D=dX_dU.*dX(boolean)+dY_dU.*dY(boolean)+dZ_dU.*dZ(boolean);
+                RV_D=dX_dV.*dX(boolean)+dY_dV.*dY(boolean)+dZ_dV.*dZ(boolean);
+                RRRR_RR=RU_RU.*RV_RV-(RU_RV).^2;
+                dU=(RU_D.*RV_RV-RV_D.*RU_RV)./RRRR_RR;
+                dV=(RV_D.*RU_RU-RU_D.*RU_RV)./RRRR_RR;
+
+                U(boolean)=U(boolean)+dU;
+                V(boolean)=V(boolean)+dV;
+                U=max(U,0);U=min(U,1);
+                V=max(V,0);V=min(V,1);
+
+                [X,Y,Z]=self.calPoint(U,V);
+%                 scatter3(X,Y,Z);
+
+                dX=XO-X;dY=YO-Y;dZ=ZO-Z;
+                iter=iter+1;
+                boolean=(abs(dU)+abs(dV)) > geo_torl;
             end
         end
 
@@ -673,46 +841,72 @@ classdef SurfaceCST3D < handle
 
     % external function
     methods
-        function surface_BSpline=getBSpline(self,varargin)
+        function drawSurface()
+
+        end
+        
+        function surface_BSpline=getSurfaceBSpline(self,varargin)
             % convert CST surface into BSpline surface
             %
             % input:
-            % XI,PSI
-            % xi_grid_number, psi_grid_number
+            % U,V
+            % u_grid_number, v_grid_number
             % value torlance
             %
 
             if nargin == 1
-                [X,Y,Z,XI,PSI]=calSurface(self);
+                [X,Y,Z,U,V]=calSurface(self);
             elseif nargin == 2
-                [X,Y,Z,XI,PSI]=calSurface(self,varargin{1});
+                [X,Y,Z,U,V]=calSurface(self,varargin{1});
             elseif nargin == 3
-                XI=varargin{1};
-                PSI=varargin{2};
-                if length(XI) > 1 && XI(1,1) > XI(1,2)
-                    XI=fliplr(XI);
+                U=varargin{1};
+                V=varargin{2};
+                if length(U) > 1 && U(1,1) > U(1,2)
+                    U=fliplr(U);
                 end
-                if length(PSI) > 1 && PSI(1,1) > PSI(2,1)
-                    PSI=flipud(PSI);
+                if length(V) > 1 && V(1,1) > V(2,1)
+                    V=flipud(V);
                 end
-                [X,Y,Z,XI,PSI]=calSurface(self,XI,PSI);
+                [X,Y,Z,U,V]=calSurface(self,U,V);
             else
                 error('SurfaceCST3D.getBSpline: error input');
             end
 
-            u_list=[0,0,0,XI(1,:),0,0,0];
-            v_list=[0,0,0,PSI(:,1)',0,0,0];
-            surface_BSpline=SurfaceBSpline([],[],[],X,Y,Z,u_list,v_list);
+            if size(X,2) == 2
+                u_list=[0,0,1,1];
+            else
+                u_list=[0,0,0,U(1,:),1,1,1];
+            end
+            if size(X,1) == 2
+                v_list=[0,0,1,1];
+            else
+                v_list=[0,0,0,V(:,1)',1,1,1];
+            end
+            surface_BSpline=SurfaceBSpline(self.name,[],[],[],X,Y,Z,[],[],u_list,v_list);
+        end
+
+        function [step_str,object_index,OPEN_SHELL_index]=getStepNode(self,object_index,varargin)
+            % interface of BSpline surface getStepNode function
+            %
+            if nargin == 2
+                surf_BSpline=self.getSurfaceBSpline();
+            elseif nargin == 3
+                surf_BSpline=self.getSurfaceBSpline(varargin{1});
+            else
+                surf_BSpline=self.getSurfaceBSpline(varargin{1},varargin{2});
+            end
+
+            [step_str,object_index,OPEN_SHELL_index]=surf_BSpline.getStepNode(object_index);
         end
     end
 end
 
-function Y=calDicrete(fcn,XI,XI_bou)
-Y_bou=fcn(XI_bou);
-xi_number=length(XI);
-Y=XI;
-for xi_index=1:xi_number
-    Y(xi_index)=interpLinear(XI(xi_index),XI_bou,Y_bou);
+function Y=calDicrete(fcn,U,U_bou)
+Y_bou=fcn(U_bou);
+u_number=length(U);
+Y=U;
+for u_index=1:u_number
+    Y(u_index)=interpLinear(U(u_index),U_bou,Y_bou);
 end
 end
 
@@ -737,37 +931,84 @@ else
 end
 end
 
-function [x_list,fval_list,node_list]=girdAdapt1D(fcn,low_bou,up_bou,torl,max_level)
-% adapt capture function value
+function [U,V,Fval,node_list]=girdAdapt2DM(fcn,low_bou,up_bou,torl,max_level,fval_num)
+% 2D Omni-Tree
+% adapt capture 2 dimemsion function value
 % ensure error of linear interplation will less than torl
 %
+if nargin < 6
+    fval_num=1;
+end
 
 % node_list which is a matrix store all node
-% a node is a array, contain level, x, fval, node_low_bou_index, node_up_bou_index, left_index, right_index
+% a node is a array, contain:
+% level, idx_1-8(index of data_list), idx_c, node_index_1-4
+% place:
+% 3-8-4 or 3-4 or 3-8-4
+% 1-5-2    6-7    6-c-7
+%          1-2    1-5-2
+% node:
+% 1-2 or 3 or 3-4
+%        1    1-2
 % if children node is empty, left_index or right_index will be zero
-node_add_num=50; % node_list will be extend only when node_list is not enough
-node_list=zeros(node_add_num,7);
+list_add_num=50; % list will be extend only when list is not enough
+node_list=zeros(list_add_num,14,'int64');
+% data_list use to sort all float data include coodinate, function value
+data_list=zeros(list_add_num,fval_num+2);
 
-% add low_bou data and up_bou data
-% root will start from index 3
-node_list(1,:)=[0,low_bou,fcn(low_bou),0,0,0,0];
-node_list(2,:)=[0,up_bou,fcn(up_bou),0,0,0,0];
+% add vertex of cell into data_list first
+bou_1=[low_bou(1),low_bou(2)];
+data_list(1,:)=[bou_1,fcn(bou_1)];
+bou_2=[up_bou(1),low_bou(2)];
+data_list(2,:)=[bou_2,fcn(bou_2)];
+bou_3=[low_bou(1),up_bou(2)];
+data_list(3,:)=[bou_3,fcn(bou_3)];
+bou_4=[up_bou(1),up_bou(2)];
+data_list(4,:)=[bou_4,fcn(bou_4)];
 
-x=(low_bou+up_bou)/2;
-fval=fcn(x);
-level=0;
-node_list(3,:)=[level,x,fval,1,2,0,0]; % root
+% create base root
+node_list(1,:)=[0,1,2,3,4,0,0,0,0,0,0,0,0,0];
 
-node_num=createNodeTree(3); % create node tree from root
+[node_num,data_num]=createNodeTree(1,4); % create node tree from root
 node_list=node_list(1:node_num,:);
-[x_list,fval_list]=traversalInorder(3); % from small to large get list
+data_list=data_list(1:data_num,:);
 
-% add boundary info
-x_list=[node_list(1,2),x_list,node_list(2,2)];
-fval_list=[node_list(1,3),fval_list,node_list(2,3)];
+% % inorder traversal to obtain u and v aus coordinate
+% idx_list=zeros(data_num,2); % data idx in u_list
+% u_list=traversalInorder(1,1,[11,13],[12,14],[6,9,10]);
+% v_list=traversalInorder(1,2,[11,12],[13,14],[7,8,10]);
+% 
+% % add boundary
+% u_list=[low_bou(1),u_list,up_bou(1)];
+% v_list=[low_bou(2),v_list,up_bou(2)];
 
-    function node_num=createNodeTree(root_idx)
-        %
+[u_list,~,u_idx]=unique(data_list(:,1));
+[v_list,~,v_idx]=unique(data_list(:,2));
+idx_list=[u_idx,v_idx];
+
+[U,V]=meshgrid(u_list,v_list);
+
+% local data to Fval
+Fval=nan(length(v_list),length(u_list),fval_num);
+
+for data_idx=1:data_num
+    if all([idx_list(data_idx,2),idx_list(data_idx,1)] ~= 0)
+        Fval(idx_list(data_idx,2),idx_list(data_idx,1),:)=data_list(data_idx,3:end);
+    end
+end
+
+% fit nan data
+for rank_idx=1:length(v_list)
+    for colume_idx=1:length(u_list)
+        if isnan(Fval(rank_idx,colume_idx,1))
+            Fval(rank_idx,colume_idx,:)=fcn([U(rank_idx,colume_idx),V(rank_idx,colume_idx)]);
+        end
+    end
+end
+
+
+    function [node_num,data_num]=createNodeTree(root_idx,data_num)
+        % create quad tree
         %
         stack=root_idx;
         node_num=root_idx;
@@ -778,73 +1019,184 @@ fval_list=[node_list(1,3),fval_list,node_list(2,3)];
             node=node_list(node_idx,:);
             stack=stack(1:end-1);
 
-            % check left
-            x_left=(node_list(node(4),2)+node(2))/2;
-            fval_left=fcn(x_left);
-            fval_left_pred=(node_list(node(4),3)+node(3))/2;
-            if abs(fval_left-fval_left_pred) > torl && node(1) < max_level
-                % create new node
-                node_left_index=node_num+1;
-                node_left=[node(1)+1,x_left,fval_left,node(4),node_idx,0,0];
+            if node(1) < max_level
+                % judge if linear predict if accptable
+                % if not, create children cell
+                %
+                [coord_c,coord_5,coord_6,coord_7,coord_8,...
+                    fval_c,fval_5,fval_6,fval_7,fval_8]=calCell(node(2),node(3),node(4),node(5));
+                [fval_pred_c,fval_pred_5,fval_pred_6,...
+                    fval_pred_7,fval_pred_8]=calCellPred(node(2),node(3),node(4),node(5));
 
-                if node_left_index > size(node_list,1)
-                    node_list=[node_list;zeros(node_add_num,7)];
+                % check u direction
+                if any(abs(fval_5-fval_pred_5) > torl) || any(abs(fval_8-fval_pred_8) > torl)
+                    add_u_flag=true(1);
+                else
+                    add_u_flag=false(1);
                 end
-                node_list(node_left_index,:)=node_left;
-                node_num=node_num+1;
 
-                stack=[stack,node_left_index];
-            else
-                node_left_index=0;
-            end
-
-            % check right
-            x_right=(node_list(node(5),2)+node(2))/2;
-            fval_right=fcn(x_right);
-            fval_right_pred=(node_list(node(5),3)+node(3))/2;
-            if abs(fval_right-fval_right_pred) > torl && node(1) < max_level
-                % create new node
-                node_right_index=node_num+1;
-                node_right=[node(1)+1,x_right,fval_right,node_idx,node(5),0,0];
-
-                if node_right_index > size(node_list,1)
-                    node_list=[node_list;zeros(node_add_num,7)];
+                % check v direction
+                if any(abs(fval_6-fval_pred_6) > torl) || any(abs(fval_7-fval_pred_7) > torl)
+                    add_v_flag=true(1);
+                else
+                    add_v_flag=false(1);
                 end
-                node_list(node_right_index,:)=node_right;
-                node_num=node_num+1;
 
-                stack=[stack,node_right_index];
-            else
-                node_right_index=0;
+                % check center place
+                if ~add_u_flag && ~add_v_flag && any(abs(fval_c-fval_pred_c) > torl)
+                    add_u_flag=true(1);
+                    add_v_flag=true(1);
+                end
+
+                if add_u_flag && add_v_flag
+                    % add 5 data into data_list
+                    data_new_idx=data_num+(1:5);
+                    if data_num+5 > size(data_list,1)
+                        data_list=[data_list;zeros(list_add_num,fval_num+2)];
+                    end
+                    data_list(data_new_idx,:)=[
+                        coord_5,fval_5;
+                        coord_6,fval_6;
+                        coord_7,fval_7;
+                        coord_8,fval_8;
+                        coord_c,fval_c;];
+                    node(6:10)=data_new_idx;
+                    data_num=data_num+5;
+
+                    % add 4 new node to node_list
+                    node_new_idx=node_num+(1:4);
+                    if node_num+4 > size(node_list,1)
+                        node_list=[node_list;zeros(list_add_num,14)];
+                    end
+                    node_list(node_new_idx,:)=[...
+                        node(1)+1,node(2),node(6),node(7),node(10),0,0,0,0,0,0,0,0,0;
+                        node(1)+1,node(6),node(3),node(10),node(8),0,0,0,0,0,0,0,0,0;
+                        node(1)+1,node(7),node(10),node(4),node(9),0,0,0,0,0,0,0,0,0;
+                        node(1)+1,node(10),node(8),node(9),node(5),0,0,0,0,0,0,0,0,0;];
+                    node(11:14)=node_new_idx;
+                    node_num=node_num+4;
+
+                elseif add_u_flag
+                    % add 2 data into data_list
+                    data_new_idx=data_num+(1:2);
+                    if data_num+2 > size(data_list,1)
+                        data_list=[data_list;zeros(list_add_num,fval_num+2)];
+                    end
+                    data_list(data_new_idx,:)=[
+                        coord_5,fval_5;
+                        coord_8,fval_8;];
+                    node([6,9])=data_new_idx;
+                    data_num=data_num+2;
+
+                    % add 2 new node to node_list
+                    node_new_idx=node_num+(1:2);
+                    if node_num+2 > size(node_list,1)
+                        node_list=[node_list;zeros(list_add_num,14)];
+                    end
+                    node_list(node_new_idx,:)=[...
+                        node(1)+1,node(2),node(6),node(4),node(9),0,0,0,0,0,0,0,0,0;
+                        node(1)+1,node(6),node(3),node(9),node(5),0,0,0,0,0,0,0,0,0;];
+                    node([11,12])=node_new_idx;
+                    node_num=node_num+2;
+
+                elseif add_v_flag
+                    % add 2 data into data_list
+                    data_new_idx=data_num+(1:2);
+                    if data_num+2 > size(data_list,1)
+                        data_list=[data_list;zeros(list_add_num,fval_num+2)];
+                    end
+                    data_list(data_new_idx,:)=[
+                        coord_6,fval_6;
+                        coord_7,fval_7;];
+                    node([7,8])=data_new_idx;
+                    data_num=data_num+2;
+
+                    % add 2 new node to node_list
+                    node_new_idx=node_num+(1:2);
+                    if node_num+2 > size(node_list,1)
+                        node_list=[node_list;zeros(list_add_num,14)];
+                    end
+                    node_list(node_num+(1:2),:)=[...
+                        node(1)+1,node(2),node(3),node(7),node(8),0,0,0,0,0,0,0,0,0;
+                        node(1)+1,node(7),node(8),node(4),node(5),0,0,0,0,0,0,0,0,0;];
+                    node([11,13])=node_new_idx;
+                    node_num=node_num+2;
+                else
+                    node_new_idx=[];
+                end
+
+                % add to stack
+                stack=[stack,node_new_idx];
+                node_list(node_idx,:)=node;
             end
-
-            % add children index into current node data
-            node_list(node_idx,6:7)=[node_left_index,node_right_index];
         end
     end
 
-    function [x_list,fval_list]=traversalInorder(root_idx)
-        stack=[];
+    function [coord_c,coord_5,coord_6,coord_7,coord_8,...
+            fval_c,fval_5,fval_6,fval_7,fval_8]=calCell(vidx_1,vidx_2,vidx_3,vidx_4)
+        % calculate index of c, 5, 6, 7, 8 place function value
+        % abbreviation:
+        % vidx: vertex index
+        %
+        coord_c=(data_list(vidx_1,[1,2])+data_list(vidx_4,[1,2]))/2;
+        fval_c=fcn(coord_c);
+
+        coord_5=(data_list(vidx_1,[1,2])+data_list(vidx_2,[1,2]))/2;
+        fval_5=fcn(coord_5);
+        coord_6=(data_list(vidx_1,[1,2])+data_list(vidx_3,[1,2]))/2;
+        fval_6=fcn(coord_6);
+        coord_7=(data_list(vidx_2,[1,2])+data_list(vidx_4,[1,2]))/2;
+        fval_7=fcn(coord_7);
+        coord_8=(data_list(vidx_3,[1,2])+data_list(vidx_4,[1,2]))/2;
+        fval_8=fcn(coord_8);
+    end
+
+    function [fval_pred_c,fval_pred_5,fval_pred_6,...
+            fval_pred_7,fval_pred_8]=calCellPred(vidx_1,vidx_2,vidx_3,vidx_4)
+        % calculate index of c, 5, 6, 7, 8 place linear predict function value
+        %
+        fval_pred_c=(data_list(vidx_1,3:end)+data_list(vidx_2,3:end)+data_list(vidx_3,3:end)+data_list(vidx_4,3:end))/4;
+        fval_pred_5=(data_list(vidx_1,3:end)+data_list(vidx_2,3:end))/2;
+        fval_pred_6=(data_list(vidx_1,3:end)+data_list(vidx_3,3:end))/2;
+        fval_pred_7=(data_list(vidx_2,3:end)+data_list(vidx_4,3:end))/2;
+        fval_pred_8=(data_list(vidx_3,3:end)+data_list(vidx_4,3:end))/2;
+    end
+
+    function x_list=traversalInorder(root_idx,coord_idx,idx_1,idx_2,place_c)
+        % inorder traversal node tree to get u_list or v_list
+        % if input coord_idx=1, idx_1=[cell_1,cell_3], idx_2=[cell_2,cell_4], traversal is u_list
+        % if input coord_idx=2, idx_1=[cell_1,cell_2], idx_2=[cell_3,cell_4], traversal is v_list
+        %
+        stack={};
         x_list=[];
-        fval_list=[];
         node_idx=root_idx;
 
-        while ~isempty(stack) || node_idx ~= 0
-            while node_idx ~= 0
-                stack=[stack,node_idx];
+        while length(stack)~=0 || ~isempty(node_idx)
+            while ~isempty(node_idx)
+                % only add one node_idx is enough
+                % because we only need center coordinate of one cell
+                stack=[stack,{node_idx}];
 
-                % node=node.left;
-                node_idx=node_list(node_idx,6);
+                % left node
+                node_idx=node_list(node_idx,idx_1);
+                node_idx=node_idx(node_idx~=0);
             end
 
-            node_idx=stack(end);
+            node_idx=stack{end};
             stack=stack(1:end-1);
-            x_list=[x_list,node_list(node_idx,2)];
-            fval_list=[fval_list,node_list(node_idx,3)];
+            % obtain center place coordinate of node
+            data_idx=node_list(node_idx,place_c);
+            data_idx=data_idx(data_idx~=0);
 
-            % node=node.right;
-            node_idx=node_list(node_idx,7);
+            if ~isempty(data_idx)
+                x_list=[x_list,data_list(data_idx(1),coord_idx)];
+                idx_list(data_idx,coord_idx)=length(x_list)+1;
+            end
+
+            % right node
+            node_idx=node_list(node_idx,idx_2);
+            node_idx=node_idx(node_idx~=0);
         end
     end
-end
 
+end
