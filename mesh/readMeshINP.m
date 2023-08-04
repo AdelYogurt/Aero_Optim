@@ -1,17 +1,17 @@
-function [part_list,point_list,geometry]=readMeshINP...
-    (mesh_filestr,scale,INFORMATION)
-% read shell mash data from inp file
+function [grid,geometry]=readMeshINP(mesh_filestr,scale)
+% read mesh data from inp file
 %
 % input:
-% filename_mesh(support .inp file), scale(geometry zoom scale), ...
-% INFORMATION(true or false)
+% filename_mesh(support .inp file), scale(geometry zoom scale)
 %
 % output:
-% point_list, part_list
+% grid, geometry
 %
 % notice:
 % point_list is coordinate of all node
-% part_list{part.name, part.mesh_list{mesh.element_list, mesh.element_type, mesh.element_ID}}
+% grid(single zone): grid.name, grid.point_list, grid.(marker)
+% marker: marker.type, marker.element_list, marker.number_list, marker.ID_list
+% notice: marker which has the same name of file is volume element
 %
 if nargin < 3
     INFORMATION=true(1);
@@ -33,162 +33,176 @@ end
 if exist(mesh_filestr,'file') ~= 2
     error('readMeshINP: mesh file do not exist')
 else
-    file_mesh=fopen(mesh_filestr,'r');
+    mesh_file=fopen(mesh_filestr,'r');
 end
 
+[~,mesh_filename,~]=fileparts(mesh_filestr);
+
 point_list=[];
-part_list={};
-part_number=0;
+dimension=3;
+add_number=50;
 
 if isempty(scale)
     scale=1;
 end
 
-if INFORMATION
-    disp('readMeshINP: read mash data begin');
-end
-
-read_part_flag=0;
+read_marker_flag=0;
 read_point_flag=0;
 read_element_flag=0;
 
 % loop each line
-part_index=0;
 point_index_offset=0; % different part point index offset
-while ~feof(file_mesh)
-    string_data=fgetl(file_mesh);
+while ~feof(mesh_file)
+    string_data=fgetl(mesh_file);
     string_list=strsplit(string_data,{' ',',',char(9)});
     if isempty(string_list{1})
         string_list=string_list(2:end);
     end
 
-    % detact read part
     if strcmp(string_list{1},'*Part')
-        read_part_flag=1;
+        % detact read part
+        read_marker_flag=1;
 
         % read part
-        part_name=string_list{2}(6:end);
-        part_index=part_index+1;
-        part_element_number=0;
-        part_mesh_list={};
-        continue;
-    end
+        marker_name=regexprep(string_list{2}(6:end),{'[',']','"','''','-'},'');
 
-    % detact read point begain
-    if strcmp(string_list{1},'*Node') && read_part_flag
+        node_index=0;
+        element_index=0;
+
+        element_list=zeros(add_number,1);
+        number_list=zeros(add_number,1);
+        ID_list=zeros(add_number,1);
+    elseif strcmp(string_list{1},'*Node') && read_marker_flag
+        % detact read point begain
         read_point_flag=1;
-        continue;
-    end
-    % end read point and read element
-    if strcmp(string_list{1},'*Element') && read_part_flag && ~read_element_flag
+
+    elseif strcmp(string_list{1},'*Element') && read_marker_flag
+        % end read point and read element
         read_point_flag=0;
         read_element_flag=1;
-
-        % begin new mesh read
-        mesh_number=0;
 
         string_list=strsplit(string_list{2},'=');
         mesh_element_type=string_list{2};
         switch mesh_element_type
             case 'S3'
-                mesh_element_ID=int8(5);
+                element_id=uint8(5);
+                node_number=3;
             case {'S4R','S4'}
-                mesh_element_ID=int8(9);
+                element_id=uint8(7);
+                node_number=4;
             case 'S8'
-                mesh_element_ID=int8(12);
+                element_id=uint8(17);
+                node_number=8;
             otherwise
                 error('readMeshINP: unknown element type')
         end
-        mesh_element_list=[];
-        element_number=0;
 
-        continue;
-    end
-
-    % end read part
-    if strcmp(string_list{1},'*End')
+    elseif strcmp(string_list{1},'*End')
+        % end read part
         if ((length(string_list) ==2) && (strcmp(string_list{2},'Part')))
-            read_part_flag=0;
+            read_marker_flag=0;
             read_element_flag=0;
 
-            % end mesh read, add old mesh to part mesh list
-            mesh.element_list=mesh_element_list;
-            mesh.element_type=mesh_element_type;
-            mesh.element_ID=mesh_element_ID;
-            mesh.element_number=element_number;
-            part_element_number=part_element_number+element_number;
+            element_list=element_list(1:node_index);
+            number_list=number_list(1:element_index);
+            ID_list=ID_list(1:element_index);
 
-            mesh_number=mesh_number+1;
-            part_mesh_list{mesh_number,1}=mesh;
+            SAME_TYPE=true(1);
 
-            % add old part to part_list
-            part.name=part_name;
-            part.mesh_list=part_mesh_list;
-            part.element_number=part_element_number;
-
-            part_number=part_number+1;
-            part_list{part_number,1}=part;
-
-            point_index_offset=int32(size(point_list,1));
-            continue;
-        end
-    end
-
-    % read point data
-    if read_point_flag
-        point=str2double(string_list(2:4))*scale;
-        point_list=[point_list;point];
-    end
-
-    % read part element data
-    if read_element_flag
-        if strcmp(string_list{1},'*Element')
-            % detech new mesh, add old mesh to part mesh list
-            mesh.element_list=mesh_element_list;
-            mesh.element_type=mesh_element_type;
-            mesh.element_ID=mesh_element_ID;
-            mesh.element_number=element_number;
-            part_element_number=part_element_number+element_number;
-
-            mesh_number=mesh_number+1;
-            part_mesh_list{mesh_number,1}=mesh;
-
-            % begin new mesh read
-            element_number=0;
-            string_list=strsplit(string_list{2},'=');
-            mesh_element_type=string_list{2};
-            switch mesh_element_type
-                case 'S3'
-                    mesh_element_ID=int8(5);
-                case {'S4R','S4'}
-                    mesh_element_ID=int8(9);
-                case 'S8'
-                    mesh_element_ID=int8(12);
-                otherwise
-                    error('readMeshINP: unknown element type')
+            % check if have same type
+            node_number=number_list(1);
+            for element_index=1:numel(number_list)
+                if number_list(element_index) ~= node_number
+                    SAME_TYPE=false(1);
+                    break;
+                end
             end
-            mesh_element_list=[];
 
-            continue;
-        else
+             % if same type, reshape element
+             if SAME_TYPE
+                 element_list=reshape(element_list,node_number,[])';
+                 number_list=number_list(1);
+                 ID_list=ID_list(1);
+                 type=idType(ID_list);
+             else
+                 if dimension == 2
+                     type = 'MIXED2';
+                 elseif dimension == 3
+                     type = 'MIXED3';
+                 else
+                     error('readMeshSU2.readElement: for mixed meshes, dimension must be 2 or 3.');
+                 end
+             end
+
+            % end mesh read, add marker
+            grid.(marker_name).type=type;
+            grid.(marker_name).element_list=element_list;
+            grid.(marker_name).number_list=number_list;
+            grid.(marker_name).ID_list=ID_list;
+
+            point_index_offset=uint32(size(point_list,1));
+        end
+    else
+        % read point data
+        if read_point_flag
+            point=str2double(string_list(2:1+dimension))*scale;
+            point_list=[point_list;point];
+        end
+
+        % read part element data
+        if read_element_flag
             % add element point index
-            element_number=element_number+1;
-            mesh_element_list=[mesh_element_list;
-                int32( str2double( string_list(2:end) ) )+point_index_offset];
+            if numel(element_list) < node_index+node_number
+                element_list=[element_list;zeros(add_number,1)];
+            end
+
+            for index=1:node_number
+                element_list(node_index+index)=uint32(str2double(string_list(1+index)))+point_index_offset;
+            end
+
+            if numel(ID_list) < element_index+1
+                ID_list=[ID_list;zeros(add_number,1)];
+                number_list=[number_list;zeros(add_number,1)];
+            end
+
+            ID_list(element_index+1)=element_id;
+            number_list(element_index+1)=node_number;
+
+            node_index=node_index+node_number;
+            element_index=element_index+1;
         end
     end
+end
+
+fclose(mesh_file);
+clear('mesh_file');
+
+grid.point_list=point_list;
+
+grid.name=mesh_filename;
+geometry.dimension=dimension;
 
 end
 
-fclose(file_mesh);
-clear('file_mesh');
-
-geometry.min_bou=min(point_list);
-geometry.max_bou=max(point_list);
-geometry.dimension=3;
-
-if INFORMATION
-    disp('readMeshINP: read mash data done');
+function type=idType(id)
+switch id
+    case 3
+        type='BAR_2';
+    case 5
+        type='TRI_3';
+    case 7
+        type='QUAD_4';
+    case 10
+        type='TETRA_4';
+    case 17
+        type='HEXA_8';
+    case 14
+        type='PENTA_6';
+    case 12
+        type='PYRA_5';
+    otherwise
+        error('idType: unknown identifier')
 end
 
 end
+

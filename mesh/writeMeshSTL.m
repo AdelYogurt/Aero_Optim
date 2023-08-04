@@ -1,4 +1,4 @@
-function writeMeshSTL(mesh_filestr,part)
+function writeMeshSTL(mesh_filestr,grid,marker_name_list)
 % write Binary STL mesh file
 %
 % input:
@@ -8,8 +8,11 @@ function writeMeshSTL(mesh_filestr,part)
 % mesh.element_ID if not is 5(tri), will be convert into tri
 % part(part.name, part.mesh_list{mesh.element_list, mesh.element_type, mesh.element_ID})
 %
-if ~isfield(part,'mesh_list')
-    error('writeMeshSTL: part lack mesh_list');
+if nargin < 3
+    marker_name_list=[];
+end
+if isempty(marker_name_list)
+    marker_name_list=fieldnames(grid);
 end
 
 % check file name
@@ -21,38 +24,34 @@ else
     mesh_filestr=[mesh_filestr,'.stl'];
 end
 
-file_mesh=fopen(mesh_filestr,'w');
+mesh_file=fopen(mesh_filestr,'w');
 
-% load part name
-if isfield(part,'name')
-    part_name=part.name;
-else
-    part_name=mesh_filestr(1:end-4);
-end
+% load mesh name
+mesh_name=grid.name;
 
 % write name to file
-name_length=length(part_name);
-fwrite(file_mesh,['solid ',part_name],'char');
-fwrite(file_mesh,32*ones(80-6-name_length,1,'int8'),'int8');
+name_length=length(mesh_name);
+fwrite(mesh_file,['solid ',mesh_name],'char');
+fwrite(mesh_file,32*ones(80-6-name_length,1,'int8'),'int8');
 
 % element number sort place
-fwrite(file_mesh,0,'uint32');
+fwrite(mesh_file,0,'uint32');
 
-% write each element to file
-mesh_list=part.mesh_list;
-mesh_number=length(mesh_list);
-total_element=0;
-for mesh_index=1:mesh_number
-    mesh=mesh_list{mesh_index};
-
-    % check if exist element_list
-    if ~isfield(mesh,'element_list')
-        error('writeMeshSTL: part.mesh_list lack element_list');
+% write each marker to file
+for marker_index=1:length(marker_name_list)
+    marker_name=marker_name_list{marker_index};
+    if strcmp(marker_name,'point_list') || strcmp(marker_name,'name')
+        continue;
     end
 
-    element_list=mesh.element_list;
+    if ~strcmp(grid.(marker_name).type,'stl')
+        error('writeMeshSTL: element_type of mesh is not stl format');
+    end
+
+    element_list=grid.(marker_name).element_list;
 
     % write element
+    total_element=0;
     element_number=size(element_list,1)/3;
     for element_index=1:element_number
         element=element_list(3*element_index-2:3*element_index,:);
@@ -69,11 +68,11 @@ for mesh_index=1:mesh_number
             % small element degeneration to line, discard it
         else
             normal_vector=cross(d12,d23);
-            fwrite(file_mesh,normal_vector,'float32');
-            fwrite(file_mesh,point1,'float32');
-            fwrite(file_mesh,point2,'float32');
-            fwrite(file_mesh,point3,'float32');
-            fwrite(file_mesh,[0,0],'int8');
+            fwrite(mesh_file,normal_vector,'float32');
+            fwrite(mesh_file,point1,'float32');
+            fwrite(mesh_file,point2,'float32');
+            fwrite(mesh_file,point3,'float32');
+            fwrite(mesh_file,[0,0],'int8');
             total_element=total_element+1;
         end
             
@@ -81,9 +80,10 @@ for mesh_index=1:mesh_number
 end
 
 % write element number
-fseek(file_mesh,80,-1);
-fwrite(file_mesh,total_element,'uint32');
+fseek(mesh_file,80,-1);
+fwrite(mesh_file,total_element,'uint32');
 
-fclose(file_mesh);
-clear('file_mesh');
+fclose(mesh_file);
+clear('mesh_file');
+
 end

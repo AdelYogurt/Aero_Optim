@@ -1,14 +1,16 @@
-function part_list=readMeshWGS(mesh_filestr,scale,INFORMATION)
-% read mash data from wgs file
+function [grid,geometry]=readMeshWGS(mesh_filestr,scale)
+% read mesh data from wgs file
+%
 % input:
-% filename_mesh(support .wgs file), scale(geometry zoom scale), ...
-% INFORMATION(true or false)
+% filename_mesh(support .wgs file), scale(geometry zoom scale)
 %
 % output:
 % point_list, part_list
 %
 % point_list is coordinate of all node
-% part_list{part.name, part.mesh_list{mesh.element_type, mesh.X, mesh.Y, mesh.Z}}
+% grid(single zone): grid.name, grid.(marker)
+% marker: marker.type, marker.X, marker.Y, marker.Z
+% notice: marker which has the same name of file is volume element
 %
 if nargin < 3
     INFORMATION=true(1);
@@ -30,38 +32,34 @@ end
 if exist(mesh_filestr,'file')~=2
     error('readMeshWGS: mesh file do not exist')
 else
-    file_mesh=fopen(mesh_filestr,'r');
+    mesh_file=fopen(mesh_filestr,'r');
 end
 
-point_list=[];
-part_list={};
-part_number=0;
+[~,mesh_filename,~]=fileparts(mesh_filestr);
 
 if isempty(scale)
     scale=1;
 end
+dimension=3;
 
 if INFORMATION
     disp('readMeshWGS: read mash data begin');
 end
 
 % initial information
-fgetl(file_mesh);
-
-read_part_flag=0;
+fgetl(mesh_file);
 
 % loop each line
-part_index=0;
-while ~feof(file_mesh)
+while ~feof(mesh_file)
     % part name
-    string_list=strsplit(fgetl(file_mesh));
+    string_list=strsplit(fgetl(mesh_file));
     if isempty(string_list{1})
         string_list=string_list(2:end);
     end
-    part_name=string_list{1};
+    marker_name=regexprep(string_list{1},{'[',']','"','''','-'},'');
 
     % part information
-    string_list=strsplit(fgetl(file_mesh));
+    string_list=strsplit(fgetl(mesh_file));
     if isempty(string_list{1})
         string_list=string_list(2:end);
     end
@@ -90,7 +88,7 @@ while ~feof(file_mesh)
         point_list=[];
 
         while data_number < point_number*3
-            string_list=strsplit(fgetl(file_mesh));
+            string_list=strsplit(fgetl(mesh_file));
             if isempty(string_list{1})
                 string_list=string_list(2:end);
             end
@@ -180,14 +178,10 @@ while ~feof(file_mesh)
         Z=Z*scale_part(3);
     end
 
-    mesh.X=X;
-    mesh.Y=Y;
-    mesh.Z=Z;
-    mesh.element_type='wgs';
-    mesh.element_number=element_number;
-    
-    mesh_list(1,1)={mesh};
-    part_element_number=part_element_number+element_number;
+    grid.(marker_name).X=X;
+    grid.(marker_name).Y=Y;
+    grid.(marker_name).Z=Z;
+    grid.(marker_name).type='wgs';
 
     % process global symmetry
     % if exist global, add mirror part 
@@ -206,28 +200,18 @@ while ~feof(file_mesh)
                 Y=flipud(Y);
                 Z=flipud(Z);
         end
-        mesh.X=X;
-        mesh.Y=Y;
-        mesh.Z=Z;
-        mesh.element_type='wgs';
-
-        mesh_list{length(mesh_list)+1,1}=mesh;
-        part_element_number=part_element_number+element_number;
+        
+        grid.([marker_name,'_SYM']).X=X;
+        grid.([marker_name,'_SYM']).Y=Y;
+        grid.([marker_name,'_SYM']).Z=Z;
+        grid.([marker_name,'_SYM']).type='wgs';
     end
-
-    part.name=part_name;
-    part.mesh_list=mesh_list;
-    part.element_number=part_element_number;
-
-    part_number=part_number+1;
-    part_list{part_number,1}=part;
 end
 
-fclose(file_mesh);
-clear('file_mesh');
+fclose(mesh_file);
+clear('mesh_file');
 
-if INFORMATION
-    disp('readMeshWGS: read mash data done');
-end
+grid.name=mesh_filename;
+geometry.dimension=dimension;
 
 end

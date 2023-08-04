@@ -1,5 +1,5 @@
-function [part_list,point_list,geometry]=convertSTLToMesh...
-    (part_list,remove_redundance,geometry_torlance)
+function [grid,geometry]=convertSTLToMesh...
+    (grid,remove_redundance,geometry_torlance)
 % convert STL format part into mesh format part
 %
 % if remove_redundance, function will call ADTreePoint to remove repeat
@@ -9,115 +9,95 @@ if nargin < 2
     remove_redundance=true(1);
 end
 
-if ~iscell(part_list)
-    part_list={part_list};
-end
-
 if nargin < 3 || isempty(geometry_torlance)
     geometry_torlance=1e-12;
 end
 
-% add all stl element_list to point list
+marker_name_list=fieldnames(grid);
+
+% add all surface to point list
 point_list=[];
-for part_index=1:length(part_list)
-    mesh_list=part_list{part_index}.mesh_list;
-
-    % process each mesh
-    for mesh_index=1:length(mesh_list)
-        mesh=mesh_list{mesh_index};
-        if ~strcmp(mesh.element_type,'stl')
-            error('convertSTLToMesh: element_type of mesh is not stl format');
-        end
-
-        % add point element_list into point_list
-        point_list=[point_list;mesh.element_list];
+for marker_index=1:length(marker_name_list)
+    marker_name=marker_name_list{marker_index};
+    if strcmp(marker_name,'point_list') || strcmp(marker_name,'name')
+        continue;
     end
+
+    marker=grid.(marker_name);
+    if ~strcmp(marker.type,'stl')
+        error('convertSTLToMesh: element_type of mesh is not stl format');
+    end
+
+    % add point element_list into point_list
+    point_list=[point_list;marker.element_list];
 end
 
 if remove_redundance
     % delete same coordination point
     % need ADTreePoint
-    [ADT,index_list]=ADTreePoint(point_list,[],[],geometry_torlance);
+    [~,index_list]=ADTreePoint(point_list,[],[],geometry_torlance);
+    [index_list,~,map_list]=unique(index_list);
+    point_list=point_list(index_list,:);
 
-    exist_point_number=0; % offset index of point index list
-    for part_index=1:length(part_list)
-        part=part_list{part_index};
-        mesh_list=part.mesh_list;
-
-        % process each mesh
-        for mesh_index=1:length(mesh_list)
-            mesh=mesh_list{mesh_index};
-            element_list=mesh.element_list;
-
-            [mesh_point_number,~]=size(element_list);
-            mesh_point_number=int32(mesh_point_number);
-            element_number=mesh_point_number/3;
-
-            % convert element_list
-            element_list=index_list(exist_point_number+1:exist_point_number+mesh_point_number);
-            element_list=reshape(int32(element_list),3,element_number)';
-            
-            % sort element
-            mesh.element_list=element_list;
-            mesh.element_type='S3';
-            mesh.element_ID=int8(5);
-
-            mesh_list{mesh_index}=mesh;
-
-            exist_point_number=exist_point_number+mesh_point_number;
+    node_index=uint32(0); % offset index of point index list
+    for marker_index=1:length(marker_name_list)
+        marker_name=marker_name_list{marker_index};
+        if strcmp(marker_name,'point_list') || strcmp(marker_name,'name')
+            continue;
         end
 
-        part.mesh_list=mesh_list;
-        part_list{part_index}=part;
+        % process each mesh
+        element_list=grid.(marker_name).element_list;
+
+        marker_point_number=size(element_list,1);
+        marker_point_number=uint32(marker_point_number);
+        marker_element_number=marker_point_number/3;
+
+        % convert element_list
+        element_list=map_list(node_index+1:node_index+marker_point_number);
+        element_list=reshape(uint32(element_list),3,marker_element_number)';
+
+        node_index=node_index+uint32(marker_point_number);
+
+        % sort element
+        grid.(marker_name).type='TRI_3';
+        grid.(marker_name).element_list=element_list;
+        grid.(marker_name).ID_list=uint8(5);
+        grid.(marker_name).number_list=3;
     end
 
-    geometry.min_bou=ADT.min_bou;
-    geometry.max_bou=ADT.max_bou;
+    grid.point_list=point_list;
+
     geometry.dimension=3;
 else
     % do not delete same coordination point
-    exist_point_number=0; % offset index of point index list
-    for part_index=1:length(part_list)
-        part=part_list{part_index};
-        mesh_list=part.mesh_list;
+    node_index=uint32(0); % offset idx of point idx list
 
-        % process each mesh
-        for mesh_index=1:length(mesh_list)
-            mesh=mesh_list{mesh_index};
-            if ~strcmp(mesh.element_type,'stl')
-                error('convertSTLToMesh: element_type of mesh is not stl format');
-            end
-
-            element_list=mesh.element_list;
-
-            [mesh_point_number,~]=size(element_list);
-            mesh_point_number=int32(mesh_point_number);
-
-            % convert element list
-            element_number=mesh_point_number/3;
-            element_list=reshape(int32(1:mesh_point_number),3,element_number)'+exist_point_number;
-            
-            % sort element
-            mesh.element_list=element_list;
-            mesh.element_type='S3';
-            mesh.element_ID=int8(5);
-
-            mesh_list{mesh_index}=mesh;
-
-            exist_point_number=exist_point_number+mesh_point_number;
+    for marker_index=1:length(marker_name_list)
+        marker_name=marker_name_list{marker_index};
+        if strcmp(marker_name,'point_list') || strcmp(marker_name,'name')
+            continue;
         end
 
-        part.mesh_list=mesh_list;
-        part_list{part_index}=part;
+        element_list=grid.(marker_name).element_list;
+
+        marker_point_number=size(element_list,1);
+        marker_point_number=uint32(marker_point_number);
+        marker_element_number=marker_point_number/3;
+
+        element_list=reshape(uint32(1:marker_point_number),3,marker_element_number)'+node_index;
+        node_index=node_index+marker_point_number;
+
+        % sort element
+        grid.(marker_name).type='TRI_3';
+        grid.(marker_name).element_list=element_list;
+        grid.(marker_name).ID_list=uint8(5);
+        grid.(marker_name).number_list=3;
     end
 
-    geometry.min_bou=min(point_list);
-    geometry.max_bou=max(point_list);
-    geometry.dimension=3;
-end
+    grid.point_list=point_list;
 
-if length(part_list) == 1
-    part_list=part_list{1};
+    geometry.dimension=3;
 end
 
 end

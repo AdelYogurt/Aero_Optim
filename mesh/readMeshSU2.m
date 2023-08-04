@@ -1,28 +1,34 @@
-function [part_list,point_list,geometry]=readMeshSU2...
-    (mesh_filestr,scale,INFORMATION)
-% read mash data from su2 file, only include marker mesh data
+function [grid,geometry]=readMeshSU2(mesh_filestr,scale,READ_VOLUME,ONLY_MARKER)
+% read mesh data from su2 file
 %
 % input:
 % filename_mesh(support .su2 file), scale(geometry zoom scale), ...
-% INFORMATION(true or false)
+% READ_VOLUME(true or false), ONLY_MARKER(only marker data, true or false)
 %
 % output:
-% point_list, part_list
+% grid, geometry
 %
 % notice:
-% point_list is coordinate of all node
-% part_list{part.name, part.mesh_list{mesh.element_list, mesh.element_type, mesh.element_ID}}
+% INDEX OF POINT HAVE PLUS ONE!
+% grid(single zone): grid.name, grid.point_list, grid.(marker)
+% marker: marker.type, marker.element_list, marker.number_list, marker.ID_list
+% notice: marker which has the same name of file is volume element
 %
-if nargin < 3
-    INFORMATION=true(1);
-    if nargin < 2
-        scale=[];
+if nargin < 4
+    ONLY_MARKER=[];
+    if nargin < 3
+        READ_VOLUME=[];
+        if nargin < 2
+            scale=[];
+        end
     end
 end
 
+if isempty(ONLY_MARKER), ONLY_MARKER=false(1);end
+if isempty(READ_VOLUME), READ_VOLUME=true(1);end
 
 % cheak file definition
-if length(mesh_filestr) > 4
+if numel(mesh_filestr) > 4
     if ~strcmpi(mesh_filestr((end-3):end),'.su2')
         mesh_filestr=[mesh_filestr,'.su2'];
     end
@@ -34,222 +40,261 @@ end
 if exist(mesh_filestr,'file') ~= 2
     error('readMeshSU2: mesh file do not exist')
 else
-    file_mesh=fopen(mesh_filestr,'r');
+    mesh_file=fopen(mesh_filestr,'r');
 end
 
-point_list=[];
-part_list={};
+[~,mesh_filename,~]=fileparts(mesh_filestr);
 
 if isempty(scale)
     scale=1;
 end
 
-if INFORMATION
-    disp('readMeshSU2: read mash data begin');
-end
+while ~feof(mesh_file)
 
-% read mesh dimension
-dimension_string=strsplit(fgetl(file_mesh),' ');
-dimension=str2double(dimension_string{2});
+    % string=strsplit(fgetl(mesh_file),{char(9),char(32)});
+    string=strsplit(fgetl(mesh_file));
 
-% read volume element number
-element_number_string=strsplit(fgetl(file_mesh),' ');
-element_number=str2double(element_number_string{2});
+    if strcmp(string{1},'NDIME=')
+        dimension=str2double(string{2});
+    elseif strcmp(string{1},'NPOIN=')
+        % read node data
+        point_number=str2double(string{2});
 
-% jump over volume element data
-for element_index=1:element_number
-    fgets(file_mesh);
-end
-
-% read node data
-point_number_string=fgetl(file_mesh);
-point_number_string=strsplit(point_number_string,' ');
-if strcmp(point_number_string{1},'NPOIN=')
-    point_number=str2double(point_number_string{2});
-else
-    error('readMeshSU2:NPOIN do not exist')
-end
-point_position=ftell(file_mesh);
-
-% jump over node data first, after read marker, read node data
-for point_index=1:point_number
-    fgets(file_mesh);
-end
-
-% read marker data
-part_number_string=strsplit(fgetl(file_mesh));
-if strcmp(part_number_string{1},'NMARK=')
-    part_number=str2double(part_number_string{2});
-else
-    error('readMeshData:NMARK do not exist')
-end
-
-part_point_number=0;
-part_list=cell(part_number,1);
-for part_index=1:part_number
-    % read marker name
-    part_name_string=strsplit(fgetl(file_mesh));
-    part_name=part_name_string{2};
-
-    % read marker element number
-    part_element_number_string=strsplit(fgetl(file_mesh));
-    part_element_number=str2double(part_element_number_string{2});
-
-    % initialize mesh list
-    mesh_tri.element_ID=5;
-    mesh_tri.element_type='S3';
-    mesh_tri.element_list=zeros(part_element_number,3);
-    mesh_tri.element_number=0;
-
-    mesh_quad.element_ID=9;
-    mesh_quad.element_ID='S4R';
-    mesh_quad.element_list=zeros(part_element_number,4);
-    mesh_quad.element_number=0;
-
-    mesh_list={mesh_tri,mesh_quad};
-
-    % read marker element node index
-    for element_index=1:part_element_number
-        element_string=strsplit(fgetl(file_mesh));
-        element_ID=int8(str2double(element_string{1}));
-        
-        switch element_ID
-            case 5
-                element_node_number=3;
-                mesh_index=1;
-            case 9
-                element_node_number=4;
-                mesh_index=2;
-        end
-
-        % su2 file point index is start from 0, so we need to add 1
-        point_index=int32(str2double(element_string(2:1+element_node_number)))+1;
-
-        % give element
-        addMesh(mesh_index,point_index);
-    end
-
-    % delete empty mesh
-    mesh_index=1;
-    element_number_total=0;
-    while mesh_index <= length(mesh_list)
-        if mesh_list{mesh_index}.element_number == 0
-            mesh_list(mesh_index)=[];
+        if ONLY_MARKER
+            point_position=ftell(mesh_file);
+            % jump over node data first, after read marker, read node data
+            for point_index=1:point_number
+                fgets(mesh_file);
+            end
         else
-            element_number=mesh_list{mesh_index}.element_number;
-            mesh_list{mesh_index}.element_list=...
-                mesh_list{mesh_index}.element_list(1:element_number,:);
-            part_point_number=part_point_number+element_number*element_node_number;
-            mesh_index=mesh_index+1;
+            point_list=zeros(point_number,dimension);
+            for point_index=1:point_number
+                node_string=strsplit(fgetl(mesh_file));
+                for dimension_index=1:dimension
+                    point_list(point_index,dimension_index)=str2double(node_string{dimension_index})*scale;
+                end
+            end
+            grid.point_list=point_list;
+        end
+    elseif strcmp(string{1},'NELEM=')
+        % read volume element number
+        element_number=str2double(string{2});
+        if READ_VOLUME && ~ONLY_MARKER
+            % read volume element
+            [type,element_list,number_list]=readElement(element_number,mesh_file);
+            grid.(mesh_filename).type=type;
+            grid.(mesh_filename).element_list=element_list;
+            grid.(mesh_filename).number_list=number_list;
+        else
+            % jump over volume element data
+            for index=1:element_number
+                fgetl(mesh_file);
+            end
+        end
+    elseif strcmp(string{1},'NMARK=')
+        % read marker data
+        marker_number=str2double(string{2});
+        marker_name_list=cell(marker_number,1);
+        for marker_index=1:marker_number
+            % read marker name
+            marker_name_string=strsplit(fgetl(mesh_file));
+            marker_name=regexprep(marker_name_string{2},{'[',']','"','''','-'},'');
+            marker_name_list{marker_index}=marker_name;
+
+            % read marker element number
+            marker_element_number_string=strsplit(fgetl(mesh_file));
+            marker_element_number=str2double(marker_element_number_string{2});
+
+            % read marker element
+            [type,element_list,number_list]=readElement(marker_element_number,mesh_file);
+
+            grid.(marker_name).type=type;
+            grid.(marker_name).element_list=element_list;
+            grid.(marker_name).number_list=number_list;
         end
     end
 
-    part.name=part_name;
-    part.mesh_list=mesh_list;
-    part.element_number=part_element_number;
-
-    part_list{part_index}=part;
 end
 
-% read all point index of part element
-flag_number=0;
-total_point_index_list=zeros(1,part_point_number);
-for part_index=1:length(part_list)
-    mesh_list=part_list{part_index}.mesh_list;
-
-    for mesh_index=1:length(mesh_list)
-        mesh=mesh_list{mesh_index};
-
-        element_number=size(mesh.element_list,1);
-
-        switch mesh.element_ID
-            case 5
-                element_node_number=3;
-            case 9
-                element_node_number=4;
-        end
-        
-        mesh_point_number=element_number*element_node_number;
-
-        % add all point_index to total_point_index_list
-        total_point_index_list((flag_number+1):(flag_number+mesh_point_number))=...
-            reshape(mesh.element_list',1,mesh_point_number);
-        flag_number=flag_number+mesh_point_number;
+if ONLY_MARKER
+    % read all point index of part element
+    total_point_index_list=[];
+    for marker_index=1:numel(marker_name_list)
+        marker_name=marker_name_list{marker_index};
+        total_point_index_list=[total_point_index_list;grid.(marker_name).element_list(:)];
     end
-end
 
-% deleta useless point, get all point index of marker
-% mapping_list: old total_point_index_list to new total_point_index_list
-% total_point_index_list is sorted from small to large
-[total_point_index_list,~,mapping_list]=unique(total_point_index_list);
+    % deleta useless point, get all point index of marker
+    % map_list: old total_point_index_list to new total_point_index_list
+    % total_point_index_list is sorted from small to large
+    [total_point_index_list,~,map_list]=unique(total_point_index_list);
 
-% updata element_list point index to new list
-flag_number=0;
-for part_index=1:length(part_list)
-    mesh_list=part_list{part_index}.mesh_list;
-
-    for mesh_index=1:length(mesh_list)
-        mesh=mesh_list{mesh_index};
-
-        element_number=size(mesh.element_list,1);
-
-        switch mesh.element_ID
-            case 5
-                element_node_number=3;
-            case 9
-                element_node_number=4;
-        end
-        
-        mesh_point_number=element_number*element_node_number;
+    % updata element_list point index to new list
+    flag_number=0;
+    for marker_index=1:numel(marker_name_list)
+        marker_name=marker_name_list{marker_index};
+        marker_node_number=numel(grid.(marker_name).element_list);
 
         % generate new element list
-        mesh.element_list=reshape(mapping_list((flag_number+1):(flag_number+mesh_point_number))...
-            ,element_node_number,element_number)';
-
-        flag_number=flag_number+mesh_point_number;
-
-        mesh_list{mesh_index}=mesh;
+        grid.(marker_name).element_list(1:marker_node_number)=map_list((flag_number+1):(flag_number+marker_node_number));
+        
+        flag_number=flag_number+marker_node_number;
     end
 
-    part_list{part_index}.mesh_list=mesh_list;
+    % reread point data
+    point_number=numel(total_point_index_list);
+    fseek(mesh_file,point_position,"bof");
+    point_list=zeros(point_number,dimension);
+    flag_point=1;
+    for point_index=1:point_number
+        point_string=fgetl(mesh_file);
+
+        % only on marker point will be read
+        if total_point_index_list(flag_point) == point_index
+            % point_string=strsplit(point_string,{char(32),char(9)});
+            point_string=strsplit(point_string);
+            for dimension_index=1:dimension
+                point_list(flag_point,dimension_index)=str2double(point_string{dimension_index})*scale;
+            end
+            flag_point=flag_point+1;
+        end
+
+        if flag_point > point_number
+            % stop reading
+            break;
+        end
+    end
+    grid.point_list=point_list;
 end
 
-% reread point data
-part_point_number=length(total_point_index_list);
-fseek(file_mesh,point_position,"bof");
-point_list=zeros(part_point_number,3);
-flag_point=1;
-for node_index=1:point_number
-    point_string=fgetl(file_mesh);
+fclose(mesh_file);
+clear('mesh_file')
 
-    % only on marker point will be read
-    if total_point_index_list(flag_point) == node_index
+grid.name=mesh_filename;
+geometry.dimension=dimension;
 
-        point_string=strsplit(point_string,{char(32),char(9)});
-        point_list(flag_point,1:3)=str2double(point_string(1:3))*scale;
-        flag_point=flag_point+1;
+    function [type,element_list,number_list,ID_list]=readElement(element_number,mesh_file)
+        % read element_number element from mesh_file
+        %
+        SAME_TYPE=true(1);
+
+        add_number=element_number*2;
+        element_list=zeros(add_number,1,'uint32');
+        number_list=zeros(element_number,1,'uint8');
+        ID_list=zeros(element_number,1,'uint8');
+
+        % read marker element node index
+        node_index=0;
+        for element_index=1:element_number
+            element_string=strsplit(fgetl(mesh_file));
+            identifier=str2double(element_string{1});
+            node_number=idSU2Number(identifier);
+            number_list(element_index,1)=idSU2Number(identifier);
+            ID_list(element_index,1)=idSU2ID(identifier);
+
+            % append element
+            if node_index+node_number > numel(element_list)
+                element_list=[element_list;zeros(add_number,1,'uint32');];
+            end
+
+            for node_idx=1:node_number
+                element_list(node_index+node_idx)=str2double(element_string{1+node_idx})+1;
+            end
+            node_index=node_index+node_number;
+        end
+        element_list=element_list(1:node_index);
+
+        % check if have same type
+        node_number=number_list(1);
+        for element_index=1:element_number
+            if number_list(element_index) ~= node_number
+                SAME_TYPE=false(1);
+                break;
+            end
+        end
+
+        % if same type, reshape element
+        if SAME_TYPE
+            element_list=reshape(element_list,node_number,[])';
+            number_list=number_list(1);
+            ID_list=ID_list(1);
+            type=idType(ID_list);
+        else
+            if dimension == 2
+                type = 'MIXED2';
+            elseif dimension == 3
+                type = 'MIXED3';
+            else
+                error('readMeshSU2.readElement: for mixed meshes, dimension must be 2 or 3.');
+            end
+        end
+
     end
 
-    if flag_point > part_point_number
-        % stop reading
-        break;
-    end
 end
 
-fclose(file_mesh);
-clear('file_mesh')
-
-geometry.min_bou=min(point_list);
-geometry.max_bou=max(point_list);
-geometry.dimension=3;
-
-if INFORMATION
-    disp('readMeshSU2: read mash data done!')
+function node_number=idSU2Number(identifier)
+switch identifier
+    case 3
+        node_number=2;
+    case 5
+        node_number=3;
+    case 9
+        node_number=4;
+    case 10
+        node_number=4;
+    case 12
+        node_number=8;
+    case 13
+        node_number=6;
+    case 14
+        node_number=5;
+    otherwise
+        error('idSU2Number: unknown identifier')
 end
 
-    function addMesh(mesh_index,point_index)
-        mesh_list{mesh_index}.element_number=mesh_list{mesh_index}.element_number+1;
-        mesh_list{mesh_index}.element_list(mesh_list{mesh_index}.element_number,:)=point_index;
-    end
+end
+
+function id=idSU2ID(identifier)
+switch identifier
+    case 3
+        id=3;
+    case 5
+        id=5;
+    case 9
+        id=7;
+    case 10
+        id=10;
+    case 12
+        id=17;
+    case 13
+        id=14;
+    case 14
+        id=12;
+    otherwise
+        error('idSU2Number: unknown identifier')
+end
+
+end
+
+function type=idType(id)
+switch id
+    case 3
+        type='BAR_2';
+    case 5
+        type='TRI_3';
+    case 7
+        type='QUAD_4';
+    case 10
+        type='TETRA_4';
+    case 17
+        type='HEXA_8';
+    case 14
+        type='PENTA_6';
+    case 12
+        type='PYRA_5';
+    otherwise
+        error('idType: unknown identifier')
+end
 
 end
