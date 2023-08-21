@@ -1,23 +1,23 @@
 # ICEM CFD Project Settings
-# Saved by Adel_Yogurt on ADEL-LAPTOP on Sat Jun 24 17:13:18 中国标准时间 2023
+# Saved by Adel_Yogurt on ADEL-LAPTOP on Thu Aug 03 22:01:31 中国标准时间 2023
 # ICEM CFD - version 22.2 - Release date: May 16 2022
 
 array set file_name {
-    catia_dir D:/Object_Workspace/Airfoil/ICEM
-    parts_dir D:/Object_Workspace/Airfoil/ICEM
+    catia_dir D:/Object_Workspace/Aero_Opt/Airfoil/ICEM
+    parts_dir D:/Object_Workspace/Aero_Opt/Airfoil/ICEM
     domain_loaded 1
     cart_file_loaded 0
     cart_file {}
     domain_saved NACA0012.uns
     archive {}
     med_replay {}
-    topology_dir D:/Object_Workspace/Airfoil/ICEM
-    ugparts_dir D:/Object_Workspace/Airfoil/ICEM
+    topology_dir D:/Object_Workspace/Aero_Opt/Airfoil/ICEM
+    ugparts_dir D:/Object_Workspace/Aero_Opt/Airfoil/ICEM
     icons {{$env(ICEM_ACN)/lib/ai_env/icons} {$env(ICEM_ACN)/lib/va/EZCAD/icons} {$env(ICEM_ACN)/lib/icons} {$env(ICEM_ACN)/lib/va/CABIN/icons}}
     tetin NACA0012.tin
     family_boco NACA0012.fbc
     prism_params NACA0012.prism_params
-    iges_dir D:/Object_Workspace/Airfoil/ICEM
+    iges_dir D:/Object_Workspace/Aero_Opt/Airfoil/ICEM
     solver_params_loaded 1
     attributes_loaded 1
     project_lock {}
@@ -28,13 +28,13 @@ array set file_name {
     settings NACA0012.prj
     blocking NACA0012.blk
     hexa_replay {}
-    transfer_dir D:/Object_Workspace/Airfoil/ICEM
-    mesh_dir D:/Object_Workspace/Airfoil/ICEM
+    transfer_dir D:/Object_Workspace/Aero_Opt/Airfoil/ICEM
+    mesh_dir D:/Object_Workspace/Aero_Opt/Airfoil/ICEM
     family_topo {}
-    gemsparts_dir D:/Object_Workspace/Airfoil/ICEM
+    gemsparts_dir D:/Object_Workspace/Aero_Opt/Airfoil/ICEM
     family_boco_loaded 1
     tetin_loaded 1
-    project_dir D:/Object_Workspace/Airfoil/ICEM
+    project_dir D:/Object_Workspace/Aero_Opt/Airfoil/ICEM
     topo_mulcad_out {}
     solver_params {}
 }
@@ -244,8 +244,8 @@ array set vid_options {
     vid_mode 0
     DelBlkPerFlag 0
 }
-set savedTreeVisibility {geomNode 1 geom_subsetNode 0 geomPointNode 2 geomCurveNode 2 meshNode 1 mesh_subsetNode 0 meshPointNode 0 meshLineNode 0 meshShellNode 2 meshQuadNode 2 blockingNode 1 block_subsetNode 2 block_vertNode 0 block_edgeNode 2 block_faceNode 0 block_blockNode 0 block_meshNode 0 topoNode 2 topo-root 2 partNode 2 part-AIRFOIL_LOW 2 part-AIRFOIL_UP 2 part-FARFIELD 2 part-FLUENT 2 part-GEOM 2 part-INNER 2 part-VORFN 0}
-set last_view {rot {-0.066452098234 -0.0965357305143 -0.00321108105173 0.993103549653} scale {928.921865985 928.921865985 928.921865985} center {0.523725 0.0 0.0} pos {186.400475711 -202.709762924 0}}
+set savedTreeVisibility {geomNode 1 geom_subsetNode 0 geomPointNode 2 geomCurveNode 2 meshNode 1 mesh_subsetNode 2 meshPointNode 0 meshLineNode 0 meshShellNode 2 meshQuadNode 2 blockingNode 1 block_subsetNode 2 block_vertNode 0 block_edgeNode 2 block_faceNode 0 block_blockNode 0 block_meshNode 0 topoNode 2 topo-root 2 partNode 2 part-AIRFOIL_LOW 2 part-AIRFOIL_UP 2 part-FARFIELD 2 part-FLUENT 2 part-GEOM 2 part-VORFN 0}
+set last_view {rot {-0.0724944242796 0.00794067768829 0.111896753521 0.991040171051} scale {4998.6968275 4998.6968275 4998.6968275} center {0.52372455596900003 -2.3841857910199999e-07 0} pos {2145.19360117 -591.294234151 0}}
 array set cut_info {
     active 0
     whole 1
@@ -292,6 +292,94 @@ namespace eval ::AIEnv::GUIManagement::DEZ {
         first_layer_smoothing_steps 1
         loadmesh 0
     }
+    array set moveBVertexDEZ_data {
+        this moveBVertexDEZ
+        type DEZ
+        moveBVertexmainVal 0
+        MoveVertexOptions {Single Multiple}
+        MVHow Single
+        __MVtype_Last_Index 0
+        moveVerts {}
+        mv_fixx 0
+        mv_fixy 0
+        mv_fixz 0
+        moveVertsDirGGVal 0
+        dirEdge {}
+        mv_normal 0
+        mv_depend 0
+        SetPostitionOptions {"Set Position" "Increment Position"}
+        SLHow {Set Position}
+        __SLtype_Last_Index 0
+        refLocTypeVal 0
+        ref_vertex {}
+        ref_point {}
+        SetLocCsysVal 0
+        SetLocBVertexXVal 0
+        X {}
+        SetLocBVertexYVal 0
+        Y {}
+        SetLocBVertexZVal 0
+        Z {}
+        SetLocBVertexNVal 0
+        Normal {}
+        SetLocCylRVal 0
+        SetLocCylTVal 0
+        SetLocCylZVal 0
+        vertices {}
+        edge {}
+        vertex {}
+        AlignVertCsysVal 0
+        AlignVertexGGVal 0
+        AlignVertexPlaneMethod 1
+        Plane {}
+        AlignVertCylParVal 0
+        alignDir {}
+        vertList {}
+        edgeList {}
+        length {}
+        edgeLenGGVal 0
+        moveFacesEGVal 0
+        faceList {}
+        moveFaceGGVal 0
+        vector {}
+        vecList {}
+        center {}
+        angle {}
+        moveVertsGGVal 0
+    }
+    array set editEdgeMenuDEZ_data {
+        this editEdgeMenuDEZ
+        type DEZ
+        editEdgemainVal 0
+        editEdgeSplitEdgeHowVal 0
+        edgeSplits {}
+        AutoedgeSplits {}
+        auto_linear_all 0
+        edges {}
+        editEdgeSplitEdgeTan1Val 0
+        tan_factor1 0.00
+        tan_point1 {}
+        editEdgeSplitEdgeTan2Val 0
+        tan_factor2 0.00
+        tan_point2 {}
+        vertexSplits {}
+        edgeUnSplitVal 0
+        edgeUnSplits {}
+        editEdgeLinkEGVal 0
+        edgeSLink {}
+        edgeTLinks {}
+        factor 0.0
+        editEdgeLinkDirGGVal 0
+        dir_vector {}
+        editEdgeLinkDirGG2Val 0
+        edgeLinkDim {}
+        edgeLinkSrcIndex {}
+        edgeLinkTargIndex {}
+        link all
+        edgeUnLink {}
+        editEdgeOptionsEdgeVal 0
+        edgesSplitType {}
+    }
     array set mParamsDEZ_data {
         this mParamsDEZ
         type DEZ
@@ -301,23 +389,23 @@ namespace eval ::AIEnv::GUIManagement::DEZ {
         check_blck 0
         factor 1
         scale_spacings 0
-        edge {45 46 -1}
-        length 4.0
-        n 131
+        edge {}
+        length {}
+        n 0
         eparamMeshLawVal 0
         curves {}
-        h1 0
-        h1act 0.198004
+        h1 {}
+        h1act {}
         link_sp1 0
-        r1 2
-        r1act 0.989597
-        h2 4e-06
-        h2act 4e-06
+        r1 {}
+        r1act {}
+        h2 {}
+        h2act {}
         link_sp2 0
-        r2 1.05
-        r2act 1.0977
-        lmax 0
-        lmaxact 0.198004
+        r2 {}
+        r2act {}
+        lmax {}
+        lmaxact {}
         eparam_rel 0
         lockNodes 0
         lockParams 0

@@ -4,7 +4,7 @@
 #SBATCH -n 128
 
 # run command
-# sbatch -p amd_512 -o output.log NACA0012_deform.sh
+# sbatch -o NACA0012_deform.log NACA0012_deform.sh
 source /public3/soft/modules/module.sh
 module load gcc/7.3.0-wzm  python/3.7.6   mpi/intel/2022.1  
 export SU2_RUN=/public3/wshome/ws173/scg7758/zhangyao/program/SU2/bin/

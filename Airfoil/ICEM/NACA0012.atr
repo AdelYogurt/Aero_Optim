@@ -1,9 +1,4 @@
-# Written by ICEM CFD 22.2, user Adel_Yogurt, Sat Jun 24 17:13:18 中国标准时间 2023
-
-begin family INNER
-    begin solver "CGNS"
-    end solver "CGNS"
-end family INNER
+# Written by ICEM CFD 22.2, user Adel_Yogurt, Thu Aug 03 22:01:31 中国标准时间 2023
 
 begin family AIRFOIL_UP
     begin solver "CGNS"
@@ -35,9 +30,5 @@ end family FARFIELD
 
 begin family FLUENT
     begin solver "CGNS"
-        begin bctype color
-            active 1
-            color 15807400 1
-        end bctype color
     end solver "CGNS"
 end family FLUENT

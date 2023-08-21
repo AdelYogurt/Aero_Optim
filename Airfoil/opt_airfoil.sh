@@ -7,7 +7,7 @@
 # dos2unix *.m
 
 # run command
-# sbatch -p amd_512 -o opt_airfoil.log opt_airfoil.sh
+# sbatch -o opt_airfoil.log opt_airfoil.sh
 source /public3/soft/modules/module.sh
 module load python/3.7.6  mpi/intel/2022.1  anaconda/3-Python-3.8.3-phonopy-phono3py
 export SU2_RUN=/public3/wshome/ws173/scg7758/zhangyao/program/SU2/bin/

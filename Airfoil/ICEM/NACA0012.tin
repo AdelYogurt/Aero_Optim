@@ -8,9 +8,11 @@
 // written by ICEM CFD - version 22.2 on Tue Jun 6 00:44:05 2023
 // written by ICEM CFD - version 22.2 on Tue Jun 6 10:45:43 2023
 // written by ICEM CFD - version 22.2 on Sat Jun 24 17:13:18 2023
+// written by ICEM CFD - version 22.2 on Thu Aug 3 16:35:58 2023
+// written by ICEM CFD - version 22.2 on Thu Aug 3 16:47:24 2023
+// written by ICEM CFD - version 22.2 on Thu Aug  3 22:01:31 2023
 
 set_triangulation_tolerance 0.001
-define_family INNER color 14693271
 define_family AIRFOIL_UP color 16278835
 define_family AIRFOIL_LOW color 14522931
 define_family GEOM color 16663866
@@ -271,28 +273,6 @@ bspline
 0.90396471837057,-0.013312421797803,0
 0.97814801680257,-0.0031322310756598,0
 1,0,0
-define_curve family INNER tetra_size 1e+10 name crv.04 vertex1 pnt157 vertex2 pnt.09
-bspline
-2,2,0
-0,0,1,1
-0,0,0
--4,0,0
-define_curve family INNER tetra_size 1e+10 name crv.13 vertex1 pnt.18 vertex2 pnt105
-bspline
-3,3,0
-0,0,0,4.364201776348,4.364201776348
-4.364201776348
--3.0691301802554,2.9055429055746,0
--0.75172889508223,2.1200818087581,0
-0.12463,0.05065,0
-define_curve family INNER tetra_size 1e+10 name crv.15 vertex1 pnt172 vertex2 pnt.19
-bspline
-3,3,0
-0,0,0,4.364201776348,4.364201776348
-4.364201776348
-0.12463,-0.05065,0
--0.75172889508223,-2.1200818087581,0
--3.0691301802554,-2.9055429055746,0
 affix 0
 define_model 1e+10 reference_size 1
 define_prism_meshing_parameters law 0 nlay 3 hratio 1.2 min_quality 0.01 fillet 0.1 tetra_smooth_limit 0.3
