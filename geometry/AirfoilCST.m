@@ -1,4 +1,4 @@
-classdef Airfoil2DCST < handle
+classdef AirfoilCST < handle
     % parameterized airfoil entity
     %
     properties
@@ -9,7 +9,7 @@ classdef Airfoil2DCST < handle
 
     % define function
     methods
-        function self=Airfoil2DCST(control_point_up,control_point_low,curve_type)
+        function self=AirfoilCST(control_point_low,control_point_up,curve_type)
             % generate airfoil object
             % default use control point to generate Bezier curve
             %
@@ -86,21 +86,59 @@ classdef Airfoil2DCST < handle
                 mesh_point.(curve_name).index=point_idx;
                 mesh_point.(curve_name).X=X;
                 mesh_point.(curve_name).Y=Y;
+                mesh_point.(curve_name).type='scatter';
+            end 
+
+        end
+    end
+
+    % visualization function
+    methods
+        function curve_total=calCurveMatrix(self,U_par)
+            % obtain curve line
+            %
+            if nargin < 1
+                U_par=[];
+            end
+
+            curve_total=cell(length(self.curve_list),1);
+            for curve_idx=1:length(self.curve_list)
+                [curve.X,curve.Y]=self.curve_list{curve_idx}.calCurve(U_par);
+                curve.name=self.curve_list{curve_idx}.name;
+                curve_total{curve_idx}=curve;
+            end
+
+        end
+
+        function drawCurve(self,U_par,fig_hdl,draw_option)
+            % draw curve on figure handle
+            %
+            if nargin < 4
+                draw_option=struct();
+                if nargin < 3
+                    fig_hdl=[];
+                    if nargin < 2
+                        U_par=[];
+                    end
+                end
+            end
+            curve_total=calCurveMatrix(self,U_par);
+
+            if isempty(fig_hdl)
+                fig_hdl=figure(1);
+            end
+            axes_hdl=fig_hdl.CurrentAxes;
+            if isempty(axes_hdl)
+                axes_hdl=axes(fig_hdl);
+            end
+            
+            for curve_idx=1:length(curve_total)
+                curve=curve_total{curve_idx};
+                line(axes_hdl,curve.X,curve.Y,draw_option);
             end
 
         end
     end
-
-    % decode x function
-    methods(Static)
-        function [control_point_up,control_point_low]=decode(control_point_up,control_point_low,x)
-            control_number=length(x)/2;
-
-            control_point_up(2:end-1,2)=x(1:control_number)';
-            control_point_low(2:end-1,2)=x(control_number+1:end)';
-        end
-    end
-
 end
 
 function s=shapeFunctionCurve(curve,u)

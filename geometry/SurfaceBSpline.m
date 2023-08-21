@@ -538,9 +538,9 @@ classdef SurfaceBSpline
             % generate surface matrix by u_x_list or point_number
             %
             % default
-            % xi_list=linspace(0,1,xi_gird_num(default is 50)+1)
-            % psi_list=linspace(0,1,psi_gird_num(default is 50)+1)
-            % [XI,PSI]=meshgrid(xi_list,psi_list), colume is LaWGS format line
+            % u_list=linspace(0,1,xi_gird_num(default is 50)+1)
+            % v_list=linspace(0,1,psi_gird_num(default is 50)+1)
+            % [U,V]=meshgrid(u_list,v_list), colume is LaWGS format line
             %
             % input:
             % U_x, V_x
@@ -550,7 +550,7 @@ classdef SurfaceBSpline
             % X,Y,Z (colume is LaWGS format line)
             %
 
-            % xi
+            % u
             if nargin < 2 || isempty(varargin{1})
                 % mean donot input xi_grid_number, use default number
                 U_x=[];
@@ -560,13 +560,13 @@ classdef SurfaceBSpline
                     U_x=[];
                     u_x_number=varargin{1};
                 else
-                    % mean input XI matrix
+                    % mean input U matrix
                     U_x=varargin{1};
                     u_x_number=size(U_x,2)-1;
                 end
             end
 
-            % psi
+            % v
             if nargin < 3 || isempty(varargin{2})
                 % mean donot input psi_grid_numebr, use default number
                 V_x=[];
@@ -576,7 +576,7 @@ classdef SurfaceBSpline
                     V_x=[];
                     v_x_number=varargin{2};
                 else
-                    % mean input PSI matrix
+                    % mean input V matrix
                     V_x=varargin{2};
                     v_x_number=size(V_x,1)-1;
                 end

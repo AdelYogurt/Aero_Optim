@@ -105,7 +105,7 @@ classdef CurveCST2D < handle
             % X,Y
             %
 
-            if nargin < 2
+            if nargin < 2 || isempty(varargin{1})
                 varargin{1}=1e-3;
             end
 
@@ -120,7 +120,7 @@ classdef CurveCST2D < handle
                     low_bou=0;
                 end
                 up_bou=1;
-                [U,fval_list,~]=girdAdapt1D(@(x) coordFcn(self,x),low_bou,up_bou,value_torl,max_level,2);
+                [U,fval_list,~]=meshAdapt1D(@(x) coordFcn(self,x),low_bou,up_bou,value_torl,max_level,2);
                 X=fval_list(1,:);
                 Y=fval_list(2,:);
             else
@@ -173,7 +173,7 @@ classdef CurveCST2D < handle
 
 end
 
-function [x_list,fval_list,node_list]=girdAdapt1D(fcn,low_bou,up_bou,torl,max_level,fval_num)
+function [x_list,fval_list,node_list]=meshAdapt1D(fcn,low_bou,up_bou,torl,max_level,fval_num)
 % Binary-tree
 % adapt capture function value
 % ensure error of linear interplation will less than torl

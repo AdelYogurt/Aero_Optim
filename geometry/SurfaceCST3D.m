@@ -82,7 +82,7 @@ classdef SurfaceCST3D < handle
             self.LZ=LZ;
 
             if ~isempty(shape_par_Y) && ~isempty(shape_par_X)
-                error('CST3DSurface: donot support both X and Y deform')
+                error('SurfaceCST3D: donot support both X and Y deform')
             elseif ~isempty(shape_par_X)
                 % deform direction x
                 self.deform_ID=1;
@@ -178,11 +178,11 @@ classdef SurfaceCST3D < handle
             %
             if self.deform_ID == 1
                 if ~isempty(tran_fcn_Y)
-                    error('CST3DSurface: donot support both X and Y deform')
+                    error('SurfaceCST3D: donot support both X and Y deform')
                 end
             elseif self.deform_ID == 2
                 if ~isempty(tran_fcn_X)
-                    error('CST3DSurface: donot support both X and Y deform')
+                    error('SurfaceCST3D: donot support both X and Y deform')
                 end
             end
 
@@ -301,6 +301,13 @@ classdef SurfaceCST3D < handle
             C=V.^N1.*(1-V).^N2./NP;
         end
 
+        function nomlz_par=calNormPar(self,N1,N2)
+            % calculate normailize class function parameter by N1, N2
+            %
+            nomlz_par=(N1./(N1+N2)).^N1.*(N2./(N1+N2)).^N2;
+            nomlz_par((N1 == 0) & (N2 == 0))=1;
+        end
+
         function G=differFcn(self,fcn,U)
             % differ to get gradient
             %
@@ -348,12 +355,6 @@ classdef SurfaceCST3D < handle
             G_V(G_V > 1e4)=1e4;
         end
 
-        function nomlz_par=calNormPar(self,N1,N2)
-            % calculate normailize class function parameter by N1, N2
-            %
-            nomlz_par=(N1./(N1+N2)).^N1.*(N2./(N1+N2)).^N2;
-            nomlz_par((N1 == 0) & (N2 == 0))=1;
-        end
     end
 
     % calculate grid coordinate function
@@ -402,7 +403,7 @@ classdef SurfaceCST3D < handle
                     low_bou=[0,0];
                 end
                 up_bou=[1,1];
-                [U,V,Fval,~]=girdAdapt2DM(@(x) coordFcn(self,x),low_bou,up_bou,value_torl,max_level,3);
+                [U,V,Fval,~]=meshAdapt2DM(@(x) coordFcn(self,x),low_bou,up_bou,value_torl,max_level,3);
                 X=Fval(:,:,1);
                 Y=Fval(:,:,2);
                 Z=Fval(:,:,3);
@@ -592,113 +593,6 @@ classdef SurfaceCST3D < handle
             % use project function to adjust parameter
             [X,Y,Z,U,V]=self.calProject(XO,YO,ZO,U,V,geo_torl);
         end
-
-        function [U,V,X,Y,Z]=calCoordinateDiscrete(self,X,Y,Z,U_bou,V_bou)
-            % base on X, Y, Z calculate local coordinate in surface
-            % calculate local coordinate of point which surface is discrete
-            %
-            XO=X;YO=Y;ZO=Z;geo_torl=1e-6;
-
-            if length(U_bou) == 1
-                U_bou=linspace(0,1,U_bou+1);
-            end
-
-            if length(V_bou) == 1
-                V_bou=linspace(0,1,V_bou+1)';
-            end
-
-            % undone translation surface
-            if ~isempty(self.translation)
-                X=X-self.translation(1);
-                Y=Y-self.translation(2);
-                Z=Z-self.translation(3);
-            end
-
-            % undone rotation surface
-            if ~isempty(self.rotation_matrix)
-                matrix=self.rotation_matrix';
-                X_old=X;Y_old=Y;Z_old=Z;
-                X=matrix(1,1)*X_old+matrix(1,2)*Y_old+matrix(1,3)*Z_old;
-                Y=matrix(2,1)*X_old+matrix(2,2)*Y_old+matrix(2,3)*Z_old;
-            end
-
-            % identify base local coordinate
-            if self.deform_ID == 1 || self.deform_ID == 0
-                if self.LY > 0
-                    Y=max(Y,0);Y=min(Y,self.LY);
-                else
-                    Y=max(Y,self.LY);Y=min(Y,0);
-                end
-
-                V=Y./self.LY;
-                if self.symmetry_y
-                    V=V+0.5;
-                end
-
-                % re deform surface
-                if ~isempty(self.tran_fcn_X)
-                    % how to solve?
-                    X=X-calDicrete(self.tran_fcn_X,V,V_bou);
-                end
-
-                if self.LX > 0
-                    X=max(X,0);
-                else
-                    X=min(X,0);
-                end
-                % base on up bou to re calculate V local coordinate
-                U=X./self.LX;
-                if ~isempty(self.shape_fcn_X)
-                    shape=calDicrete(self.shape_fcn_X,V,V_bou);
-                    shape(shape==0)=1;
-                    U=U./shape;
-                end
-
-                % judge local coordinate
-                U=min(U,1);
-
-            elseif self.deform_ID == 2
-                if self.LX > 0
-                    X=max(X,0);X=min(X,self.LX);
-                else
-                    X=max(X,self.LX);Y=min(X,0);
-                end
-
-                U=X./self.LX;
-
-                % re deform surface
-                if ~isempty(self.tran_fcn_Y)
-                    Y=Y-calDicrete(self.tran_fcn_Y,U,U_bou);
-                end
-
-                if self.LY > 0
-                    Y=max(Y,0);
-                else
-                    Y=min(Y,0);
-                end
-                % base on up bou to re calculate V local coordinate
-                V=Y./self.LY;
-                if ~isempty(self.shape_fcn_Y)
-                    shape=calDicrete(self.shape_fcn_Y,U,U_bou);
-                    shape(shape==0)=1;
-                    V=V./shape;
-                end
-
-                % judge local coordinate
-                if self.symmetry_y
-                    V=V+0.5;
-                end
-                V=min(V,1);
-
-            end
-            
-            U=max(U,0);U=min(U,1);
-            V=max(V,0);V=min(V,1);
-
-            % use project function to adjust parameter
-            [X,Y,Z,U,V]=self.calProject(XO,YO,ZO,U,V,geo_torl);
-        end
-
     end
 
     % calculate project point coordinate function
@@ -811,7 +705,7 @@ classdef SurfaceCST3D < handle
 %             scatter3(X,Y,Z);
             dX=XO-X;dY=YO-Y;dZ=ZO-Z;
             boolean=(abs(dX)+abs(dY)+abs(dZ)) > geo_torl;
-            while any(boolean) && iter < iter_max
+            while any(any(boolean)) && iter < iter_max
                 [dX_dU,dY_dU,dZ_dU,dX_dV,dY_dV,dZ_dV]=self.calGradientDiffer(U(boolean),V(boolean),X(boolean),Y(boolean),Z(boolean));
 
                 RU_RU=dX_dU.^2+dY_dU.^2+dZ_dU.^2;
@@ -931,7 +825,7 @@ else
 end
 end
 
-function [U,V,Fval,node_list]=girdAdapt2DM(fcn,low_bou,up_bou,torl,max_level,fval_num)
+function [U,V,Fval,node_list]=meshAdapt2DM(fcn,low_bou,up_bou,torl,max_level,fval_num)
 % 2D Omni-Tree
 % adapt capture 2 dimemsion function value
 % ensure error of linear interplation will less than torl

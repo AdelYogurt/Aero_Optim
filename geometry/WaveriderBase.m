@@ -29,9 +29,9 @@ classdef WaveriderBase
                 (total_length,par_width,par_hight_up,par_hight_low,...
                 par_T,par_M_up,par_M_low,par_N_up,par_N_low,par_R)
             % generate waverider wing wgs data
-            % xi, x=X(xi)
-            % psi, y=Y(xi)
-            % zeta, z=Z(xi,psi)
+            % u, x=X(u)
+            % v, y=Y(u)
+            % w, z=Z(u,v)
             %
             % notice:
             % colume vector in matrix is wgs format
@@ -94,8 +94,8 @@ classdef WaveriderBase
             side_high=radius_head_side_y-radius_center_head_side_y;
 
             %% define head
-            head_up=CST3DSurface(total_length,par_width,par_hight_up,[],[par_T,0],[par_M_up,0],{[par_N_up,par_N_up]},global_symmetry_y);
-            head_low=CST3DSurface(total_length,par_width,-par_hight_low,[],[par_T,0],[par_M_low,0],{[par_N_low,par_N_low]},global_symmetry_y);
+            head_up=SurfaceCST3D(total_length,par_width,par_hight_up,[],[par_T,0],[par_M_up,0],{[par_N_up,par_N_up]},global_symmetry_y);
+            head_low=SurfaceCST3D(total_length,par_width,-par_hight_low,[],[par_T,0],[par_M_low,0],{[par_N_low,par_N_low]},global_symmetry_y);
             
             % blunt translation
             head_up.addTranslation(0,0,par_R);
@@ -103,12 +103,12 @@ classdef WaveriderBase
 
             %% define blunt head side
             % local coordinate, local x is global -x, local y is global z, local z is global y
-            shape_fcn_X=@(PSI) 1+shape_head_side_x((PSI-0.5)*par_R*2)/total_length;
-            shape_fcn_Z=@(XI,PSI) shape_head_side_y((PSI-0.5)*par_R*2);
-            head_side=CST3DSurface(total_length,2*par_R,1,shape_fcn_X,[],[0.0,0.01],shape_fcn_Z);
+            shape_fcn_X=@(V) 1+shape_head_side_x((V-0.5)*par_R*2)/total_length;
+            shape_fcn_Z=@(U,V) shape_head_side_y((V-0.5)*par_R*2);
+            head_side=SurfaceCST3D(total_length,2*par_R,1,shape_fcn_X,[],[0.0,0.01],shape_fcn_Z);
 
-            Y_edge=@(XI) XI.^par_T*par_width/2;
-            tran_fun_Z=@(XI,PSI) Y_edge(1-XI);
+            Y_edge=@(U) U.^par_T*par_width/2;
+            tran_fun_Z=@(U,V) Y_edge(1-U);
             % deform surface
             head_side.addDeform([],[],tran_fun_Z);
 
@@ -119,12 +119,12 @@ classdef WaveriderBase
             head_side.addTranslation(total_length,0,-par_R);
 
             %% define back
-            shape_fcn_Y_up=@(XI) par_hight_up*(0.5+XI/2).^par_N_up.*(0.5-XI/2).^par_N_up/(0.5)^(2*par_N_up)+par_R;
-            shape_fcn_Y_low=@(XI) par_hight_low*(0.5+XI/2).^par_N_low.*(0.5-XI/2).^par_N_low/(0.5)^(2*par_N_low)+par_R;
+            shape_fcn_Y_up=@(U) par_hight_up*(0.5+U/2).^par_N_up.*(0.5-U/2).^par_N_up/(0.5)^(2*par_N_up)+par_R;
+            shape_fcn_Y_low=@(U) par_hight_low*(0.5+U/2).^par_N_low.*(0.5-U/2).^par_N_low/(0.5)^(2*par_N_low)+par_R;
 
             % local coordinate, local x is global y, local y is global z
-            back_up=CST3DSurface(par_width/2,1,0,[],shape_fcn_Y_up);
-            back_low=CST3DSurface(par_width/2,-1,0,[],shape_fcn_Y_low);
+            back_up=SurfaceCST3D(par_width/2,1,0,[],shape_fcn_Y_up);
+            back_low=SurfaceCST3D(par_width/2,-1,0,[],shape_fcn_Y_low);
 
             % rotation to global coordinate
             back_up.addRotation(90,90,0);
@@ -137,11 +137,11 @@ classdef WaveriderBase
 
             %% define back side
             % local coordinate, local x is global -x, local y is global z
-            shape_fcn_Y_up=@(XI) shape_back_side_y(XI*side_high);
-            shape_fcn_Y_low=@(XI) shape_back_side_y(XI*side_high);
+            shape_fcn_Y_up=@(U) shape_back_side_y(U*side_high);
+            shape_fcn_Y_low=@(U) shape_back_side_y(U*side_high);
 
-            back_side_up=CST3DSurface(side_high,1,0,[],shape_fcn_Y_up);
-            back_side_low=CST3DSurface(side_high,-1,0,[],shape_fcn_Y_low);
+            back_side_up=SurfaceCST3D(side_high,1,0,[],shape_fcn_Y_up);
+            back_side_low=SurfaceCST3D(side_high,-1,0,[],shape_fcn_Y_low);
 
             back_side_up.addRotation(90,90,0);
             back_side_low.addRotation(90,90,0);
@@ -160,26 +160,26 @@ classdef WaveriderBase
         function [X,Y,Z]=calSurfaceMatrix...
                 (self,xi_grid_num_head,psi_grid_num_head,edge_gird_num)
             % generate waverider wing wgs data
-            % xi, x=X(xi)
-            % psi, y=Y(xi)
-            % zeta, z=Z(xi,psi)
+            % u, x=X(u)
+            % v, y=Y(u)
+            % w, z=Z(u,v)
             %
             % notice colume vector in matrix is wgs format
             %
 
-            % auto allocation xi
+            % auto allocation u
             head_xi_list=linspace(0,1,xi_grid_num_head+1);
             head_xi_list=head_xi_list.^(1/self.par_T);
 
             % calculate head
-            [XI,PSI]=meshgrid(head_xi_list,linspace(0.5,1,psi_grid_num_head+1));
-            [X_head,Y_head,Z_head_up]=self.surface_list.head_up.calSurface(XI,PSI);
-            [X_head,Y_head,Z_head_low]=self.surface_list.head_low.calSurface(XI,PSI);
+            [U,V]=meshgrid(head_xi_list,linspace(0.5,1,psi_grid_num_head+1));
+            [X_head,Y_head,Z_head_up]=self.surface_list.head_up.calSurface(U,V);
+            [X_head,Y_head,Z_head_low]=self.surface_list.head_low.calSurface(U,V);
 
             % calculate blunt head side
             head_side_xi_list=1-head_xi_list;
-            [XI,ZETA]=meshgrid(head_side_xi_list,linspace(0,1,edge_gird_num*2+1));
-            [X_head_side,Y_head_side,Z_head_side]=self.surface_list.head_side.calSurface(XI,ZETA);
+            [U,W]=meshgrid(head_side_xi_list,linspace(0,1,edge_gird_num*2+1));
+            [X_head_side,Y_head_side,Z_head_side]=self.surface_list.head_side.calSurface(U,W);
 
             % calculate back
             [X_back,Y_back,Z_back_up]=self.surface_list.back_up.calSurface(psi_grid_num_head,edge_gird_num);
