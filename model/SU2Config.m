@@ -1,12 +1,15 @@
-classdef Config < handle
+classdef SU2Config < handle
+    % dict of SU2 config
     properties
         config_filedir;
         config_filename;
         dump_filename='config.cfg';
-        data_dict;
+        data_dict=struct();
     end
+
+    % main function
     methods
-        function self=Config(config_filestr)
+        function self=SU2Config(config_filestr)
             % initialize config, process input config_filestr
             % read config parameter from config file
             %
@@ -19,7 +22,7 @@ classdef Config < handle
             end
 
             if ~exist(config_filestr,'file')
-                error('Config: cfg file do not exist');
+                error('SU2Config: cfg file do not exist');
             end
 
             [self.config_filedir,temp_filename,~]=fileparts(config_filestr);
@@ -48,7 +51,7 @@ classdef Config < handle
                 end
 
                 if ~exist(config_filestr,'file')
-                    error('Config: cfg file do not exist');
+                    error('SU2Config: cfg file do not exist');
                 end
 
                 [self.config_filedir,temp_filename,~]=fileparts(which(config_filestr));
@@ -56,7 +59,6 @@ classdef Config < handle
             end
 
             cfg_file=fopen(config_filestr,'r');
-            self.data_dict=struct();
 
             % read cfg define line by line
             while (~feof(cfg_file))
@@ -67,7 +69,7 @@ classdef Config < handle
                         string_read=string_read(1:end-1);
                         string_temp=regexprep(fgetl(cfg_file),'\s',''); % read char list and deblank
                         if len(string_temp.split('=')) > 1
-                            error('Config: statement found after end')
+                            error('SU2Config: statement found after end')
                         end
                         if string_read(1) ~= '%'
                             string_read=[string_read,string_temp];
@@ -106,23 +108,6 @@ classdef Config < handle
 
             fclose(cfg_file);
             clear('cfg_file');
-
-            % default parameter
-            if ~isfield(self.data_dict,'MACH_NUMBER')
-                self.data_dict.MACH_NUMBER=0.8;
-            end
-            if ~isfield(self.data_dict,'AOA')
-                self.data_dict.AOA=1.25;
-            end
-            if ~isfield(self.data_dict,'SIDESLIP_ANGLE')
-                self.data_dict.SIDESLIP_ANGLE=0.0;
-            end
-            if ~isfield(self.data_dict,'FREESTREAM_TEMPERATURE')
-                self.data_dict.FREESTREAM_TEMPERATURE=288.15;
-            end
-            if ~isfield(self.data_dict,'FREESTREAM_PRESSURE')
-                self.data_dict.FREESTREAM_PRESSURE=101325.0;
-            end
 
         end
 
@@ -169,7 +154,10 @@ classdef Config < handle
                 end
             end
         end
+    end
 
+    % parameter process funciton
+    methods
         function setParameter(self,parameter,value)
             % set value of parameter
             %
@@ -195,7 +183,17 @@ classdef Config < handle
         function value=getParameter(self,parameter)
             % obtain value of parameter
             %
-            value=self.data_dict.(parameter);
+            if isfield(self.data_dict,parameter)
+                value=self.data_dict.(parameter);
+            else
+                value=[];
+            end
+        end
+
+        function bool=isParameter(self,parameter)
+            % obtain value of parameter
+            %
+            bool=isfield(self.data_dict,parameter);
         end
     end
 end

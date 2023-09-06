@@ -1,90 +1,84 @@
 function [SU2_history,SU2_surface,SU2_CFD_info]=runSU2CFD...
-    (mesh_filestr,cfg_filestr,partitions,CFD_config,restart_filestr,...
-    dir_temp,run_description,remove_dump,out_logger)
+    (mesh_filestr,cfg_param,partitions,...
+    restart_filestr,dir_temp,run_description,REMOVE_TEMP,out_logger)
 % interface of SU2_CFD
 % base on input filestr and CFD_config to run SU2_CFD
 %
-if nargin < 9
+% input:
+% mesh_filestr,(cfg_filestr or CFG),partitions
+%
+if nargin < 8
     out_logger=[];
-    if nargin < 8
-        remove_dump=[];
-        if nargin < 7
+    if nargin < 7
+        REMOVE_TEMP=[];
+        if nargin < 6
             run_description=[];
-            if nargin < 6
+            if nargin < 5
                 dir_temp=[];
-                if nargin < 5
+                if nargin < 4
                     restart_filestr=[];
-                    if nargin < 4
-                        CFD_config=[];
-                    end
                 end
             end
         end
     end
 end
 
-[str_filedir__,~]=fileparts(which('runSU2CFD.m'));
+if isempty(REMOVE_TEMP)
+    REMOVE_TEMP=false(1);
+end
 
+dir_cur=pwd();
+
+% get dir work
+[str_filedir__,~]=fileparts(which('runSU2CFD.m'));
 if isempty(dir_temp)
     dir_temp=fullfile(str_filedir__,'SU2_temp');
     if ~exist(dir_temp,'dir')
         mkdir(dir_temp);
     end
 end
-
-if isempty(remove_dump)
-    remove_dump=false(1);
+procid=feature('getpid');
+dir_work=fullfile(dir_temp,[run_description,'_',num2str(procid)]);
+if ~isempty(out_logger)
+    out_logger.info(['SU2 calculating ... procid=',num2str(procid)]);
 end
 
-dir_cur=pwd();
-
-[mesh_filename,mesh_filedir,mesh_filestr]=safeSplitFileStr(mesh_filestr);
-[cfg_filename,cfg_filedir,cfg_filestr]=safeSplitFileStr(cfg_filestr);
-if ~isempty(restart_filestr)
-    [restart_filename,restart_filedir,restart_filestr]=safeSplitFileStr(restart_filestr);
+% SU2Config
+if isa(cfg_param,'SU2Config')
+    config=cfg_param;
+    cfg_filestr=fullfile(config.config_filedir,config.config_filename);
+elseif ischar(cfg_param) || isstring(cfg_param)
+    cfg_filestr=cfg_param;
+    [~,~,cfg_filestr]=safeSplitFileStr(cfg_filestr);
+    config=SU2Config(cfg_filestr);
+else
+    error('runSU2CFD: error input, config is not SU2Config or cfg_filestr')
 end
-
-% Config
-config=Config(cfg_filestr);
 config.setParameter('NUMBER_PART',partitions);
 
 if strcmp(config.getParameter('SOLVER'),'MULTIPHYSICS')
     error('Parallel computation script not compatible with MULTIPHYSICS solver.');
 end
 
-% process input
-if ~isempty(restart_filestr)
-    config.setParameter('RESTART_SOL','YES');
-    config.setParameter('RESTART_FILENAME',restart_filename);
-end
+% create dir work
+safeMakeDirs(dir_work,out_logger);
+
+% process mesh file
+[mesh_filename,mesh_filedir,mesh_filestr]=safeSplitFileStr(mesh_filestr);
 config.setParameter('MESH_FILENAME',mesh_filename);
-if contains(mesh_filename,'cgns')
+if contains(mesh_filename,'cgns') || contains(mesh_filename,'CGNS')
     config.setParameter('MESH_FORMAT','CGNS');
 else
     config.setParameter('MESH_FORMAT','SU2');
 end
+safeCopyDirs(mesh_filename,mesh_filedir,dir_work,out_logger);
 
-% add input config
-if ~isempty(CFD_config)
-    field_name_list=fieldnames(CFD_config);
-    for idx=1:length(field_name_list)
-        field=field_name_list{idx};
-        config.setParameter(field,CFD_config.(field));
-    end
-end
-
-procid=feature('getpid');
-if ~isempty(out_logger)
-    out_logger.info(['SU2 calculating ... procid=',num2str(procid)]);
-end
-dir_work=fullfile(dir_temp,[run_description,'_',num2str(procid)]);
-
-safeMakeDirs(dir_work,out_logger);
-% copy mesh file to dir work
-safeCopyDirs({mesh_filename},mesh_filedir,dir_work,out_logger);
+% process restart file
 if ~isempty(restart_filestr)
-    % copy restart data to dir work
-    safeCopyDirs({restart_filename},restart_filedir,dir_work,out_logger);
+    [restart_filename,restart_filedir,~]=safeSplitFileStr(restart_filestr);
+    config.setParameter('RESTART_SOL','YES');
+    config.setParameter('RESTART_FILENAME',restart_filename);
+    safeCopyDirs(restart_filename,restart_filedir,dir_work,out_logger);
 end
 
 % State
@@ -157,7 +151,7 @@ while (~isempty(error_message) && (retry_time < 2))
         if ~isempty(out_logger)
             out_logger.error([dir_work,error_message,'\n']);
         end
-        error(['runSU2CFD: fatal error with SU2 CFD,proid=',num2str(procid)]);
+        error(['runSU2CFD: fatal error with SU2 CFD,proid=',num2str(procid),' error message: ',error_message]);
     end
 end
 
@@ -172,7 +166,7 @@ surface_filestr=[config.getParameter('SURFACE_FILENAME'),'.csv'];
 SU2_surface=readSU2CSV(fullfile(dir_work,surface_filestr));
 
 % delete temp file
-if remove_dump
+if REMOVE_TEMP
     if ~isempty(out_logger)
         out_logger.info('cleaning temp files...');
     end

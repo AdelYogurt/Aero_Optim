@@ -23,15 +23,15 @@ classdef Logger < handle
             % set log level
             %
             switch loglevel
-                case 'DEBUG'
+                case {'DEBUG',1}
                     digtial_loglevel=1;
-                case 'INFO'
+                case {'INFO',2}
                     digtial_loglevel=2;
-                case 'WARNING'
+                case {'WARNING',3}
                     digtial_loglevel=3;
-                case 'ERROR'
+                case {'ERROR',4}
                     digtial_loglevel=4;
-                case 'CRITICAL'
+                case {'CRITICAL',5}
                     digtial_loglevel=5;
                 otherwise
             end

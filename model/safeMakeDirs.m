@@ -5,8 +5,11 @@ if nargin < 2
     my_logger=[];
 end
 
-[status,message]=mkdir(dir);
-if status ~= 0 && ~isempty(my_logger)
-    my_logger.error(message);
+if ~exist(dir,"dir")
+    [status,message]=mkdir(dir);
+    if status ~= 0 && ~isempty(my_logger)
+        my_logger.error(message);
+    end
 end
+
 end

@@ -1,0 +1,204 @@
+classdef ModelAirfoil < handle
+    % basical problem parameter
+    properties
+        % run paramter
+        partitions=[];
+
+        % temp file parameter
+        dir_temp='';
+        REMOVE_TEMP=false(1);
+
+        % info parameter
+        run_description=[];
+        out_logger=[];
+    end
+
+    % initial input parameter, include software parameter
+    properties
+        geo_param;
+        mesh_param; 
+        CFD_param
+    end
+
+    % main function
+    methods
+        function self=ModelAirfoil(partitions,geo_param,mesh_param,CFD_param,...
+                dir_temp,REMOVE_TEMP,run_description,out_logger)
+            % airfoil model setup function
+            %
+            % notice:
+            % airfoil aerodynamic model need three part:
+            % geometry, mesh generater, CFD solver
+            %
+            % input:
+            % partitions, geometry_varargin, mesh_varargin, CFD_varargin
+            % dir_temp,REMOVE_TEMP,run_description,out_logger
+            %
+            if nargin < 8
+                out_logger=[];
+                if nargin < 7
+                    run_description=[];
+                    if nargin < 6
+                        REMOVE_TEMP=[];
+                        if nargin < 5
+                            dir_temp=[];
+                        end
+                    end
+                end
+            end
+
+            % run paramter
+            self.partitions=partitions;
+            if ~isempty(dir_temp), self.out_logger=dir_temp;end
+            if ~isempty(REMOVE_TEMP), self.REMOVE_TEMP=REMOVE_TEMP;end
+            if ~isempty(run_description), self.run_description=run_description;end
+            if ~isempty(out_logger), self.out_logger=out_logger;end
+
+            % geomertry module setup
+            if ~isempty(geo_param)
+                switch geo_param.solver
+                    case 'CST'
+                        if ~isfield(geo_param,'mesh_coord'), error('ModelAirfoil: lack mesh_coord');end
+                    case 'FFD'
+
+                    case 'HICKS_HENNE'
+                        if ~isfield(geo_param,'mesh_point'), error('ModelAirfoil: lack mesh_point');end
+                        if ~isfield(geo_param,'hicks_hemme_define'), error('ModelAirfoil: lack hicks_hemme_define');end
+                        if ~isfield(geo_param.hicks_hemme_define,'SCALE'),...
+                                geo_param.hicks_hemme_define.SCALE=ones(size(geo_param.hicks_hemme_define.MARKER));end
+                        if ~isfield(geo_param.hicks_hemme_define,'MARKER'), error('ModelAirfoil: lack MARKER');end
+                        if ~isfield(geo_param.hicks_hemme_define,'PARAM'), error('ModelAirfoil: lack PARAM');end
+                    otherwise
+                        error('ModelAirfoil: unsupported geometry solver')
+                end
+            end
+            self.geo_param=geo_param;
+
+            % mesh generate module setup
+            if ~isempty(mesh_param)
+                switch mesh_param.solver
+                    case 'SU2_DEF'
+                        if ~isfield(mesh_param,'initial_mesh_filestr'), error('ModelAirfoil: lack initial_mesh_filestr');end
+                        if ~isfield(mesh_param,'SU2_DEF_param'), error('ModelAirfoil: lack SU2_DEF_param');end
+                        if ~isfield(mesh_param,'dat_filestr'), mesh_param.dat_filestr='model/airfoil.dat';end
+                        if ~isfield(mesh_param,'mesh_filestr'), mesh_param.mesh_filestr='model/airfoil.su2';end
+                    otherwise
+                        error('ModelAirfoil: unsupported mesh solver')
+                end
+            end
+            self.mesh_param=mesh_param;
+
+            % CFD solver module setup
+            if ~isempty(CFD_param)
+                switch CFD_param.solver
+                    case 'SU2_CFD'
+                        if ~isfield(CFD_param,'SU2_CFD_param'), error('ModelAirfoil: lack SU2_CFD_param');end
+                        if ~isfield(CFD_param,'restart_filestr'), CFD_param.restart_filestr='';end
+                    case 'Fluent'
+                        if ~isfield(CFD_param,'fluent_jou_filestr'), error('ModelAirfoil: lack fluent_jou_filestr');end
+                        if ~isfield(CFD_param,'fluent_dir'), error('ModelAirfoil: lack fluent_dir');end
+                        if ~isfield(CFD_param,'solver_dimension'), error('ModelAirfoil: lack solver_dimension');end
+                        if ~isfield(CFD_param,'out_filename'), error('ModelAirfoil: lack out_filename');end
+                    otherwise
+                        error('ModelAirfoil: unsupported CFD solver')
+                end
+            end
+            self.CFD_param=CFD_param;
+        end
+
+        % solve airfoil aerodynamic model function
+        function [geo_out,mesh_out,CFD_out]=solveAirfoil(self,geo_in)
+            % call each module to solve aerodynamic model
+            %
+            % solve flow:
+            % (geo_in)>geo_module>(surface_mesh)>mesh_module>(mesh)>CFD_module
+            %
+
+            % step 1: geometry module
+            geo_out=self.geoModule(geo_in);
+
+            % step 2: mesh module
+            % run SU2_DEF deform mesh
+            writePoint(geo_out.mesh_point,self.mesh_param.dat_filestr,2)
+            [mesh_out.mesh_filestr,mesh_out.SU2_DEF_info]=runSU2DEF...
+                (self.mesh_param.initial_mesh_filestr,self.mesh_param.SU2_DEF_param,self.mesh_param.dat_filestr,self.partitions,...
+                self.mesh_param.mesh_filestr,self.dir_temp,self.run_description,self.REMOVE_TEMP,self.out_logger);
+
+            % step 3: CFD module
+            if strcmp(self.CFD_param.solver,'SU2_CFD')
+                % run SU2_CFD to get result
+                [CFD_out.SU2_history,CFD_out.SU2_surface,CFD_out.SU2_CFD_info]=runSU2CFD...
+                    (mesh_out.mesh_filestr,self.CFD_param.SU2_CFD_param,self.partitions,...
+                    self.CFD_param.restart_filestr,self.dir_temp,self.run_description,self.REMOVE_TEMP,self.out_logger);
+            elseif strcmp(self.CFD_param.solver,'Fluent')
+                % convert SU2 to cgns
+                mesh_data=readMeshSU2(mesh_out.mesh_filestr);
+                [airfoil_mesh_dir,airfoil_mesh_filename,~]=fileparts(mesh_out.mesh_filestr);
+                mesh_data.FLUID=mesh_data.(airfoil_mesh_filename);
+                mesh_data=rmfield(mesh_data,airfoil_mesh_filename);
+                mesh_filestr=fullfile(airfoil_mesh_dir,[airfoil_mesh_filename,'.cgns']);
+                writeMeshCGNS(mesh_filestr,mesh_data)
+
+                % step 3: CAE part
+                % run fluent to get result
+                [CFD_out.fluent_out,CFD_out.fluent_info]=runFluentCFD...
+                    (mesh_filestr,self.CFD_param.fluent_jou_filestr,self.partitions,self.CFD_param.fluent_dir,self.CFD_param.solver_dimension,self.CFD_param.out_filename,...
+                    self.dir_temp,self.run_description);
+            end
+        end
+
+        function drawGeo(self,geo_in)
+            % draw specific geometry
+            %
+            geo_out=self.geoModule(geo_in);
+            displayMesh(geo_out.mesh_point)
+        end
+
+        function geo_out=geoModule(self,geo_in)
+            % calculate geo out
+            %
+            if strcmp(self.geo_param.solver,'CST')
+                % rebulid surface mesh point
+                airfoil=AirfoilCST(geo_in.low,geo_in.up);
+                geo_out.mesh_point=airfoil.calMeshPoint(self.geo_param.mesh_coord);
+            elseif strcmp(self.geo_param.solver,'FFD')
+
+            elseif strcmp(self.geo_param.solver,'HICKS_HENNE')
+                % deform surface mesh point
+                self.geo_param.hicks_hemme_define.SIZE=geo_in.SIZE;
+                geo_out.mesh_point=ModelAirfoil.geoHicksHemme...
+                    (self.geo_param.mesh_point,self.geo_param.hicks_hemme_define);
+            end
+        end
+    end
+
+    % parameterization function
+    methods(Static)
+        function mesh_point=geoHicksHemme(mesh_point,hicks_hemme_define)
+            % mesh_point_surface.(marker)
+            % marker.index, marker.X, marker.Y
+            %
+            % hicks_hemme_define.SCALE, hicks_hemme_define.MARKER,...
+            % hicks_hemme_define.PARAM, hicks_hemme_define.SIZE
+            %
+            bump_scale=hicks_hemme_define.SCALE;
+            bump_marker=hicks_hemme_define.MARKER;
+            bump_direction=hicks_hemme_define.PARAM(:,1);
+            bump_location=hicks_hemme_define.PARAM(:,2);
+            bump_size=hicks_hemme_define.SIZE;
+
+            bump_E=log(0.5)./log(bump_location);
+
+            % calculate the new coordinates
+            for idx=1:length(bump_size)
+                marker_name=bump_marker{idx};
+
+                direction=bump_direction(idx);
+                if direction == 0, direction=-1;end
+
+                mesh_point.(marker_name).Y=mesh_point.(marker_name).Y+...
+                    direction*bump_size(idx)*bump_scale(idx)*sin(pi*mesh_point.(marker_name).X.^bump_E(idx)).^3;
+            end
+        end
+    end
+end

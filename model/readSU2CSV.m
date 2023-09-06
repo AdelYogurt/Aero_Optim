@@ -9,7 +9,7 @@ end
 % read out type
 file_data=fopen(filestr,"r");
 str_type=regexprep(fgetl(file_data),'\s','');
-str_type=regexprep(str_type,{'[',']','"'},'');
+str_type=regexprep(str_type,{'[',']','"','-'},'');
 type_list=strsplit(str_type,',')';
 fclose(file_data);
 clear('file_data');
