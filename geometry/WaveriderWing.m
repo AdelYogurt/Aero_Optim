@@ -23,19 +23,29 @@ classdef WaveriderWing < Body
     end
 
     properties
+        % deform parameter
+        par_WDSA1=0; % delta sweep angle of wing 1
+        par_WDSA2=0; % delta sweep angle of wing 2
+    end
+
+    properties
         % calculate parameter
         head_length;
-        head_side_length;
-        stag_length;
-        body_length
-        y_cut;
-        body_v_max_fun;
+        body_length;
+
+        tri_wing_lead_x;
+        tri_wing_lead_y;
+        tri_wing_swe_ang; % sweep angle of tri wing
+        wing_lead_x;
+        wing_lead_y;
+        wing_swe_ang; % sweep angle of wing
 
         % local coordinate parameter
         blunt_u=0.002; % is local length parameter
         blunt_eta=0.005; % is local length parameter
 
         % function
+        body_v_max_fun;
         shape_head_edge_x;
         shape_tri_wing_edge_x;
         shape_wing_edge_x;
@@ -95,22 +105,31 @@ classdef WaveriderWing < Body
             self.body_length=body_length;
 
             y_cut=(1-par_rho1).^par_T*par_width/2;
-            self.y_cut=y_cut;
             body_v_max_fun=@(u) y_cut./(u.^par_T*par_width)-eps;
             self.body_v_max_fun=body_v_max_fun;
 
             % wing base parameter
             v_end_cut=self.body_v_max_fun(1);
 
+            % tri wing
             tri_wing_length=par_rho1*total_length;
             tri_wing_width=par_WS1;
             tri_wing_height_up=(v_end_cut+0.5)^par_N_up*(0.5-v_end_cut)^par_N_up/(0.5)^(2*par_N_up)*par_hight_up;
             tri_wing_height_low=(v_end_cut+0.5)^par_N_low*(0.5-v_end_cut)^par_N_low/(0.5)^(2*par_N_low)*par_hight_low;
 
+            self.tri_wing_lead_x=(1-par_rho1)*total_length;
+            self.tri_wing_lead_y=y_cut;
+            self.tri_wing_swe_ang=atan(par_rho1*(1-par_rho12)*total_length/par_WS1);
+
+            % wing
             wing_length=par_rho1*par_rho12*total_length;
             wing_width=par_WS2;
             wing_height_up=par_WT_up;
             wing_height_low=par_WT_low;
+
+            self.wing_lead_x=par_rho1*(1-par_rho12)*total_length;
+            self.wing_lead_y=y_cut+par_WS1;
+            self.wing_swe_ang=atan(par_rho1*par_rho12*(1-par_rho23)*total_length/par_WS2);
 
             switch waverider_type
                 case 'Fei'
@@ -124,11 +143,10 @@ classdef WaveriderWing < Body
             end
             self.shape_wing_fcn=shape_wing_fcn;
 
+            % calculate blunt radius parameter
+            % calculate gradient of up and low discrete surface to local radius center
             if ~strcmp(waverider_type,'Fei')
-                % calculate blunt radius parameter
-                % local coordinate, local x is global x, local y is global z
-                % head radius
-                % calculate gradient of up and low discrete surface to local radius center
+                % calculate head radius of zox plane of head
                 if par_M_up > 1
                     radius_center_up=0;
                 else
@@ -201,9 +219,9 @@ classdef WaveriderWing < Body
                 head_side=SurfaceCST3D('head_side',head_length,2*par_R,0,[],shape_fcn_Y,[0,0],[0,0]);
             else
                 shape_fcn_X=@(V) 1-shape_tri_wing_edge_x((V-0.5)*par_R*2)/head_length+shape_head_edge_x((V-0.5)*par_R*2)/head_length;
-                shape_fcn_Z=@(U,V) (sqrt(radius_head_side_sq-(((V-0.5)*2)*par_R).^2)-radius_center_head_side).*(1-U);
-                % shape_fcn_Z=@(U,V) (sqrt(radius_head_side_sq-(((V-0.5)*2)*par_R).^2)-radius_center_head_side).*(1-U).^0.3;
-                head_side=SurfaceCST3D('head_side',head_length,2*par_R,1,shape_fcn_X,[],shape_fcn_Z,{[0.0,0.0],[0.0,0.0]});
+                % shape_fcn_Z=@(U,V) (sqrt(radius_head_side_sq-(((V-0.5)*2)*par_R).^2)-radius_center_head_side).*(1-U);
+                shape_fcn_Z=@(U,V) (sqrt(radius_head_side_sq-(((V-0.5)*2)*par_R).^2)-radius_center_head_side).*(1-U).^0.3;
+                head_side=SurfaceCST3D('head_side',head_length,2*par_R,1,shape_fcn_X,[],shape_fcn_Z,[0.0,0.0]);
             end
 
             if strcmp(waverider_type,'Fei')
@@ -395,7 +413,7 @@ classdef WaveriderWing < Body
             % local coordination, local x is global y, local y is global z
             if strcmp(waverider_type,'Fei')
                 wing_back_up=SurfaceCST3D('wing_back_up',wing_width,wing_height_low,0);
-                wing_back_low=SurfaceCST3D('wing_back_up',wing_width,-wing_height_low,0);
+                wing_back_low=SurfaceCST3D('wing_back_low',wing_width,-wing_height_low,0);
             elseif strcmp(waverider_type,'Dia')
                 wing_back_up=SurfaceCST3D('wing_back_up',wing_width,par_R,0);
                 wing_back_low=SurfaceCST3D('wing_back_low',wing_width,-par_R,0);
@@ -490,7 +508,8 @@ classdef WaveriderWing < Body
             % notice colume vector in matrix is wgs format
             %
 
-            surf_total=cell(length(self.surface_list),1);
+            surf_num=length(self.surface_list);
+            surf_total=cell(surf_num,1);
             if nargin <= 2
                 if nargin == 1
                     value_torl=1e-3;
@@ -499,7 +518,7 @@ classdef WaveriderWing < Body
                 end
 
                 % calculate all surface matrix
-                for surf_idx=1:length(self.surface_list)
+                for surf_idx=1:surf_num
                     surf.name=self.surface_list{surf_idx}.name;
                     [surf.X,surf.Y,surf.Z,surf.U,surf.V]=self.surface_list{surf_idx}.calSurface(value_torl);
                     surf.element_type='wgs';
@@ -522,17 +541,17 @@ classdef WaveriderWing < Body
                     v_grid_num_head,edge_gird_num;
                     v_grid_num_wing,u_grid_num_body;
                     v_grid_num_wing,u_grid_num_body;
-                    v_grid_num_wing,2*edge_gird_num;
+                    v_grid_num_wing,edge_gird_num*2;
                     v_grid_num_wing,edge_gird_num;
                     v_grid_num_wing,edge_gird_num;
                     v_grid_num_wing,u_grid_num_body;
                     v_grid_num_wing,u_grid_num_body;
-                    v_grid_num_wing,2*edge_gird_num;
+                    v_grid_num_wing,edge_gird_num*2;
                     v_grid_num_wing,edge_gird_num;
                     v_grid_num_wing,edge_gird_num;
                     u_grid_num_body,edge_gird_num;
                     u_grid_num_body,edge_gird_num;
-                    edge_gird_num,2*edge_gird_num];
+                    edge_gird_num,edge_gird_num*2];
                 name_list={'head_up';'head_low';'head_side';
                     'body_up';'body_low';'body_back_up';'body_back_low';
                     'tri_wing_up';'tri_wing_low';'tri_wing_front';
@@ -551,7 +570,7 @@ classdef WaveriderWing < Body
             end
 
             % fix normal vector
-            for surf_idx=1:length(surf_total)
+            for surf_idx=1:surf_num
                 surf=surf_total{surf_idx};
                 if contains(surf.name,'low')
                     surf.X=flipud(surf.X);
@@ -563,6 +582,28 @@ classdef WaveriderWing < Body
                 surf_total{surf_idx}=surf;
             end
 
+            % deform of sweep angle
+            DX=(sin(self.tri_wing_swe_ang+self.par_WDSA1)-sin(self.tri_wing_swe_ang))/cos(self.tri_wing_swe_ang);
+            DY=(cos(self.tri_wing_swe_ang+self.par_WDSA1)-cos(self.tri_wing_swe_ang))/cos(self.tri_wing_swe_ang);
+            for surf_idx=1:surf_num
+                surf=surf_total{surf_idx};
+                if contains(surf.name,'wing')
+                    surf.X=surf.X+(DX*(surf.Y-self.tri_wing_lead_y));
+                    surf.Y=surf.Y+(DY*(surf.Y-self.tri_wing_lead_y));
+                end
+                surf_total{surf_idx}=surf;
+            end
+
+            DX=(sin(self.wing_swe_ang+self.par_WDSA2)-sin(self.wing_swe_ang))/cos(self.wing_swe_ang);
+            DY=(cos(self.wing_swe_ang+self.par_WDSA2)-cos(self.wing_swe_ang))/cos(self.wing_swe_ang);
+            for surf_idx=1:surf_num
+                surf=surf_total{surf_idx};
+                if contains(surf.name,'wing') && ~contains(surf.name,'tri')
+                    surf.X=surf.X+(DX*(surf.Y-self.wing_lead_y));
+                    surf.Y=surf.Y+(DY*(surf.Y-self.wing_lead_y));
+                end
+                surf_total{surf_idx}=surf;
+            end
         end
 
         function mesh_data=getWGSMesh(self,varargin)
@@ -592,15 +633,6 @@ classdef WaveriderWing < Body
         function writeStepOpenShell(self,step_filestr,varargin)
             % write surface into step file
             %
-
-            % check file name
-            if length(step_filestr) > 4
-                if ~strcmp(step_filestr((end-4):end),'.step')
-                    step_filestr=[step_filestr,'.step'];
-                end
-            else
-                step_filestr=[step_filestr,'.step'];
-            end
             [~,step_filename,~]=fileparts(step_filestr);
 
             % write head
@@ -760,9 +792,8 @@ classdef WaveriderWing < Body
                 par_rho1,par_rho12,par_rho23,par_WS1,par_WS2,par_WT_up,par_WT_low]=decode(param)
             % decode x into parameter
             %
-
             if isnumeric(param)
-                param=num2cell(param,[1,17]);
+                param=num2cell(param,[1,16]);
             end
 
             % length parameter

@@ -53,15 +53,6 @@ classdef Body < handle
             % write surface into step file
             %
             surf_num=length(self.surface_list);
-            
-            % check file name
-            if length(step_filestr) > 4
-                if ~strcmp(step_filestr((end-4):end),'.step')
-                    step_filestr=[step_filestr,'.step'];
-                end
-            else
-                step_filestr=[step_filestr,'.step'];
-            end
             [~,step_filename,~]=fileparts(step_filestr);
 
             % write head

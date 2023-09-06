@@ -2,10 +2,9 @@ clc;
 clear;
 close all hidden;
 
-%% base parameter
+%% waverider with wing
 
-total_length=4; % total length
-
+% total_length=4; % total length
 % vari_num=16;
 % low_bou=[0.7,0.7, ...
 %     2.4,0.4,0.5,0.5, ...
@@ -20,28 +19,20 @@ total_length=4; % total length
 % x=(up_bou+low_bou)/2;
 % x=[0.85,0.85,2.8,0.7,1.25,1.25,0.3,0.3,0.0125,0.3,0.7,1,0.7,0.6,0.03,0.03];
 % x=[0.778,0.988,3.112,0.6,1.538,1.720,0.409,0.225,0.0125,0.339,0.6,1,0.661,0.642,0.01,0.01];
-
 % x=[0.752,0.973,2*1.634,1/(0.805*2),0.796,1.948,0.446,0.165,0.005,1-0.793,0.773,1,0.778,0.409,0.04,0.01]; % optimal result of WaveriderWingFei in fei thesis
-x=[0.750,0.750,2*1.400,1/(1.000*2),1.250,1.250,0.300,0.300,0.005,1-0.700,0.700,1,0.750,0.600,0.04,0.01]; % origin shape of WaveriderWingFei in fei thesis
-
+% x=[0.750,0.750,2*1.400,1/(1.000*2),1.250,1.250,0.300,0.300,0.005,1-0.700,0.700,1,0.750,0.600,0.04,0.01]; % origin shape of WaveriderWingFei in fei thesis
 % x=up_bou;
 % x=low_bou;
+% load('optres.mat');x=x_MF_best;
 
-% load('optres.mat')
-% x=x_MF_best;
-
-%% create waverider
-
+% % create waverider
 % waverider_wing=WaveriderWing(total_length,x,'Fei');
 % waverider_wing=WaveriderWing(total_length,x,'Dia');
 % waverider_wing=WaveriderWing(total_length,x,'Tri');
 
-% waverider_base=WaveriderBase...
-%     (total_length,par_width,par_hight_up,par_hight_low,...
-%     par_T,par_M_up,par_M_low,par_N_up,par_N_low,par_R);
+% waverider_wing.par_WDSA2=waverider_wing.tri_wing_SA;
 
-%% draw
-
+% % draw
 % fine grid
 % xi_grid_num_head=40; % head x direction gird num
 % eta_grid_num_head=20; % head and body y direction gird num
@@ -57,30 +48,46 @@ x=[0.750,0.750,2*1.400,1/(1.000*2),1.250,1.250,0.300,0.300,0.005,1-0.700,0.700,1
 % edge_gird_num=3; % edge gird num
 
 % waverider_wing.drawBody(xi_grid_num_head,eta_grid_num_head,xi_grid_num_body,eta_grid_num_wing,edge_gird_num);
-waverider_wing.drawBody()
-% waverider_base.drawBody(xi_grid_num_head,eta_grid_num_head,edge_gird_num);
+% waverider_wing.drawBody()
 
-%% write to wgs
-
+% % write to wgs
 % part=waverider_wing.getWGSMesh('waverider_wing_dia',xi_grid_num_head,eta_grid_num_head,xi_grid_num_body,eta_grid_num_wing,edge_gird_num);
-% writeMeshWGS('waverider_wing_dia',part);
+% writeMeshWGS('waverider_wing_dia.wgs',part);
 
-%% write to STL
+% % write to STL
+% mesh_data=waverider_wing.getWGSMesh();
+% writeMeshSTL('waverider_wing_dia.stl',convertWGSToSTL(mesh_data));
 
-% part=waverider_wing.getWGSMesh('waverider_wing_dia');
-% writeMeshSTL('waverider_wing_dia',convertWGSToSTL(part));
+% mesh_data=waverider_base.getWGSMesh();
+% writeMeshSTL('waverider_base.stl',convertWGSToSTL(mesh_data));
 
-% part=waverider_base.getWGSMesh('waverider_base',xi_grid_num_head,eta_grid_num_head,edge_gird_num);
-% writeMeshSTL('waverider_base',convertWGSToSTL(part));
+% % write to INP
+% mesh_data=waverider_wing.getWGSMesh();
+% 
+% mesh_data_head_body=struct();
+% mesh_data_tri_wing=struct();
+% mesh_data_wing=struct();
+% marker_name_list=fieldnames(mesh_data);
+% for marker_index=1:length(marker_name_list)
+%     name=marker_name_list{marker_index};
+%     if contains(name,'tri_wing')
+%         mesh_data_tri_wing.(name)=mesh_data.(name);
+%     elseif contains(name,'wing')
+%         mesh_data_wing.(name)=mesh_data.(name);
+%     else
+%         mesh_data_head_body.(name)=mesh_data.(name);
+%     end
+% end
+% 
+% % writeMeshINP('waverider_wing.inp',convertWGSToMesh(mesh_data));
+% 
+% writeMeshINP('waverider_wing_head_body.inp',convertWGSToMesh(mesh_data_head_body));
+% writeMeshINP('waverider_wing_tri_wing.inp',convertWGSToMesh(mesh_data_tri_wing));
+% writeMeshINP('waverider_wing_wing.inp',convertWGSToMesh(mesh_data_wing));
 
-%% write to INP
 
-% part=waverider_wing.getWGSMesh('waverider_wing_dia');
-% [part_list,point_list]=convertWGSToMesh(part,false(1));
-% writeMeshINP('waverider_wing_dia',part_list,point_list);
-
-%% write to STEP
-% waverider_wing.writeStepOpenShell('waverider_wing_dia',1e-4);
+% % write to STEP
+% waverider_wing.writeStepOpenShell('waverider_wing_dia.step',1e-4);
 
 %% cone waverider
 
@@ -97,9 +104,9 @@ waverider_wing.drawBody()
 % R_total_sq=(tan(beta)*(x_0+L_total))^2;
 % H_total=(sqrt(R_total_sq-(W_total/2)^2)-R_0);
 % lead_edge_fcn=@(z) -R_0+H_total*(cos(pi*z/W_total)-1);
-% 
-% % drawFunction(lead_edge_fcn,0,W_total/2);
-% 
+
+% drawFunction(lead_edge_fcn,0,W_total/2);
+
 % waverider=WaveriderCone(Ma_in,T_in,P_in,beta,...
 %     lead_edge_fcn,R_0,L_total,W_total);
 % 
@@ -114,6 +121,29 @@ waverider_wing.drawBody()
 % writeMeshSTL('waverider_cone',convertWGSToSTL(part));
 
 % waverider.writeStepOpenShell('waverider_cone',U_num,[],W_num);
+
+%% waverider
+
+% total_length=4; % total length
+% vari_num=11;
+% low_bou=[0.7,0.7, ...
+%     2.4,0.4,0.5,0.5, ...
+%     0.1,0.1,0.01, ...
+%     -0.5,0.5];
+% up_bou=[1.0,1.0, ...
+%     3.2,0.8,2.0,2.0, ...
+%     0.5,0.5,0.04, ...
+%     0.5,2.0];
+
+% x=rand(1,vari_num).*(up_bou-low_bou)+low_bou;
+% x=(up_bou+low_bou)/2;
+% x=[0.85,0.85,2.8,0.7,1.25,1.25,0.3,0.3,0.0125,-0.5,1.0];
+% x=up_bou;
+% x=low_bou;
+
+% create waverider
+% waverider_wing=Waverider(total_length,x);
+% waverider_wing.drawBody()
 
 %%
 
