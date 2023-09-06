@@ -1,16 +1,16 @@
-classdef OptSADERBF < handle
-    % RBF-CDE optimization algorithm
-    % use RBF model instead of origin kriging model
+classdef OptSADE < handle
+    % KRG-CDE optimization algorithm
     %
     % referance: [1] 叶年辉,龙腾,武宇飞,等.
     % 基于Kriging代理模型的约束差分进化算法 [J]. 航空学报,2021,42(6): 13.
     %
-    % Copyright 2023 Adel
+    % Copyright 2022 Adel
     %
     % abbreviation:
-    % obj: objective, con: constraint, iter: iteration, torl: torlance
+    % obj: objective, con: constraint, iter: iteration, tor: torlance
     % fcn: function, surr: surrogate
     % lib: library, init: initial, rst: restart, potl: potential
+    % pred: predict, var:variance, vari: variable, num: number
     %
     properties
         % basic parameter
@@ -39,19 +39,25 @@ classdef OptSADERBF < handle
     properties
         % problem parameter
         expensive_con_flag;
+        KRG_simplify_flag=true(1);
 
-        obj_fcn_surr;
-        con_fcn_surr;
-        ks_fcn_surr;
+        obj_fcn_surr=[];
+        con_fcn_surr=[];
 
-        obj_surr;
-        con_surr_list;
-        coneq_surr_list;
+        obj_KRG=[];
+        con_KRG_list=[];
+        coneq_KRG_list=[];
+
+        obj_RBF=[];
+        con_RBF_list=[];
+        coneq_RBF_list=[];
+
+        X_init=[];
     end
 
     % main function
     methods
-        function self=OptSADERBF(NFE_max,iter_max,obj_torl,con_torl,data_lib,save_description)
+        function self=OptSADE(NFE_max,iter_max,obj_torl,con_torl,data_lib,save_description)
             % initialize optimization
             %
             if nargin < 6
@@ -153,9 +159,13 @@ classdef OptSADERBF < handle
             end
 
             if size(self.data_lib.X,1) < pop_num
-                % use latin hypercube method to get enough initial sample x_list
-                X_updata=lhsdesign(pop_num-size(self.data_lib.X,1),vari_num,'iterations',50,'criterion','maximin').*(up_bou-low_bou)+low_bou;
-
+                if isempty(self.X_init)
+                    % use latin hypercube method to get enough initial sample x_list
+                    X_updata=lhsdesign(pop_num-size(self.data_lib.X,1),vari_num,'iterations',50,'criterion','maximin').*(up_bou-low_bou)+low_bou;
+                else
+                    X_updata=self.X_init;
+                end
+                
                 % updata data lib by x_list
                 [self.data_lib,~,~,~,~,~,~,~,NFE_updata]=dataUpdata(self.data_lib,X_updata,0,self.WRIRE_FILE_FLAG,self.str_data_file);
                 NFE=NFE+NFE_updata;
@@ -185,7 +195,6 @@ classdef OptSADERBF < handle
                 search_mode=next_search_mode;
                 % nomalization all data by max obj and to create surrogate model
                 [X,Obj,Con,Coneq,Vio,Ks]=dataLoad(self.data_lib);
-
                 [X_surr,Obj_surr,Con_surr,Coneq_surr,~,~,...
                     obj_max,con_max_list,coneq_max_list,vio_max_list,ks_max_list]=self.getModelData...
                     (X,Obj,Con,Coneq,Vio,Ks,self.nomlz_value);
@@ -377,31 +386,19 @@ classdef OptSADERBF < handle
             X_DE=[X_new_R1;X_new_R2;X_new_CR;X_new_CB];
 
             % step 4
-            % construct RBF model
-            % base on distance to x_list to repace predict variance
-            [self.obj_fcn_surr,self.con_fcn_surr,output_model]=self.getSurrFcnRBF...
-                (X_surr,Obj_surr,Con_surr,Coneq_surr);
-            self.obj_surr=output_model.obj_surr;
-            self.con_surr_list=output_model.con_surr_list;
-            self.coneq_surr_list=output_model.coneq_surr_list;
+            % updata kriging model and function
+            [self.obj_fcn_surr,self.con_fcn_surr,output_model]=self.getSurrFcnKRG...
+                (X_surr,Obj_surr,Con_surr,Coneq_surr,...
+                self.obj_KRG,self.con_KRG_list,self.coneq_KRG_list);
+            self.obj_KRG=output_model.obj_surr;
+            self.con_KRG_list=output_model.con_surr_list;
+            self.coneq_KRG_list=output_model.coneq_surr_list;
 
             % evaluate each x_offspring obj and constraints
-            [obj_pred_DE_list]=self.obj_fcn_surr(X_DE);
-
-            % variance were replaced by x distance to exist x
-            % distance scale
-            dis=zeros(size(X_DE,1),size(X_surr,1));
-            for vari_idx=1:vari_num
-                dis=dis+(X_DE(:,vari_idx)-X_surr(:,vari_idx)').^2;
-            end
-            D=min(sqrt(dis),[],2);
-            D_min=min(D); D_max=max(D);
-            obj_var_DE_list=(D_max-D)./(D_max-D_min);
+            [obj_pred_DE_list,obj_var_DE_list]=self.obj_fcn_surr(X_DE);
             if self.expensive_con_flag
                 if ~isempty(self.con_fcn_surr)
-                    [con_pred_DE_list,coneq_pred_DE_list]=self.con_fcn_surr(X_DE);
-                    con_var_DE_list=obj_var_DE_list;
-                    coneq_var_DE_list=obj_var_DE_list;
+                    [con_pred_DE_list,coneq_pred_DE_list,con_var_DE_list,coneq_var_DE_list]=self.con_fcn_surr(X_DE);
                 end
 
                 vio_DE_list=zeros(4*pop_num,1);
@@ -445,56 +442,56 @@ classdef OptSADERBF < handle
                 x_infill=X_DE(fitness_best_idx,:);
             end
 
-            function X_new=DERand(low_bou,up_bou,X,F,x_number,rand_number)
-                [x_number__,variable_number__]=size(X);
-                X_new=zeros(x_number,variable_number__);
-                for x_idx__=1:x_number
-                    idx__=randi(x_number__,2*rand_number+1,1);
-                    X_new(x_idx__,:)=X(idx__(1),:);
-                    for rand_idx__=1:rand_number
-                        X_new(x_idx__,:)=X_new(x_idx__,:)+...
+            function X_new = DERand(low_bou,up_bou,X,F,x_number,rand_number)
+                [x_number__,variable_number__] = size(X);
+                X_new = zeros(x_number,variable_number__);
+                for x_idx__ = 1:x_number
+                    idx__ = randi(x_number__,2*rand_number+1,1);
+                    X_new(x_idx__,:) = X(idx__(1),:);
+                    for rand_idx__ = 1:rand_number
+                        X_new(x_idx__,:) = X_new(x_idx__,:)+...
                             F*(X(idx__(2*rand_idx__),:)-X(idx__(2*rand_idx__+1),:));
-                        X_new(x_idx__,:)=max(X_new(x_idx__,:),low_bou);
-                        X_new(x_idx__,:)=min(X_new(x_idx__,:),up_bou);
+                        X_new(x_idx__,:) = max(X_new(x_idx__,:),low_bou);
+                        X_new(x_idx__,:) = min(X_new(x_idx__,:),up_bou);
                     end
                 end
             end
 
-            function X_new=DECurrentRand(low_bou,up_bou,X,F)
-                [x_number__,variable_number__]=size(X);
-                X_new=zeros(x_number__,variable_number__);
-                for x_idx__=1:x_number__
-                    idx__=randi(x_number__,3,1);
-                    X_new(x_idx__,:)=X(x_idx__,:)+...
+            function X_new = DECurrentRand(low_bou,up_bou,X,F)
+                [x_number__,variable_number__] = size(X);
+                X_new = zeros(x_number__,variable_number__);
+                for x_idx__ = 1:x_number__
+                    idx__ = randi(x_number__,3,1);
+                    X_new(x_idx__,:) = X(x_idx__,:)+...
                         F*(X(idx__(1),:)-X(x_idx__,:)+...
                         X(idx__(2),:)-X(idx__(3),:));
-                    X_new(x_idx__,:)=max(X_new(x_idx__,:),low_bou);
-                    X_new(x_idx__,:)=min(X_new(x_idx__,:),up_bou);
+                    X_new(x_idx__,:) = max(X_new(x_idx__,:),low_bou);
+                    X_new(x_idx__,:) = min(X_new(x_idx__,:),up_bou);
                 end
             end
 
-            function X_new=DECurrentBest(low_bou,up_bou,X,F,x_best_idx)
-                [x_number__,variable_number__]=size(X);
-                X_new=zeros(x_number__,variable_number__);
-                for x_idx__=1:x_number__
-                    idx__=randi(x_number__,2,1);
-                    X_new(x_idx__,:)=X(x_idx__,:)+...
+            function X_new = DECurrentBest(low_bou,up_bou,X,F,x_best_idx)
+                [x_number__,variable_number__] = size(X);
+                X_new = zeros(x_number__,variable_number__);
+                for x_idx__ = 1:x_number__
+                    idx__ = randi(x_number__,2,1);
+                    X_new(x_idx__,:) = X(x_idx__,:)+...
                         F*(X(x_best_idx,:)-X(x_idx__,:)+...
                         X(idx__(1),:)-X(idx__(2),:));
-                    X_new(x_idx__,:)=max(X_new(x_idx__,:),low_bou);
-                    X_new(x_idx__,:)=min(X_new(x_idx__,:),up_bou);
+                    X_new(x_idx__,:) = max(X_new(x_idx__,:),low_bou);
+                    X_new(x_idx__,:) = min(X_new(x_idx__,:),up_bou);
                 end
             end
 
-            function X_new=DECrossover(low_bou,up_bou,X,V,C_R)
-                [x_number__,variable_number__]=size(X);
-                X_new=X;
-                rand_number=rand(x_number__,variable_number__);
-                idx__=find(rand_number < C_R);
-                X_new(idx__)=V(idx__);
-                for x_idx__=1:x_number__
-                    X_new(x_idx__,:)=max(X_new(x_idx__,:),low_bou);
-                    X_new(x_idx__,:)=min(X_new(x_idx__,:),up_bou);
+            function X_new = DECrossover(low_bou,up_bou,X,V,C_R)
+                [x_number__,variable_number__] = size(X);
+                X_new = X;
+                rand_number = rand(x_number__,variable_number__);
+                idx__ = find(rand_number < C_R);
+                X_new(idx__) = V(idx__);
+                for x_idx__ = 1:x_number__
+                    X_new(x_idx__,:) = max(X_new(x_idx__,:),low_bou);
+                    X_new(x_idx__,:) = min(X_new(x_idx__,:),up_bou);
                 end
             end
 
@@ -538,9 +535,9 @@ classdef OptSADERBF < handle
             % get RBF model and function
             [self.obj_fcn_surr,self.con_fcn_surr,output_model]=self.getSurrFcnRBF...
                 (X_RBF,Obj_RBF,Con_RBF,Coneq_RBF);
-            self.obj_surr=output_model.obj_surr;
-            self.con_surr_list=output_model.con_surr_list;
-            self.coneq_surr_list=output_model.coneq_surr_list;
+            self.obj_RBF=output_model.obj_surr;
+            self.con_RBF_list=output_model.con_surr_list;
+            self.coneq_RBF_list=output_model.coneq_surr_list;
 
             % get local infill point
             % obtian total constraint function
@@ -557,6 +554,105 @@ classdef OptSADERBF < handle
                 low_bou_local,up_bou_local,con_fcn,fmincon_options);
         end
 
+        function [obj_fcn_surr,con_fcn_surr,output]=getSurrFcnKRG...
+                (self,x_list,obj_list,con_list,coneq_list,...
+                obj_surr,con_surr_list,coneq_surr_list)
+            % generate surrogate function of objective and constraints
+            %
+            % output:
+            % obj_fcn_surr(output is obj_pred, obj_vari),...
+            % con_fcn_surr(output is con_pred, coneq_pred, con_vari, coneq_vari)
+            %
+            if nargin < 8
+                coneq_surr_list=[];
+                if nargin < 7
+                    con_surr_list=[];
+                    if nargin < 6
+                        obj_surr=[];
+                    end
+                end
+            end
+
+            % generate obj surrogate
+            [pred_fcn_obj,obj_surr]=self.interpKrigingPreModel(x_list,obj_list,obj_surr,self.KRG_simplify_flag);
+
+            % generate con surrogate
+            if ~isempty(con_list)
+                pred_fcn_con_list=cell(size(con_list,2),1);
+                if isempty(con_surr_list)
+                    con_surr_list=cell(size(con_list,2),1);
+                end
+
+                for con_idx=1:size(con_list,2)
+                    [pred_fcn_con_list{con_idx},con_surr_list{con_idx}]=self.interpKrigingPreModel...
+                        (x_list,con_list(:,con_idx),con_surr_list{con_idx},self.KRG_simplify_flag);
+                end
+            else
+                pred_fcn_con_list=[];
+                con_surr_list=[];
+            end
+
+            % generate coneq surrogate
+            if ~isempty(coneq_list)
+                pred_fcn_coneq_list=cell(size(coneq_list,2),1);
+                if isempty(coneq_surr_list)
+                    coneq_surr_list=cell(size(coneq_list,2),1);
+                end
+
+                for coneq_idx=1:size(coneq_list,2)
+                    [pred_fcn_coneq_list{coneq_idx},coneq_surr_list{coneq_idx}]=self.interpKrigingPreModel...
+                        (x_list,coneq_list(:,coneq_idx),coneq_surr_list{coneq_idx},self.KRG_simplify_flag);
+                end
+            else
+                pred_fcn_coneq_list=[];
+                coneq_surr_list=[];
+            end
+
+            obj_fcn_surr=@(X_pred) objFcnSurr(X_pred,pred_fcn_obj);
+            if isempty(pred_fcn_con_list) && isempty(pred_fcn_coneq_list)
+                con_fcn_surr=[];
+            else
+                con_fcn_surr=@(X_pred) conFcnSurr(X_pred,pred_fcn_con_list,pred_fcn_coneq_list);
+            end
+
+            output.obj_surr=obj_surr;
+            output.con_surr_list=con_surr_list;
+            output.coneq_surr_list=coneq_surr_list;
+
+            function [obj_pred,obj_var]=objFcnSurr...
+                    (X_pred,pred_fcn_obj)
+                % connect all predict favl
+                %
+                [obj_pred,obj_var]=pred_fcn_obj(X_pred);
+            end
+
+            function [con_pred,coneq_pred,con_var,coneq_var]=conFcnSurr...
+                    (X_pred,pred_fcn_con,pred_fcn_coneq)
+                % connect all predict con and coneq
+                %
+                if isempty(pred_fcn_con)
+                    con_pred=[];con_var=[];
+                else
+                    con_pred=zeros(size(X_pred,1),length(pred_fcn_con));
+                    con_var=zeros(size(X_pred,1),length(pred_fcn_con));
+                    for con_idx__=1:length(pred_fcn_con)
+                        [con_pred(:,con_idx__),con_var(:,con_idx__)]=....
+                            pred_fcn_con{con_idx__}(X_pred);
+                    end
+                end
+                if isempty(pred_fcn_coneq)
+                    coneq_pred=[];coneq_var=[];
+                else
+                    coneq_pred=zeros(size(X_pred,1),length(pred_fcn_coneq));
+                    coneq_var=zeros(size(X_pred,1),length(pred_fcn_coneq));
+                    for coneq_idx__=1:length(pred_fcn_coneq)
+                        [coneq_pred(:,con_idx__),coneq_var(:,con_idx__)]=...
+                            pred_fcn_coneq{coneq_idx__}(X_pred);
+                    end
+                end
+            end
+        end
+
         function [obj_fcn_surr,con_fcn_surr,output]=getSurrFcnRBF...
                 (self,x_list,obj_list,con_list,coneq_list)
             % generate surrogate function of objective and constraints
@@ -567,34 +663,34 @@ classdef OptSADERBF < handle
             %
 
             % generate obj surrogate
-            [pred_fcn_obj,obj_RBF]=self.interpRadialBasisPreModel(x_list,obj_list);
+            [pred_fcn_obj,obj_surr]=self.interpRadialBasisPreModel(x_list,obj_list);
 
             % generate con surrogate
             if ~isempty(con_list)
                 pred_fcn_con_list=cell(size(con_list,2),1);
-                con_RBF_list=cell(size(con_list,2),1);
+                con_surr_list=cell(size(con_list,2),1);
 
                 for con_idx=1:size(con_list,2)
-                    [pred_fcn_con_list{con_idx},con_RBF_list{con_idx}]=self.interpRadialBasisPreModel...
+                    [pred_fcn_con_list{con_idx},con_surr_list{con_idx}]=self.interpRadialBasisPreModel...
                         (x_list,con_list(:,con_idx));
                 end
             else
                 pred_fcn_con_list=[];
-                con_RBF_list=[];
+                con_surr_list=[];
             end
 
             % generate coneq surrogate
             if ~isempty(coneq_list)
                 pred_fcn_coneq_list=cell(size(coneq_list,2),1);
-                coneq_RBF_list=cell(size(coneq_list,2),1);
+                coneq_surr_list=cell(size(coneq_list,2),1);
 
                 for coneq_idx=1:size(coneq_list,2)
-                    [pred_fcn_coneq_list{coneq_idx},coneq_RBF_list{coneq_idx}]=self.interpRadialBasisPreModel...
+                    [pred_fcn_coneq_list{coneq_idx},coneq_surr_list{coneq_idx}]=self.interpRadialBasisPreModel...
                         (x_list,coneq_list(:,coneq_idx));
                 end
             else
                 pred_fcn_coneq_list=[];
-                coneq_RBF_list=[];
+                coneq_surr_list=[];
             end
 
             obj_fcn_surr=@(X_pred) objFcnSurr(X_pred,pred_fcn_obj);
@@ -604,9 +700,9 @@ classdef OptSADERBF < handle
                 con_fcn_surr=@(X_pred) conFcnSurr(X_pred,pred_fcn_con_list,pred_fcn_coneq_list);
             end
 
-            output.obj_surr=obj_RBF;
-            output.con_surr_list=con_RBF_list;
-            output.coneq_surr_list=coneq_RBF_list;
+            output.obj_surr=obj_surr;
+            output.con_surr_list=con_surr_list;
+            output.coneq_surr_list=coneq_surr_list;
 
             function obj_pred=objFcnSurr...
                     (X_pred,pred_fcn_obj)
@@ -759,6 +855,284 @@ classdef OptSADERBF < handle
 
     % surrogate model
     methods(Static)
+        function [pred_fcn,model_kriging]=interpKrigingPreModel(X,Y,hyp,simplify_flag)
+            % nomalization method is gaussian
+            % theta=exp(hyp)
+            %
+            % input:
+            % X, Y(initial data ,which are real data), hyp(optional),...
+            % simple_flag(only use one hyp)
+            %
+            % output:
+            % pred_fcn, model_kriging
+            %
+            % Copyright 2023.2 Adel
+            %
+            [x_number,variable_number]=size(X);
+            if nargin < 4
+                simplify_flag=false(1);
+            end
+
+            if nargin < 3 || isempty(hyp)
+                if simplify_flag
+                    hyp=0;
+                else
+                    hyp=zeros(1,variable_number);
+                end
+            end
+            if isstruct(hyp)
+                hyp=hyp.hyp;
+            end
+
+            % normalize data
+            aver_X=mean(X);
+            stdD_X=std(X);
+            aver_Y=mean(Y);
+            stdD_Y=std(Y);
+            index__=find(stdD_X == 0);
+            if  ~isempty(index__),stdD_X(index__)=1; end
+            index__=find(stdD_Y == 0);
+            if  ~isempty(index__),stdD_Y(index__)=1; end
+            X_nomlz=(X-aver_X)./stdD_X;
+            Y_nomlz=(Y-aver_Y)./stdD_Y;
+
+            % initial X_dis_sq
+            X_dis_sq=zeros(x_number,x_number,variable_number);
+            for variable_index=1:variable_number
+                X_dis_sq(:,:,variable_index)=...
+                    (X_nomlz(:,variable_index)-X_nomlz(:,variable_index)').^2;
+            end
+
+            % regression function define
+            % notice reg_function process no normalization data
+            % reg_function=@(X) regZero(X);
+            reg_function=@(X) regLinear(X);
+
+            % calculate reg
+            Obj_reg_nomlz=(reg_function(X)-aver_Y)./stdD_Y;
+
+            % optimal to get hyperparameter
+            object_function_hyp=@(hyp) objectNLLKriging...
+                (X_dis_sq,Y_nomlz,x_number,variable_number,hyp,Obj_reg_nomlz);
+
+            % [Obj,gradient]=object_function_hyp(hyp)
+            % [~,gradient_differ]=differ(object_function_hyp,hyp)
+            % drawFunction(object_function_hyp,low_bou_hyp,up_bou_hyp);
+
+            % extend hyp
+            if simplify_flag && length(hyp) > 1, hyp=mean(hyp);end
+            if ~simplify_flag && length(hyp) ~= variable_number, hyp=[hyp,mean(hyp)*ones(1,variable_number-length(hyp))];end
+
+            if simplify_flag
+                low_bou_hyp=-3;
+                up_bou_hyp=3;
+            else
+                low_bou_hyp=-3*ones(1,variable_number);
+                up_bou_hyp=3*ones(1,variable_number);
+            end
+
+            hyp=fmincon...
+                (object_function_hyp,hyp,[],[],[],[],low_bou_hyp,up_bou_hyp,[], ...
+                optimoptions('fmincon','Display','none',...
+                'OptimalityTolerance',1e-2,...
+                'FiniteDifferenceStepSize',1e-5,...,
+                'MaxIterations',10,'SpecifyObjectiveGradient',true));
+
+            % get parameter
+            [covariance,inv_covariance,beta,sigma_sq]=interpKriging...
+                (X_dis_sq,Y_nomlz,x_number,variable_number,exp(hyp),Obj_reg_nomlz);
+            gama=inv_covariance*(Y_nomlz-Obj_reg_nomlz*beta);
+            FTRF=Obj_reg_nomlz'*inv_covariance*Obj_reg_nomlz;
+
+            % initialization predict function
+            pred_fcn=@(X_predict) interpKrigingPredictor...
+                (X_predict,X_nomlz,aver_X,stdD_X,aver_Y,stdD_Y,...
+                x_number,variable_number,exp(hyp),beta,gama,sigma_sq,...
+                inv_covariance,Obj_reg_nomlz,FTRF,reg_function);
+
+            model_kriging.X=X;
+            model_kriging.Y=Y;
+            model_kriging.Obj_regression=Obj_reg_nomlz;
+            model_kriging.covariance=covariance;
+            model_kriging.inv_covariance=inv_covariance;
+
+            model_kriging.hyp=hyp;
+            model_kriging.beta=beta;
+            model_kriging.gama=gama;
+            model_kriging.sigma_sq=sigma_sq;
+            model_kriging.aver_X=aver_X;
+            model_kriging.stdD_X=stdD_X;
+            model_kriging.aver_Y=aver_Y;
+            model_kriging.stdD_Y=stdD_Y;
+
+            model_kriging.predict_function=pred_fcn;
+
+            % abbreviation:
+            % num: number,pred: predict,vari: variable,hyp: hyper parameter
+            % NLL: negative log likelihood
+            function [Obj,gradient]=objectNLLKriging...
+                    (X_dis_sq,Y,x_num,vari_num,hyp,F_reg)
+                % function to minimize sigma_sq
+                %
+                theta=exp(hyp);
+                [cov,inv_cov,~,sigma2,inv_FTRF,Y_Fmiu]=interpKriging...
+                    (X_dis_sq,Y,x_num,vari_num,theta,F_reg);
+
+                % calculation negative log likelihood
+                L=chol(cov)';
+                Obj=x_num/2*log(sigma2)+sum(log(diag(L)));
+
+                % calculate gradient
+                if nargout > 1
+                    % gradient
+
+                    if simplify_flag
+                        dcov_dtheta=zeros(x_num,x_num);
+                        for vari_index=1:vari_num
+                            dcov_dtheta=dcov_dtheta - (X_dis_sq(:,:,vari_index).*cov)*theta/vari_num;
+                        end
+                        dinv_cov_dtheta=...
+                            -inv_cov*dcov_dtheta*inv_cov;
+
+                        dinv_FTRF_dtheta=-inv_FTRF*...
+                            (F_reg'*dinv_cov_dtheta*F_reg)*...
+                            inv_FTRF;
+
+                        dmiu_dtheta=dinv_FTRF_dtheta*(F_reg'*inv_cov*Y)+...
+                            inv_FTRF*(F_reg'*dinv_cov_dtheta*Y);
+
+                        dY_Fmiu_dtheta=-F_reg*dmiu_dtheta;
+
+                        dsigma2_dtheta=(dY_Fmiu_dtheta'*inv_cov*Y_Fmiu+...
+                            Y_Fmiu'*dinv_cov_dtheta*Y_Fmiu+...
+                            Y_Fmiu'*inv_cov*dY_Fmiu_dtheta)/x_num;
+
+                        dlnsigma2_dtheta=1/sigma2*dsigma2_dtheta;
+
+                        dlndetR=trace(inv_cov*dcov_dtheta);
+
+                        gradient=x_num/2*dlnsigma2_dtheta+0.5*dlndetR;
+
+                    else
+                        gradient=zeros(vari_num,1);
+                        for vari_index=1:vari_num
+                            dcov_dtheta=-(X_dis_sq(:,:,vari_index).*cov)*theta(vari_index)/vari_num;
+
+                            dinv_cov_dtheta=...
+                                -inv_cov*dcov_dtheta*inv_cov;
+
+                            dinv_FTRF_dtheta=-inv_FTRF*...
+                                (F_reg'*dinv_cov_dtheta*F_reg)*...
+                                inv_FTRF;
+
+                            dmiu_dtheta=dinv_FTRF_dtheta*(F_reg'*inv_cov*Y)+...
+                                inv_FTRF*(F_reg'*dinv_cov_dtheta*Y);
+
+                            dY_Fmiu_dtheta=-F_reg*dmiu_dtheta;
+
+                            dsigma2_dtheta=(dY_Fmiu_dtheta'*inv_cov*Y_Fmiu+...
+                                Y_Fmiu'*dinv_cov_dtheta*Y_Fmiu+...
+                                Y_Fmiu'*inv_cov*dY_Fmiu_dtheta)/x_num;
+
+                            dlnsigma2_dtheta=1/sigma2*dsigma2_dtheta;
+
+                            dlndetR=trace(inv_cov*dcov_dtheta);
+
+                            gradient(vari_index)=x_num/2*dlnsigma2_dtheta+0.5*dlndetR;
+                        end
+                    end
+                end
+            end
+
+            function [cov,inv_cov,beta,sigma_sq,inv_FTRF,Y_Fmiu]=interpKriging...
+                    (X_dis_sq,Y,x_num,vari_num,theta,F_reg)
+                % kriging interpolation kernel function
+                % Y(x)=beta+Z(x)
+                %
+                cov=zeros(x_num,x_num);
+
+                if simplify_flag
+                    for vari_index=1:vari_num
+                        cov=cov+X_dis_sq(:,:,vari_index)*theta;
+                    end
+                else
+                    for vari_index=1:vari_num
+                        cov=cov+X_dis_sq(:,:,vari_index)*theta(vari_index);
+                    end
+                end
+                cov=exp(-cov/vari_num)+eye(x_num)*1e-6;
+
+                % coefficient calculation
+                inv_cov=cov\eye(x_num);
+                inv_FTRF=(F_reg'*inv_cov*F_reg)\eye(size(F_reg,2));
+
+                % basical bias
+                beta=inv_FTRF*(F_reg'*inv_cov*Y);
+                Y_Fmiu=Y-F_reg*beta;
+                sigma_sq=(Y_Fmiu'*inv_cov*Y_Fmiu)/x_num;
+
+            end
+
+            function [Y_pred,Var_pred]=interpKrigingPredictor...
+                    (X_pred,X_nomlz,aver_X,stdD_X,aver_Y,stdD_Y,...
+                    x_num,vari_num,theta,beta,gama,sigma_sq,...
+                    inv_cov,Obj_reg_nomlz,FTRF,reg_function)
+                % kriging interpolation predict function
+                % input predict_x and kriging model
+                % predict_x is row vector
+                % output the predict value
+                %
+                [x_pred_num,~]=size(X_pred);
+                Obj_reg_pred=reg_function(X_pred);
+
+                % normalize data
+                X_pred_nomlz=(X_pred-aver_X)./stdD_X;
+                Obj_reg_pred_nomlz=(Obj_reg_pred-aver_Y)./stdD_Y;
+
+                % predict covariance
+                predict_cov=zeros(x_num,x_pred_num);
+                if simplify_flag
+                    for vari_index=1:vari_num
+                        predict_cov=predict_cov+...
+                            (X_nomlz(:,vari_index)-X_pred_nomlz(:,vari_index)').^2*theta;
+                    end
+                else
+                    for vari_index=1:vari_num
+                        predict_cov=predict_cov+...
+                            (X_nomlz(:,vari_index)-X_pred_nomlz(:,vari_index)').^2*theta(vari_index);
+                    end
+                end
+                predict_cov=exp(-predict_cov/vari_num);
+
+                % predict base Obj
+                Y_pred=Obj_reg_pred_nomlz*beta+predict_cov'*gama;
+
+                % predict variance
+                u__=Obj_reg_nomlz'*inv_cov*predict_cov-Obj_reg_pred_nomlz';
+                Var_pred=sigma_sq*...
+                    (1+u__'/FTRF*u__+...
+                    -predict_cov'*inv_cov*predict_cov);
+
+                % normalize data
+                Y_pred=Y_pred*stdD_Y+aver_Y;
+                Var_pred=diag(Var_pred)*stdD_Y*stdD_Y;
+
+                Var_pred(Var_pred < 100*eps)=100*eps;
+            end
+
+            function F_reg=regZero(X)
+                % zero order base funcion
+                %
+                F_reg=ones(size(X,1),1); % zero
+            end
+
+            function F_reg=regLinear(X)
+                % first order base funcion
+                %
+                F_reg=[ones(size(X,1),1),X]; % linear
+            end
+        end
+
         function [pred_fcn,model_RBF]=interpRadialBasisPreModel(X,Y,basis_function)
             % radial basis function interp pre model function
             %
@@ -870,7 +1244,6 @@ classdef OptSADERBF < handle
         end
 
     end
-
 end
 
 %% data library function

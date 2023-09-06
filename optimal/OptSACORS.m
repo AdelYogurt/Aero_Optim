@@ -1,11 +1,12 @@
 classdef OptSACORS < handle
     % SACO-RS optimization algorithm
+    % only support constraints problem
     %
-    % Copyright 2023 4 Adel
+    % Copyright 2023 Adel
     %
     % abbreviation:
-    % obj: objective, con: constraint, iter: iteration, tor: torlance
-    % fcn: function
+    % obj: objective, con: constraint, iter: iteration, torl: torlance
+    % fcn: function, surr: surrogate
     % lib: library, init: initial, rst: restart, potl: potential
     %
     properties
@@ -16,20 +17,24 @@ classdef OptSACORS < handle
         con_torl;
         data_lib;
 
-        DRAW_FIGURE_FLAG=1; % whether draw data
+        DRAW_FIGURE_FLAG=0; % whether draw data
         INFORMATION_FLAG=1; % whether print data
         CONVERGENCE_JUDGMENT_FLAG=0; % whether judgment convergence
         WRIRE_FILE_FLAG=0; % whether write to file
+        save_description=[]; % iter save mat name
 
         nomlz_value=10; % max obj when normalize obj,con,coneq
-        protect_range=1e-16; % surrogate add point protect range
+        protect_range=1e-14; % surrogate add point protect range
         identiy_torl=1e-2; % if inf norm of point less than identiy_torlance, point will be consider as same local best
+        min_r_interest=1e-3;
+        max_r_interest=1e-1;
 
         str_data_file='result_total.txt'
     end
 
     properties
         % problem parameter
+        GPC_simplify_flag=true(1);
         expensive_con_flag;
 
         X_local_best=[];
@@ -53,20 +58,24 @@ classdef OptSACORS < handle
         ks_surr;
     end
 
-    methods % main
-        function self=OptSACORS(NFE_max,iter_max,obj_torl,con_torl,data_lib)
+    % main function
+    methods
+        function self=OptSACORS(NFE_max,iter_max,obj_torl,con_torl,data_lib,save_description)
             % initialize optimization
             %
-            if nargin < 5
-                data_lib=[];
-                if nargin < 4
-                    con_torl=[];
-                    if nargin < 3
-                        obj_torl=[];
-                        if nargin < 2
-                            iter_max=[];
-                            if nargin < 1
-                                NFE_max=[];
+            if nargin < 6
+                save_description=[];
+                if nargin < 5
+                    data_lib=[];
+                    if nargin < 4
+                        con_torl=[];
+                        if nargin < 3
+                            obj_torl=[];
+                            if nargin < 2
+                                iter_max=[];
+                                if nargin < 1
+                                    NFE_max=[];
+                                end
                             end
                         end
                     end
@@ -85,7 +94,7 @@ classdef OptSACORS < handle
             self.obj_torl=obj_torl;
             self.con_torl=con_torl;
             self.data_lib=data_lib;
-
+            self.save_description=save_description;
         end
 
         function [x_best,obj_best,NFE,output]=optimize(self,varargin)
@@ -96,25 +105,24 @@ classdef OptSACORS < handle
                 problem=varargin{1};
                 if isstruct(problem)
                     fields=fieldnames(problem);
-                    if ~contains(fields,'objcon_fcn'), error('optSACORS.optimize: input problem lack objcon_fcn'); end
+                    if all(~contains(fields,'objcon_fcn')), error('optSACORS.optimize: input problem lack objcon_fcn'); end
                     objcon_fcn=problem.objcon_fcn;
-                    if ~contains(fields,'vari_num'), error('optSACORS.optimize: input problem lack vari_num'); end
-                    if ~contains(fields,'low_bou'), error('optSACORS.optimize: input problem lack low_bou'); end
-                    if ~contains(fields,'up_bou'), error('optSACORS.optimize: input problem lack up_bou'); end
-                    if ~contains(fields,'con_fcn_cheap'), problem.con_fcn_cheap=[]; end
+                    if all(~contains(fields,'vari_num')), error('optSACORS.optimize: input problem lack vari_num'); end
+                    if all(~contains(fields,'low_bou')), error('optSACORS.optimize: input problem lack low_bou'); end
+                    if all(~contains(fields,'up_bou')), error('optSACORS.optimize: input problem lack up_bou'); end
+                    if all(~contains(fields,'con_fcn_cheap')), problem.con_fcn_cheap=[]; end
                     con_fcn_cheap=problem.con_fcn_cheap;
                 else
-                    m=methods(problem);
-                    if ~contains(m,'objcon_fcn'), error('optSACORS.optimize: input problem lack objcon_fcn'); end
-                    objcon_fcn=@(x) problem.objcon_fcn(x);
-                    p=properties(problem);
-                    if ~contains(p,'vari_num'), error('optSACORS.optimize: input problem lack vari_num'); end
-                    if ~contains(p,'low_bou'), error('optSACORS.optimize: input problem lack low_bou'); end
-                    if ~contains(p,'up_bou'), error('optSACORS.optimize: input problem lack up_bou'); end
-                    if ~contains(m,'con_fcn_cheap')
+                    m=methods(problem);p=properties(problem);
+                    if all(~contains(m,'objcon_fcn')) && all(~contains(p,'objcon_fcn')), error('optSACORS.optimize: input problem lack objcon_fcn'); end
+                    objcon_fcn=@problem.objcon_fcn;
+                    if all(~contains(p,'vari_num')), error('optSACORS.optimize: input problem lack vari_num'); end
+                    if all(~contains(p,'low_bou')), error('optSACORS.optimize: input problem lack low_bou'); end
+                    if all(~contains(p,'up_bou')), error('optSACORS.optimize: input problem lack up_bou'); end
+                    if all(~contains(m,'con_fcn_cheap')) && all(~contains(p,'con_fcn_cheap'))
                         con_fcn_cheap=[];
                     else
-                        con_fcn_cheap=@(x) problem.con_fcn_cheap(x);
+                        con_fcn_cheap=@problem.con_fcn_cheap;
                     end
                 end
                 vari_num=problem.vari_num;
@@ -138,35 +146,31 @@ classdef OptSACORS < handle
             % hyper parameter
             sample_num_init=6+3*vari_num;
 
-%             sample_num_init=9; % draw demo use
-
             sample_num_rst=sample_num_init;
             sample_num_add=ceil(log(sample_num_init)/2);
 
-            min_r_interest=1e-3;
-            max_r_interest=1e-1;
-
             trial_num=min(100*vari_num,100);
-
-%             trial_num=40; % draw demo use
 
             done=0;NFE=0;iter=0;
 
             % step 1
-            % generate initial data lib
+            % generate initial data library
             if isempty(self.data_lib)
                 self.data_lib=struct('objcon_fcn',objcon_fcn,'vari_num',vari_num,'low_bou',low_bou,'up_bou',up_bou,'con_torl',self.con_torl,...
                     'result_best_idx',[],'X',[],'Obj',[],'Con',[],'Coneq',[],'Vio',[],'Ks',[]);
-
-                X_updata=lhsdesign(sample_num_init,vari_num,'iterations',50,'criterion','maximin').*(up_bou-low_bou)+low_bou;
-
-                % updata data lib by x_list
-                [self.data_lib,~,~,~,~,~,~,~,NFE_updata]=dataUpdata(self.data_lib,X_updata,0,self.WRIRE_FILE_FLAG,self.str_data_file);
-                NFE=NFE+NFE_updata;
             else
                 % load exist data
                 self.data_lib=struct('objcon_fcn',objcon_fcn,'vari_num',vari_num,'low_bou',low_bou,'up_bou',up_bou,'con_torl',self.con_torl,...
                     'result_best_idx',[],'X',self.data_lib.X,'Obj',self.data_lib.Obj,'Con',self.data_lib.Con,'Coneq',self.data_lib.Coneq,'Vio',self.data_lib.Vio,'Ks',self.data_lib.Ks);
+            end
+
+            if size(self.data_lib.X,1) < sample_num_init
+                % use latin hypercube method to get enough initial sample x_list
+                X_updata=lhsdesign(sample_num_init-size(self.data_lib.X,1),vari_num,'iterations',50,'criterion','maximin').*(up_bou-low_bou)+low_bou;
+
+                % updata data lib by x_list
+                [self.data_lib,~,~,~,~,~,~,~,NFE_updata]=dataUpdata(self.data_lib,X_updata,0,self.WRIRE_FILE_FLAG,self.str_data_file);
+                NFE=NFE+NFE_updata;
             end
 
             % detech expensive constraints
@@ -182,7 +186,7 @@ classdef OptSACORS < handle
             end
             Bool_conv=false(size(self.data_lib.X,1),1);
 
-            fmincon_options=optimoptions('fmincon','Display','none','Algorithm','interior-point','ConstraintTolerance',0);
+            fmincon_options=optimoptions('fmincon','Display','none','Algorithm','sqp','ConstraintTolerance',0);
 
             result_x_best=zeros(self.iter_max,vari_num);
             result_obj_best=zeros(self.iter_max,1);
@@ -198,12 +202,12 @@ classdef OptSACORS < handle
                     obj_max,con_max_list,coneq_max_list,vio_max_list,ks_max_list]=self.getModelData...
                     (X,Obj,Con,Coneq,Vio,Ks,self.nomlz_value);
 
-                % get local infill point, construct surrogate objcon_fcn
-                [self.obj_fcn_surr,self.con_fcn_surr,output_model]=self.getSurrFcn...
+                % construct surrogate objcon_fcn
+                [self.obj_fcn_surr,self.con_fcn_surr,output_model]=self.getSurrFcnRBF...
                     (X_surr,Obj_surr,Con_surr,Coneq_surr);
-                self.obj_surr=output_model.RBF_obj;
-                self.con_surr_list=output_model.RBF_con_list;
-                self.coneq_surr_list=output_model.RBF_coneq_list;
+                self.obj_surr=output_model.obj_surr;
+                self.con_surr_list=output_model.con_surr_list;
+                self.coneq_surr_list=output_model.coneq_surr_list;
                 [self.ks_fcn_surr,self.ks_surr]=self.interpRadialBasisPreModel(X_surr,Ks_surr);
 
                 % step 3
@@ -247,68 +251,9 @@ classdef OptSACORS < handle
                 self.Vio_potl(1,:)=vio_infill;
 
                 if self.DRAW_FIGURE_FLAG && vari_num < 3
-                    %                     interpVisualize(self.obj_surr,low_bou,up_bou);
-                    %                     line(x_infill(1),x_infill(2),obj_infill./obj_max*self.nomlz_value,'Marker','o','color','r','LineStyle','none');
-                    %                     view(2);
-
-%                     if iter == 1
-%                         figure_handle=figure(1);
-%                         %                     drawContour(objcon_fcn,low_bou,up_bou,[],[],[],figure_handle)
-%                         drawBoundary(self.con_fcn_surr,low_bou,up_bou,[],0,struct('LineStyle','-','LineColor','b'),figure_handle)
-%                         drawBinary(@(x) calKs(objcon_fcn,x),low_bou,up_bou,[],0,[],figure_handle)
-%                         drawBoundary(@(x) getCon(objcon_fcn,x),low_bou,up_bou,[],0,[],figure_handle)
-%                         line(self.data_lib.X(1:end-1,1),self.data_lib.X(1:end-1,2),'Marker','d','MarkerFaceColor','b','color','k','LineStyle','none','MarkerSize',8);
-%                         line(self.X_potl(:,1),self.X_potl(:,2),'Marker','v','MarkerFaceColor','#da4df9','color','k','LineStyle','none','MarkerSize',10);
-%                         line(x_infill(1),x_infill(2),'Marker','s','MarkerFaceColor','#ffc812','color','k','LineStyle','none','MarkerSize',8);
-%                         line(2.9346,3.2351,'Marker','p','MarkerFaceColor','r','color','k','LineStyle','none','MarkerSize',10);
-%                         view(2);
-%                         axe_handle=figure_handle.Children;
-%                         axe_handle.set('FontName','Times New Roman','FontSize',12);
-%                         box on;xlabel([]);ylabel([]);
-%                         axe_handle_1=axe_handle;
-%                         save('SACO_RS_axe_handle_1.mat','axe_handle_1')
-%                     end
-
-%                     if iter == 6
-%                         figure_handle=figure(1);
-%                         %                     drawContour(objcon_fcn,low_bou,up_bou,[],[],[],figure_handle)
-%                         drawBoundary(self.con_fcn_surr,low_bou,up_bou,[],0,struct('LineStyle','-','LineColor','b'),figure_handle)
-%                         drawBinary(@(x) calKs(objcon_fcn,x),low_bou,up_bou,[],0,[],figure_handle)
-%                         drawBoundary(@(x) getCon(objcon_fcn,x),low_bou,up_bou,[],0,[],figure_handle)
-%                         line(self.data_lib.X(1:end-1,1),self.data_lib.X(1:end-1,2),'Marker','d','MarkerFaceColor','b','color','k','LineStyle','none','MarkerSize',8);
-%                         line(self.X_potl(:,1),self.X_potl(:,2),'Marker','v','MarkerFaceColor','#da4df9','color','k','LineStyle','none','MarkerSize',10);
-%                         line(x_infill(1),x_infill(2),'Marker','s','MarkerFaceColor','#ffc812','color','k','LineStyle','none','MarkerSize',8);
-%                         line(2.9346,3.2351,'Marker','p','MarkerFaceColor','r','color','k','LineStyle','none','MarkerSize',10);
-%                         view(2);
-%                         axe_handle=figure_handle.Children;
-%                         axe_handle.set('FontName','Times New Roman','FontSize',12);
-%                         box on;xlabel([]);ylabel([]);
-%                         axe_handle_3=axe_handle;
-%                         save('SACO_RS_axe_handle_3.mat','axe_handle_3')
-%                         delete(figure_handle)
-%                     end
-
-%                     if iter == 7
-%                         figure_handle=figure(2);
-%                         drawBinary(@(x) calKs(objcon_fcn,x),low_bou,up_bou,[],0,[],figure_handle)
-%                         drawBoundary(@(x) getCon(objcon_fcn,x),low_bou,up_bou,[],0,[],figure_handle)
-%                         drawBoundary(self.con_fcn_surr,low_bou,up_bou,[],0,struct('LineStyle','-','LineColor','b'),figure_handle)
-%                         drawBinary(@(x) -pred_fcn_GPC(x),low_bou,up_bou,500,0,struct('facecolor','#b5b5ff'),figure_handle)
-%                         drawBoundary(con_GPC_fcn,low_bou,up_bou,[],0,struct('LineStyle','-','LineColor','k'),figure_handle)
-% 
-%                         line(self.data_lib.X(1:end-sample_num_rst-1,1),self.data_lib.X(1:end-sample_num_rst-1,2),'Marker','d','MarkerFaceColor','b','color','k','LineStyle','none','MarkerSize',8);
-%                         line(self.X_local_best(:,1),self.X_local_best(:,2),'Marker','^','MarkerFaceColor','y','color','k','LineStyle','none','MarkerSize',10);
-% 
-%                         line(X_add(:,1),X_add(:,2),'Marker','s','MarkerFaceColor','#ffc812','color','k','LineStyle','none','MarkerSize',8);
-%                         line(self.X_potl(:,1),self.X_potl(:,2),'Marker','v','MarkerFaceColor','#da4df9','color','k','LineStyle','none','MarkerSize',10);
-%                         line(2.9346,3.2351,'Marker','p','MarkerFaceColor','r','color','k','LineStyle','none','MarkerSize',10);
-%                         axe_handle=figure_handle.Children;
-%                         axe_handle.set('FontName','Times New Roman','FontSize',12);
-%                         box on;xlabel([]);ylabel([]);
-%                         axe_handle_4=axe_handle;
-%                         save('SACO_RS_axe_handle_4.mat','axe_handle_4')
-%                         delete(figure_handle)
-%                     end
+                    interpVisualize(self.obj_surr,low_bou,up_bou);
+                    line(x_infill(1),x_infill(2),obj_infill./obj_max*self.nomlz_value,'Marker','o','color','r','LineStyle','none');
+                    view(2);
                 end
 
                 % find best result to record
@@ -404,7 +349,7 @@ classdef OptSACORS < handle
                             Class=-1*ones(size(X,1),1);
                             Class(Bool_conv)=1; % cannot go into converage area
 
-                            [pred_fcn_GPC,self.model_GPC]=self.classifyGaussProcess(X,Class,self.model_GPC.hyp,true(1));
+                            [pred_fcn_GPC,self.model_GPC]=self.classifyGaussProcess(X,Class,self.model_GPC.hyp,self.GPC_simplify_flag);
                             con_GPC_fcn=@(x) self.conFcnGPC(x,pred_fcn_GPC);
                         else
                             con_GPC_fcn=[];
@@ -420,8 +365,8 @@ classdef OptSACORS < handle
                         end
 
                         if self.DRAW_FIGURE_FLAG && vari_num < 3
-                            %                             classifyVisualization(self.model_GPC,low_bou,up_bou);
-                            %                             line(X(:,1),X(:,2),'Marker','o','color','k','LineStyle','none');
+                            classifyVisualization(self.model_GPC,low_bou,up_bou);
+                            line(X(:,1),X(:,2),'Marker','o','color','k','LineStyle','none');
                         end
                     else
                         % step 5.1
@@ -474,8 +419,8 @@ classdef OptSACORS < handle
                             center_point=fmincon(con_GPC_fcn,x_pareto_center,[],[],[],[],low_bou,up_bou,con_fcn_cheap,fmincon_options);
 
                             r_interest=sum(abs(center_point-x_infill)./(up_bou-low_bou))/vari_num;
-                            r_interest=max(min_r_interest,r_interest);
-                            r_interest=min(max_r_interest,r_interest);
+                            r_interest=max(self.min_r_interest,r_interest);
+                            r_interest=min(self.max_r_interest,r_interest);
 
                             % generate trial point
                             trial_point=repmat(x_infill,trial_num,1);
@@ -513,38 +458,10 @@ classdef OptSACORS < handle
                                 end
                             end
 
-%                             if iter == 3 % draw demo use
-%                                 load('SACO_RS_draw.mat','X_add','trial_point_filter','trial_point') % draw demo use
-%                             end % draw demo use
-                            
                             if self.DRAW_FIGURE_FLAG && vari_num < 3
-                                %                                 classifyVisualization(self.model_GPC,low_bou,up_bou);
-                                %                                 line(trial_point(:,1),trial_point(:,2),'Marker','o','color','k','LineStyle','none');
-                                %                                 line(X_add(:,1),X_add(:,2),'Marker','o','color','g','LineStyle','none');
-
-%                                 if iter == 3
-%                                     figure_handle=figure(2);
-%                                     drawBinary(@(x) calKs(objcon_fcn,x),low_bou,up_bou,[],0,[],figure_handle)
-%                                     drawBoundary(@(x) getCon(objcon_fcn,x),low_bou,up_bou,[],0,[],figure_handle)
-% 
-%                                     line(X_add(:,1),X_add(:,2),'Marker','s','MarkerFaceColor','#ffc812','color','k','LineStyle','none','MarkerSize',8);
-%                                     line(trial_point(:,1),trial_point(:,2),'Marker','.','color','#D95319','LineStyle','none','MarkerSize',12);
-%                                     line(trial_point_filter(:,1),trial_point_filter(:,2),'Marker','.','color','k','LineStyle','none','MarkerSize',12);
-%                                     drawContour(con_GPC_fcn,low_bou,up_bou,[],[0,0],struct('ShowText','off','LineStyle','--','LineColor','k'),figure_handle)
-%                                     line(self.data_lib.X(1:end,1),self.data_lib.X(1:end,2),'Marker','d','MarkerFaceColor','b','color','k','LineStyle','none','MarkerSize',8);
-%                                     line(self.X_potl(:,1),self.X_potl(:,2),'Marker','v','MarkerFaceColor','#da4df9','color','k','LineStyle','none','MarkerSize',10);
-%                                     line(2.9346,3.2351,'Marker','p','MarkerFaceColor','r','color','k','LineStyle','none','MarkerSize',10);
-%                                     
-%                                     view(2);
-%                                     axe_handle=figure_handle.Children;
-%                                     axe_handle.set('FontName','Times New Roman','FontSize',12);
-%                                     box on;xlabel([]);ylabel([]);
-%                                     if iter == 3
-%                                         axe_handle_2=axe_handle;
-%                                         save('SACO_RS_axe_handle_2.mat','axe_handle_2')
-%                                     end
-%                                 delete(figure_handle)
-%                                 end
+                                classifyVisualization(self.model_GPC,low_bou,up_bou);
+                                line(trial_point(:,1),trial_point(:,2),'Marker','o','color','k','LineStyle','none');
+                                line(X_add(:,1),X_add(:,2),'Marker','o','color','g','LineStyle','none');
                             end
                         end
                     end
@@ -564,6 +481,12 @@ classdef OptSACORS < handle
                 end
 
                 obj_infill_old=obj_infill;
+
+                % save iteration
+                if ~isempty(self.save_description)
+                    data_lib=self.data_lib;
+                    save(self.save_description,'data_lib');
+                end
             end
 
             % find best result to record
@@ -580,85 +503,6 @@ classdef OptSACORS < handle
             output.obj_local_best=self.Obj_local_best;
 
             output.data_lib=self.data_lib;
-        end
-
-        function [obj_fcn_surr,con_fcn_surr,output]=getSurrFcn...
-                (self,x_list,obj_list,con_list,coneq_list)
-            % base on lib_data to create radialbasis objcon_fcn and function
-            % if input objcon_fcn,function will updata objcon_fcn
-            % object_function is single obj output
-            % nonlcon_function is normal nonlcon_function which include con,coneq
-            % con is colume vector,coneq is colume vector
-            % var_function is same
-            %
-            [pred_fcn_obj,RBF_obj]=self.interpRadialBasisPreModel...
-                (x_list,obj_list);
-
-            if ~isempty(con_list)
-                pred_fcn_con_list=cell(size(con_list,2),1);
-                RBF_con_list=cell(size(con_list,2),1);
-                for con_idx=1:size(con_list,2)
-                    [pred_fcn_con_list{con_idx},RBF_con_list{con_idx}]=self.interpRadialBasisPreModel...
-                        (x_list,con_list(:,con_idx));
-                end
-            else
-                pred_fcn_con_list=[];
-                RBF_con_list=[];
-            end
-
-            if ~isempty(coneq_list)
-                pred_fcn_coneq_list=cell(size(coneq_list,2),1);
-                RBF_coneq_list=cell(size(coneq_list,2),1);
-                for coneq_idx=1:size(coneq_list,2)
-                    [pred_fcn_coneq_list{coneq_idx},RBF_coneq_list{coneq_idx}]=self.interpRadialBasisPreModel...
-                        (x_list,coneq_list(:,coneq_idx));
-                end
-            else
-                pred_fcn_coneq_list=[];
-                RBF_coneq_list=[];
-            end
-
-            obj_fcn_surr=@(X_pred) objFcnSurr(X_pred,pred_fcn_obj);
-            if isempty(pred_fcn_con_list) && isempty(pred_fcn_coneq_list)
-                con_fcn_surr=[];
-            else
-                con_fcn_surr=@(X_pred) conFcnSurr(X_pred,pred_fcn_con_list,pred_fcn_coneq_list);
-            end
-
-            output.RBF_obj=RBF_obj;
-            output.RBF_con_list=RBF_con_list;
-            output.RBF_coneq_list=RBF_coneq_list;
-            function obj=objFcnSurr...
-                    (X_pred,pred_fcn_obj)
-                % connect all predict favl
-                %
-                obj=pred_fcn_obj(X_pred);
-            end
-
-            function [con,coneq]=conFcnSurr...
-                    (X_pred,pred_fcn_con_list,pred_fcn_coneq_list)
-                % connect all predict con and coneq
-                %
-                if isempty(pred_fcn_con_list)
-                    con=[];
-                else
-                    con=zeros(size(X_pred,1),length(pred_fcn_con_list));
-                    for con_idx__=1:length(pred_fcn_con_list)
-                        con(:,con_idx__)=....
-                            pred_fcn_con_list{con_idx__}(X_pred);
-                    end
-                end
-                if isempty(pred_fcn_coneq_list)
-                    coneq=[];
-                else
-                    coneq=zeros(size(X_pred,1),length(pred_fcn_coneq_list));
-                    for coneq_idx__=1:length(pred_fcn_coneq_list)
-                        coneq(:,coneq_idx__)=...
-                            pred_fcn_coneq_list{coneq_idx__}(X_pred);
-                    end
-                end
-            end
-
         end
 
         function updataLocalPotential...
@@ -821,7 +665,7 @@ classdef OptSACORS < handle
 
                 x_pareto_center=sum(X(pareto_idx_list,:),1)/length(pareto_idx_list);
 
-                [pred_func_GPC,self.model_GPC]=self.classifyGaussProcess(X,Class,self.model_GPC.hyp,true(1));
+                [pred_func_GPC,self.model_GPC]=self.classifyGaussProcess(X,Class,self.model_GPC.hyp,self.GPC_simplify_flag);
             else
                 obj_threshold=prctile(Obj,50-40*sqrt(NFE/self.NFE_max));
 
@@ -831,15 +675,99 @@ classdef OptSACORS < handle
 
                 x_pareto_center=sum(X(Obj < obj_threshold,:),1)/sum(Obj < obj_threshold);
 
-                [pred_func_GPC,self.model_GPC]=self.classifyGaussProcess(X,Class,self.model_GPC.hyp,true(1));
+                [pred_func_GPC,self.model_GPC]=self.classifyGaussProcess(X,Class,self.model_GPC.hyp,self.GPC_simplify_flag);
             end
 
             pareto_idx_list=idx(pareto_idx_list);
         end
 
+        function [obj_fcn_surr,con_fcn_surr,output]=getSurrFcnRBF...
+                (self,x_list,obj_list,con_list,coneq_list)
+            % generate surrogate function of objective and constraints
+            %
+            % output:
+            % obj_fcn_surr(output is obj_pred),...
+            % con_fcn_surr(output is con_pred, coneq_pred)
+            %
+
+            % generate obj surrogate
+            [pred_fcn_obj,obj_RBF]=self.interpRadialBasisPreModel(x_list,obj_list);
+
+            % generate con surrogate
+            if ~isempty(con_list)
+                pred_fcn_con_list=cell(size(con_list,2),1);
+                con_RBF_list=cell(size(con_list,2),1);
+
+                for con_idx=1:size(con_list,2)
+                    [pred_fcn_con_list{con_idx},con_RBF_list{con_idx}]=self.interpRadialBasisPreModel...
+                        (x_list,con_list(:,con_idx));
+                end
+            else
+                pred_fcn_con_list=[];
+                con_RBF_list=[];
+            end
+
+            % generate coneq surrogate
+            if ~isempty(coneq_list)
+                pred_fcn_coneq_list=cell(size(coneq_list,2),1);
+                coneq_RBF_list=cell(size(coneq_list,2),1);
+
+                for coneq_idx=1:size(coneq_list,2)
+                    [pred_fcn_coneq_list{coneq_idx},coneq_RBF_list{coneq_idx}]=self.interpRadialBasisPreModel...
+                        (x_list,coneq_list(:,coneq_idx));
+                end
+            else
+                pred_fcn_coneq_list=[];
+                coneq_RBF_list=[];
+            end
+
+            obj_fcn_surr=@(X_pred) objFcnSurr(X_pred,pred_fcn_obj);
+            if isempty(pred_fcn_con_list) && isempty(pred_fcn_coneq_list)
+                con_fcn_surr=[];
+            else
+                con_fcn_surr=@(X_pred) conFcnSurr(X_pred,pred_fcn_con_list,pred_fcn_coneq_list);
+            end
+
+            output.obj_surr=obj_RBF;
+            output.con_surr_list=con_RBF_list;
+            output.coneq_surr_list=coneq_RBF_list;
+
+            function obj_pred=objFcnSurr...
+                    (X_pred,pred_fcn_obj)
+                % connect all predict favl
+                %
+                obj_pred=pred_fcn_obj(X_pred);
+            end
+
+            function [con_pred,coneq_pred]=conFcnSurr...
+                    (X_pred,pred_fcn_con,pred_fcn_coneq)
+                % connect all predict con and coneq
+                %
+                if isempty(pred_fcn_con)
+                    con_pred=[];
+                else
+                    con_pred=zeros(size(X_pred,1),length(pred_fcn_con));
+                    for con_idx__=1:length(pred_fcn_con)
+                        con_pred(:,con_idx__)=....
+                            pred_fcn_con{con_idx__}(X_pred);
+                    end
+                end
+                if isempty(pred_fcn_coneq)
+                    coneq_pred=[];
+                else
+                    coneq_pred=zeros(size(X_pred,1),length(pred_fcn_coneq));
+                    for coneq_idx__=1:length(pred_fcn_coneq)
+                        coneq_pred(:,coneq_idx__)=...
+                            pred_fcn_coneq{coneq_idx__}(X_pred);
+                    end
+                end
+            end
+        end
+
     end
 
-    methods(Static) % auxiliary function
+    % auxiliary function
+    methods(Static)
         function [X_surr,Obj_surr,Con_surr,Coneq_surr,Vio_model,Ks_model,...
                 obj_max,con_max_list,coneq_max_list,vio_max_list,ks_max_list]=getModelData...
                 (X,Obj,Con,Coneq,Vio,Ks,nomlz_obj)
@@ -1058,7 +986,8 @@ classdef OptSACORS < handle
 
     end
 
-    methods(Static) % machine learning
+    % machine learning
+    methods(Static)
         function [pred_fcn,model_GPC]=classifyGaussProcess...
                 (X,Class,hyp,simplify_flag)
             % generate gaussian process classifier model
@@ -1352,9 +1281,9 @@ classdef OptSACORS < handle
                 [Sigma,mu,L,alpha,nlZ]=epComputeParams(K,y,ttau,tnu,lik,hyp,m,inf);
             end
 
-%             if sweep == max_sweep && abs(nlZ-nlZ_old) > tol
-%                 error('maximum number of sweeps exceeded in function infEP')
-%             end
+            %             if sweep == max_sweep && abs(nlZ-nlZ_old) > tol
+            %                 error('maximum number of sweeps exceeded in function infEP')
+            %             end
 
             last_ttau=ttau; last_tnu=tnu;                       % remember for next call
             post.alpha=alpha; post.sW=sqrt(ttau); post.L=L;  % return posterior params
@@ -1539,8 +1468,9 @@ classdef OptSACORS < handle
 
     end
 
-    methods(Static) % surrogate function
-        function [predict_function,radialbasis_model]=interpRadialBasisPreModel...
+    % surrogate function
+    methods(Static)
+        function [pred_fcn,radialbasis_model]=interpRadialBasisPreModel...
                 (X,Y,basis_function)
             % radial basis function interp pre objcon_fcn function
             % input initial data X,Y,which are real data
@@ -1586,7 +1516,7 @@ classdef OptSACORS < handle
                 (X_dis,Y_nomlz,basis_function,x_number);
 
             % initialization predict function
-            predict_function=@(X_predict) interpRadialBasisPredictor...
+            pred_fcn=@(X_predict) interpRadialBasisPredictor...
                 (X_predict,X_nomlz,aver_X,stdD_X,aver_Y,stdD_Y,...
                 x_number,variable_number,beta,basis_function);
 
@@ -1602,7 +1532,7 @@ classdef OptSACORS < handle
             radialbasis_model.stdD_Y=stdD_Y;
             radialbasis_model.basis_function=basis_function;
 
-            radialbasis_model.predict_function=predict_function;
+            radialbasis_model.predict_function=pred_fcn;
 
             % abbreviation:
             % num: number,pred: predict,vari: variable
@@ -1654,7 +1584,8 @@ classdef OptSACORS < handle
 
     end
 
-    methods(Static) % LHD
+    % LHD
+    methods(Static)
         function [X_sample,dist_min_nomlz,X_total]=lhdESLHS...
                 (sample_number,variable_number,...
                 low_bou,up_bou,X_exist,cheapcon_function)
