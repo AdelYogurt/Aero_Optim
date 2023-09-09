@@ -201,11 +201,11 @@ classdef WaveriderWing < Body
             head_low=SurfaceCST3D('head_low',head_length,par_width,-par_hight_low,[],shape_fcn_Y,shape_fcn_Z_low,[par_N_low,par_N_low],global_symmetry_y);
             
             if strcmp(waverider_type,'Fei')
-                tran_fun_Z_up=@(U,V) -par_R*(1-U).^100;
-                tran_fun_Z_low=@(U,V) par_R*(1-U).^100;
+                tran_fcn_Z_up=@(U,V) -par_R*(1-U).^100;
+                tran_fcn_Z_low=@(U,V) par_R*(1-U).^100;
                 % blunt deform
-                head_up.addDeform([],[],tran_fun_Z_up)
-                head_low.addDeform([],[],tran_fun_Z_low)
+                head_up.addDeform([],[],tran_fcn_Z_up)
+                head_low.addDeform([],[],tran_fcn_Z_low)
             end
 
             % blunt translation
@@ -232,9 +232,9 @@ classdef WaveriderWing < Body
                 tran_fun_Y=[];
             end
             Y_edge=@(U) U.^par_T*par_width/2;
-            tran_fun_Z=@(U,V) Y_edge((1-U)*(1-par_rho1));
+            tran_fcn_Z=@(U,V) Y_edge((1-U)*(1-par_rho1));
             % deform surface
-            head_side.addDeform(tran_fun_X,tran_fun_Y,tran_fun_Z);
+            head_side.addDeform(tran_fun_X,tran_fun_Y,tran_fcn_Z);
 
             % rotation surface
             head_side.addRotation(90,180,0);
@@ -322,8 +322,8 @@ classdef WaveriderWing < Body
             else
                 tran_fun_Y=[];
             end
-            tran_fun_Z=@(U,V) U*(par_rho1*(1-par_rho12)*total_length);
-            tri_wing_front.addDeform([],tran_fun_Y,tran_fun_Z);
+            tran_fcn_Z=@(U,V) U*(par_rho1*(1-par_rho12)*total_length);
+            tri_wing_front.addDeform([],tran_fun_Y,tran_fcn_Z);
 
             % rotation surface
             tri_wing_front.addRotation(90,-90,0);
@@ -395,8 +395,8 @@ classdef WaveriderWing < Body
                 wing_front=SurfaceCST3D('wing_front',wing_width,2*par_R,1,[],[],shape_fcn_Z,{[0,0]});
 
                 % deform surface
-                tran_fun_Z=@(U,V) U*(par_rho1*par_rho12*(1-par_rho23)*total_length);
-                wing_front.addDeform([],[],tran_fun_Z);
+                tran_fcn_Z=@(U,V) U*(par_rho1*par_rho12*(1-par_rho23)*total_length);
+                wing_front.addDeform([],[],tran_fcn_Z);
             end
 
             % rotation surface
@@ -435,13 +435,17 @@ classdef WaveriderWing < Body
             if strcmp(waverider_type,'Fei')
                 shape_fcn_Y_up=@(V) self.shape_wing_fcn(1-V)*(wing_height_up);
                 shape_fcn_Y_low=@(V) wing_height_low;
+                tran_fcn_X_up=[];
+                tran_fcn_X_low=[];
             else
                 shape_fcn_Y_up=@(V) self.shape_wing_fcn(1-V)*par_WT_up*par_rho23+par_R;
                 shape_fcn_Y_low=@(V) self.shape_wing_fcn(1-V)*par_WT_low*par_rho23+par_R;
+                tran_fcn_X_up=@(V) 1+shape_wing_edge_x(V*par_R)/(wing_length*par_rho23);
+                tran_fcn_X_low=@(V) 1+shape_wing_edge_x(V*par_R)/(wing_length*par_rho23);
             end
 
-            wing_side_up=SurfaceCST3D('wing_side_up',wing_length*par_rho23,1,0,[],shape_fcn_Y_up);
-            wing_side_low=SurfaceCST3D('wing_side_low',wing_length*par_rho23,-1,0,[],shape_fcn_Y_low);
+            wing_side_up=SurfaceCST3D('wing_side_up',wing_length*par_rho23,1,0,tran_fcn_X_up,shape_fcn_Y_up);
+            wing_side_low=SurfaceCST3D('wing_side_low',wing_length*par_rho23,-1,0,tran_fcn_X_low,shape_fcn_Y_low);
 
             % rotation to global coordinate
             wing_side_up.addRotation(90,180,0);
@@ -452,30 +456,11 @@ classdef WaveriderWing < Body
             wing_side_low.addTranslation(total_length,y_cut+par_WS1+par_WS2,0);
             
             %% sort data
-            if strcmp(waverider_type,'Fei')
-                self.surface_list={head_up,head_low,head_side,...
-                    body_up,body_low,body_back_up,body_back_low,...
-                    tri_wing_up,tri_wing_low,tri_wing_front,tri_wing_back_up,tri_wing_back_low,...
-                    wing_up,wing_low,wing_front,wing_back_up,wing_back_low,...
-                    wing_side_up,wing_side_low};
-            else
-                % wing side blunt front
-                shape_fcn_X=@(V) shape_wing_edge_x((V-0.5)*2*par_R);
-                wing_side_front=SurfaceCST3D('wing_side_front',1,2*par_R,0,shape_fcn_X);
-
-                % rotation to global coordinate
-                wing_side_front.addRotation(90,180,0);
-
-                % translation to global coordinate
-                wing_side_front.addTranslation(total_length-wing_length*par_rho23,y_cut+par_WS1+par_WS2,-par_R);
-
-                self.surface_list={head_up,head_low,head_side,...
+            self.surface_list={head_up,head_low,head_side,...
                 body_up,body_low,body_back_up,body_back_low,...
                 tri_wing_up,tri_wing_low,tri_wing_front,tri_wing_back_up,tri_wing_back_low,...
                 wing_up,wing_low,wing_front,wing_back_up,wing_back_low,...
-                wing_side_up,wing_side_low,wing_side_front};
-            end
-
+                wing_side_up,wing_side_low};
         end
         
         function V=shapeWingFei(~,U)
@@ -514,7 +499,7 @@ classdef WaveriderWing < Body
                 if nargin == 1
                     value_torl=1e-3;
                 else
-                    value_torl=varargin{2};
+                    value_torl=varargin{1};
                 end
 
                 % calculate all surface matrix

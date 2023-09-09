@@ -81,18 +81,6 @@ classdef SurfaceCST3D < handle
             self.LY=LY;
             self.LZ=LZ;
 
-            if ~isempty(shape_par_Y) && ~isempty(shape_par_X)
-                error('SurfaceCST3D: donot support both X and Y deform')
-            elseif ~isempty(shape_par_X)
-                % deform direction x
-                self.deform_ID=1;
-            elseif ~isempty(shape_par_Y)
-                % deform direction y
-                self.deform_ID=2;
-            else
-                self.deform_ID=0;
-            end
-
             if ~isempty(shape_par_X) && isnumeric(shape_par_X)
                 % shape_par_Y only one cross-section parameter
                 self.shape_fcn_X=@(V) self.defunShape(V,shape_par_X(1),shape_par_X(2));
@@ -176,16 +164,6 @@ classdef SurfaceCST3D < handle
             % input:
             % tran_fcn_X(V), tran_fcn_Y(U), tran_fcn_Z(U,V)
             %
-            if self.deform_ID == 1
-                if ~isempty(tran_fcn_Y)
-                    error('SurfaceCST3D: donot support both X and Y deform')
-                end
-            elseif self.deform_ID == 2
-                if ~isempty(tran_fcn_X)
-                    error('SurfaceCST3D: donot support both X and Y deform')
-                end
-            end
-
             self.tran_fcn_X=tran_fcn_X;
             self.tran_fcn_Y=tran_fcn_Y;
             self.tran_fcn_Z=tran_fcn_Z;
@@ -301,14 +279,14 @@ classdef SurfaceCST3D < handle
             C=V.^N1.*(1-V).^N2./NP;
         end
 
-        function nomlz_par=calNormPar(self,N1,N2)
+        function nomlz_par=calNormPar(~,N1,N2)
             % calculate normailize class function parameter by N1, N2
             %
             nomlz_par=(N1./(N1+N2)).^N1.*(N2./(N1+N2)).^N2;
             nomlz_par((N1 == 0) & (N2 == 0))=1;
         end
 
-        function G=differFcn(self,fcn,U)
+        function G=differFcn(~,fcn,U)
             % differ to get gradient
             %
             step=1e-5;
@@ -326,7 +304,7 @@ classdef SurfaceCST3D < handle
             G(G > 1e4)=1e4;
         end
 
-        function [G_U,G_V]=differFcn2(self,fcn,U,V)
+        function [G_U,G_V]=differFcn2(~,fcn,U,V)
             % differ to get gradient
             %
             step=1e-5;
@@ -510,7 +488,7 @@ classdef SurfaceCST3D < handle
         function [U,V,X,Y,Z]=calCoordinate(self,X,Y,Z)
             % base on X, Y, Z calculate local coordinate in surface
             %
-            XO=X;YO=Y;ZO=Z;geo_torl=1e-6;
+            XO=X;YO=Y;ZO=Z;geo_torl=100*eps;
 
             % undone translation surface
             if ~isempty(self.translation)
@@ -528,63 +506,32 @@ classdef SurfaceCST3D < handle
             end
 
             % identify base local coordinate
-            if self.deform_ID == 1 || self.deform_ID == 0
-                if self.LY > 0
-                    Y=max(Y,0);Y=min(Y,self.LY);
-                else
-                    Y=max(Y,self.LY);Y=min(Y,0);
-                end
+            if self.LY > 0
+                Y=max(Y,0);Y=min(Y,self.LY);
+            else
+                Y=max(Y,self.LY);Y=min(Y,0);
+            end
 
-                V=Y./self.LY;
-                if self.symmetry_y
-                    V=V+0.5;
-                end
+            V=Y./self.LY;
+            if self.symmetry_y
+                V=V+0.5;
+            end
 
-                % re deform surface
-                if ~isempty(self.tran_fcn_X)
-                    X=X-self.tran_fcn_X(V);
-                end
+            % re deform surface
+            if ~isempty(self.tran_fcn_X)
+                X=X-self.tran_fcn_X(V);
+            end
 
-                if self.LX > 0
-                    X=max(X,0);
-                else
-                    X=min(X,0);
-                end
-                U=X./self.LX;
-                if ~isempty(self.shape_fcn_X)
-                    shape=self.shape_fcn_X(V);
-                    shape(shape==0)=1;
-                    U=U./shape;
-                end
-
-                % judge local coordinate
-                U=min(U,1);
-            elseif self.deform_ID == 2
-                if self.LX > 0
-                    X=max(X,0);X=min(X,self.LX);
-                else
-                    X=max(X,self.LX);X=min(X,0);
-                end
-
-                U=X./self.LX;
-
-                % re deform surface
-                if ~isempty(self.tran_fcn_Y)
-                    Y=Y-self.tran_fcn_Y(U);
-                end
-
-                V=Y./self.LY;
-                if ~isempty(self.shape_fcn_Y)
-                    shape=self.shape_fcn_Y(U);
-                    shape(shape==0)=1;
-                    V=V./shape;
-                end
-
-                % judge local coordinate
-                if self.symmetry_y
-                    V=V+0.5;
-                end
-                V=min(V,1);
+            if self.LX > 0
+                X=max(X,0);
+            else
+                X=min(X,0);
+            end
+            U=X./self.LX;
+            if ~isempty(self.shape_fcn_X)
+                shape=self.shape_fcn_X(V);
+                shape(shape==0)=1;
+                U=U./shape;
             end
 
             U=max(U,0);U=min(U,1);
@@ -727,7 +674,7 @@ classdef SurfaceCST3D < handle
 
                 dX=XO-X;dY=YO-Y;dZ=ZO-Z;
                 iter=iter+1;
-                boolean=(abs(dU)+abs(dV)) > geo_torl;
+                boolean=(abs(dX)+abs(dY)+abs(dZ)) > geo_torl;
             end
         end
 
@@ -885,9 +832,9 @@ idx_list=[u_idx,v_idx];
 % local data to Fval
 Fval=nan(length(v_list),length(u_list),fval_num);
 
-for data_idx=1:data_num
-    if all([idx_list(data_idx,2),idx_list(data_idx,1)] ~= 0)
-        Fval(idx_list(data_idx,2),idx_list(data_idx,1),:)=data_list(data_idx,3:end);
+for data_index=1:data_num
+    if all([idx_list(data_index,2),idx_list(data_index,1)] ~= 0)
+        Fval(idx_list(data_index,2),idx_list(data_index,1),:)=data_list(data_index,3:end);
     end
 end
 
@@ -1065,7 +1012,7 @@ end
         x_list=[];
         node_idx=root_idx;
 
-        while length(stack)~=0 || ~isempty(node_idx)
+        while ~isempty(stack) || ~isempty(node_idx)
             while ~isempty(node_idx)
                 % only add one node_idx is enough
                 % because we only need center coordinate of one cell

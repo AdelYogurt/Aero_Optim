@@ -85,7 +85,6 @@ close all hidden;
 % writeMeshINP('waverider_wing_tri_wing.inp',convertWGSToMesh(mesh_data_tri_wing));
 % writeMeshINP('waverider_wing_wing.inp',convertWGSToMesh(mesh_data_wing));
 
-
 % % write to STEP
 % waverider_wing.writeStepOpenShell('waverider_wing_dia.step',1e-4);
 
@@ -104,46 +103,35 @@ close all hidden;
 % R_total_sq=(tan(beta)*(x_0+L_total))^2;
 % H_total=(sqrt(R_total_sq-(W_total/2)^2)-R_0);
 % lead_edge_fcn=@(z) -R_0+H_total*(cos(pi*z/W_total)-1);
-
-% drawFunction(lead_edge_fcn,0,W_total/2);
-
+% % drawFunction(lead_edge_fcn,0,W_total/2);
 % waverider=WaveriderCone(Ma_in,T_in,P_in,beta,...
 %     lead_edge_fcn,R_0,L_total,W_total);
-% 
 % U_num=11;
 % V_num=11;
 % W_num=11;
-% 
 % waverider.drawBody(U_num,[],W_num)
-
 % surf_total=waverider.calSurfaceMatrix(U_num,[],W_num);
 % part.mesh_list=surf_total;
-% writeMeshSTL('waverider_cone',convertWGSToSTL(part));
-
+% % writeMeshSTL('waverider_cone',convertWGSToSTL(part));
 % waverider.writeStepOpenShell('waverider_cone',U_num,[],W_num);
 
 %% waverider
 
-% total_length=4; % total length
-% vari_num=11;
-% low_bou=[0.7,0.7, ...
-%     2.4,0.4,0.5,0.5, ...
-%     0.1,0.1,0.01, ...
-%     -0.5,0.5];
-% up_bou=[1.0,1.0, ...
-%     3.2,0.8,2.0,2.0, ...
-%     0.5,0.5,0.04, ...
-%     0.5,2.0];
+total_length=4; % total length
+vari_num=11;
+low_bou=[0.7,0.7, 2.4,0.4,0.5,0.5, 0.1,0.1,0.01, -0.5,0.5];
+up_bou=[1.0,1.0, 3.2,0.8,2.0,2.0, 0.5,0.5,0.04, 0.5,2.0];
 
 % x=rand(1,vari_num).*(up_bou-low_bou)+low_bou;
-% x=(up_bou+low_bou)/2;
-% x=[0.85,0.85,2.8,0.7,1.25,1.25,0.3,0.3,0.0125,-0.5,1.0];
+x=(up_bou+low_bou)/2;
+% x=[0.85,0.85,2.8,0.7,1.25,1.25,0.3,0.3,0.0125,-0.3,1.0];
 % x=up_bou;
 % x=low_bou;
 
 % create waverider
-% waverider_wing=Waverider(total_length,x);
-% waverider_wing.drawBody()
+waverider_wing=Waverider(total_length,x);
+waverider_wing.drawBody()
+% waverider_wing.writeStepOpenShell('waverider.step',1e-4);
 
 %%
 

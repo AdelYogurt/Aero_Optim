@@ -21,15 +21,12 @@ classdef Waverider < Body
         body_length;
 
         % local coordinate parameter
-        blunt_u=0.002; % is local length parameter
-        blunt_eta=0.005; % is local length parameter
+        blunt_u=0.1; % is local length parameter
+        blunt_eta=0.1; % is local length parameter
 
         % function
-        body_v_max_fun;
         shape_head_edge_x;
-        shape_tri_wing_edge_x;
-        shape_wing_edge_x;
-        shape_wing_fcn;
+        shape_head_side_x;
     end
 
     % define function
@@ -87,9 +84,8 @@ classdef Waverider < Body
             radius_center_low=par_R*dz_dx;
             radius_center_head_side=max(radius_center_low,radius_center_up);
             radius_head_side_sq=(radius_center_head_side*radius_center_head_side+par_R*par_R);
-            radius_head_side=sqrt(radius_head_side_sq);
             shape_head_side_x=@(Y) (sqrt(radius_head_side_sq-Y.^2))-radius_center_head_side;
-            side_length=radius_head_side-radius_center_head_side;
+            self.shape_head_side_x=shape_head_side_x;
 
             %% define head
             head_up=SurfaceCST3D('head_up',total_length,par_width,par_hight_up,[],[par_T,0],[par_M_up,0],[par_N_up,par_N_up],global_symmetry_y);
@@ -107,12 +103,12 @@ classdef Waverider < Body
 
             %% define blunt head side
             % local coordinate, local x is global -x, local y is global z, local z is global y
-            shape_fcn_X=@(V) 1+shape_head_side_x((V-0.5)*par_R*2)/total_length;
-            shape_fcn_Z=@(U,V) (sqrt(radius_head_side_sq-(((V-0.5)*2)*par_R).^2)-radius_center_head_side).*(1-U).^0.3;
+            shape_fcn_X=@(V) 1+shape_head_edge_x((V-0.5)*par_R*2)/total_length;
+            shape_fcn_Z=@(U,V) shape_head_side_x(((V-0.5)*2)*par_R).*(1-U).^0.3;
             head_side=SurfaceCST3D('head_side',total_length,2*par_R,1,shape_fcn_X,[],shape_fcn_Z,[0.0,0.0]);
 
             Y_edge=@(U) U.^par_T*par_width/2;
-            tran_fun_Y_up=@(U) par_G*U.^par_F;
+            tran_fun_Y_up=@(U) par_G*(1-U).^par_F;
             tran_fun_Z=@(U,V) Y_edge(1-U);
             % deform surface
             head_side.addDeform([],tran_fun_Y_up,tran_fun_Z);
@@ -124,12 +120,14 @@ classdef Waverider < Body
             head_side.addTranslation(total_length,0,-par_R);
 
             %% define back
+            shape_fcn_X_up=@(V) 1+shape_head_side_x(V*par_R)/par_width*2;
+            shape_fcn_X_low=@(V) 1+shape_head_side_x(V*par_R)/par_width*2;
             shape_fcn_Y_up=@(U) par_hight_up*(0.5+U/2).^par_N_up.*(0.5-U/2).^par_N_up/(0.5)^(2*par_N_up)+par_R;
             shape_fcn_Y_low=@(U) par_hight_low*(0.5+U/2).^par_N_low.*(0.5-U/2).^par_N_low/(0.5)^(2*par_N_low)+par_R;
 
             % local coordinate, local x is global y, local y is global z
-            back_up=SurfaceCST3D('body_back_up',par_width/2,1,0,[],shape_fcn_Y_up);
-            back_low=SurfaceCST3D('body_back_low',par_width/2,-1,0,[],shape_fcn_Y_low);
+            back_up=SurfaceCST3D('back_up',par_width/2,1,0,shape_fcn_X_up,shape_fcn_Y_up);
+            back_low=SurfaceCST3D('back_low',par_width/2,-1,0,shape_fcn_X_low,shape_fcn_Y_low);
 
             % rotation to global coordinate
             back_up.addRotation(90,90,0);
@@ -139,19 +137,8 @@ classdef Waverider < Body
             back_up.addTranslation(total_length,0,par_G);
             back_low.addTranslation(total_length,0,par_G);
 
-            %% define back side
-            % local coordinate, local x is global -x, local y is global z
-            shape_fcn_X=@(V) shape_head_side_x((V-0.5)*2*par_R);
-
-            back_side=SurfaceCST3D('back_side',side_length,2*par_R,0,shape_fcn_X,[]);
-
-            back_side.addRotation(90,90,0);
-
-            % translation to global coordinate
-            back_side.addTranslation(total_length,par_width/2,-par_R+par_G);
-
             %% sort data
-            self.surface_list={head_up,head_low,head_side,back_up,back_low,back_side};
+            self.surface_list={head_up,head_low,head_side,back_up,back_low};
         end
     
     end
@@ -173,7 +160,7 @@ classdef Waverider < Body
                 if nargin == 1
                     value_torl=1e-3;
                 else
-                    value_torl=varargin{2};
+                    value_torl=varargin{1};
                 end
 
                 % calculate all surface matrix
@@ -277,7 +264,7 @@ classdef Waverider < Body
                 else
                     v_list=[0,0,0,surf.V(:,1)',1,1,1];
                 end
-                surf=SurfaceBSpline(surf_name,[],[],[],surf.X,surf.Y,surf.Z,[],[],u_list,v_list);
+                surf=SurfaceBSpline(surf.name,[],[],[],surf.X,surf.Y,surf.Z,[],[],u_list,v_list);
                 [step_str,object_index,ADVANCED_FACE_index_list(surf_idx)]=surf.getStepNode(object_index);
                 fprintf(step_file,step_str);
                 fprintf(step_file,'\n');
@@ -337,10 +324,10 @@ classdef Waverider < Body
 
     % parameterized function
     methods
-        function WWD_coord=calCoord(self,point_list,surf_index_list)
+        function W_coord=calCoord(self,point_list,surf_index_list)
             % calculate all input point local coordinate
             %
-            WWD_coord=struct();
+            W_coord=struct();
 
             surf_name_list=fieldnames(surf_index_list);
             for surf_idx=1:length(surf_name_list)
@@ -355,19 +342,19 @@ classdef Waverider < Body
                 % calculate coordinate
                 point=point_list(point_idx,1:3);
                 [U,V,~,~,~]=surf.calCoordinate(point(:,1),point(:,2),point(:,3));
-                WWD_coord.(surf_name).index=point_idx;
-                WWD_coord.(surf_name).U=U;
-                WWD_coord.(surf_name).V=V;
+                W_coord.(surf_name).index=point_idx;
+                W_coord.(surf_name).U=U;
+                W_coord.(surf_name).V=V;
             end
 
         end
 
-        function mesh_data=calMeshPoint(self,WWD_coord)
-            % calculate all mesh point by input WWD coord
+        function mesh_data=calMeshPoint(self,W_coord)
+            % calculate all mesh point by input W coord
             %
             mesh_data=struct();
 
-            surf_name_list=fieldnames(WWD_coord);
+            surf_name_list=fieldnames(W_coord);
             for surf_idx=1:length(surf_name_list)
                 % get surface
                 surf_name=surf_name_list{surf_idx};
@@ -375,9 +362,9 @@ classdef Waverider < Body
                 if isempty(surf)
                     continue;
                 end
-                point_idx=WWD_coord.(surf_name).index;
-                U=WWD_coord.(surf_name).U;
-                V=WWD_coord.(surf_name).V;
+                point_idx=W_coord.(surf_name).index;
+                U=W_coord.(surf_name).U;
+                V=W_coord.(surf_name).V;
 
                 % calculate coordinate
                 [X,Y,Z]=surf.calPoint(U,V);

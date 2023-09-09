@@ -44,8 +44,8 @@ CST3D_surface.addTranslation(5,6,9);
 [X,Y,Z]=CST3D_surface.calSurface(U,V);
 [inv_U,inv_V]=CST3D_surface.calCoordinate(X,Y,Z);
 if any(any((inv_U-U) > 1e-9)) || any(any((inv_V-V) > 1e-9))
-    d_XI=inv_U-U;
-    d_PSI=inv_V-V;
+    d_U=inv_U-U;
+    d_V=inv_V-V;
 end
 [inv_X,inv_Y,inv_Z]=CST3D_surface.calSurface(inv_U,inv_V);
 
@@ -74,7 +74,7 @@ axis equal
 % line(X,Y);
 % Z=zeros(size(X));
 % 
-% [XI_inv]=curve.calCoordinate(X);
+% [U_inv]=curve.calCoordinate(X);
 % 
 % line(X,Y);
 % xlabel('x');
