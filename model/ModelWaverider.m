@@ -1,4 +1,4 @@
-classdef ModelWWD < handle
+classdef ModelWaverider < handle
     % basical problem parameter
     properties
         % run paramter
@@ -30,9 +30,9 @@ classdef ModelWWD < handle
 
     methods
         % problem setup function
-        function self=ModelWWD(partitions,geo_param,mesh_param,CFD_param,...
+        function self=ModelWaverider(partitions,geo_param,mesh_param,CFD_param,...
                 dir_temp,REMOVE_TEMP,run_description,out_logger)
-            % WWD model setup function
+            % W model setup function
             %
             % notice:
             % airfoil aerodynamic model need three part:
@@ -83,8 +83,8 @@ classdef ModelWWD < handle
                     case 'SU2_DEF'
                         if ~isfield(mesh_param,'initial_mesh_filestr'), error('ModelAirfoil: lack initial_mesh_filestr');end
                         if ~isfield(mesh_param,'SU2_DEF_param'), error('ModelAirfoil: lack SU2_DEF_param');end
-                        if ~isfield(mesh_param,'dat_filestr'), mesh_param.dat_filestr='model/WWD.dat';end
-                        if ~isfield(mesh_param,'mesh_filestr'), mesh_param.mesh_filestr='model/WWD.su2';end
+                        if ~isfield(mesh_param,'dat_filestr'), mesh_param.dat_filestr='model/W.dat';end
+                        if ~isfield(mesh_param,'mesh_filestr'), mesh_param.mesh_filestr='model/W.su2';end
                     otherwise
                         error('ModelAirfoil: unsupported mesh solver')
                 end
@@ -104,8 +104,8 @@ classdef ModelWWD < handle
             self.CFD_param=CFD_param;
         end
 
-        % solve WWD aerodynamic model function
-        function [geo_out,mesh_out,CFD_out]=solveWWD(self,geo_in)
+        % solve waverider aerodynamic model function
+        function [geo_out,mesh_out,CFD_out]=solveAerodynamic(self,geo_in)
             % call each module to solve aerodynamic model
             %
             % solve flow:
@@ -148,10 +148,10 @@ classdef ModelWWD < handle
         function geo_out=geoModule(self,geo_in)
             % calculate geo out
             %
-            WWD=WaveriderWingDia(geo_in.total_length,geo_in.param);
-            geo_out.mesh_point=WWD.calMeshPoint(self.geo_param.mesh_coord);
+            W=Waverider(geo_in.total_length,geo_in.param);
+            geo_out.mesh_point=W.calMeshPoint(self.geo_param.mesh_coord);
 
-            mesh_data=WWD.getWGSMesh();
+            mesh_data=W.getWGSMesh();
             mesh_data=convertWGSToSTL(mesh_data);
             [area,volume]=calSTLGeometry(mesh_data);
             area=area*2;volume=volume*2;
