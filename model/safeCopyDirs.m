@@ -11,7 +11,7 @@ end
 for file_idx=1:length(files)
     file=files{file_idx};
     [status,message]=copyfile(fullfile(old_dir,file),new_dir);
-    if status ~= 0
+    if status == 0
         if ~isempty(my_logger)
             my_logger.error(message);
         end

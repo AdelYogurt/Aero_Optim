@@ -59,6 +59,13 @@ safeMakeDirs(dir_work,out_logger);
 % process mesh file
 [mesh_filename,mesh_filedir,mesh_filestr]=safeSplitFileStr(mesh_filestr);
 config.setParameter('MESH_FILENAME',mesh_filename);
+if contains(mesh_filename,'cgns','IgnoreCase',true)
+    config.setParameter('MESH_FORMAT','CGNS');
+elseif contains(mesh_filename,'su2','IgnoreCase',true)
+    config.setParameter('MESH_FORMAT','SU2');
+else
+    error('runSU2CFD: unsupport mesh type');
+end
 safeCopyDirs(mesh_filename,mesh_filedir,dir_work,out_logger);
 
 % process dat file
@@ -144,7 +151,7 @@ while (~isempty(error_message) && (retry_time < 2))
         fclose(err_file);
         clear('err_file');
         if ~isempty(out_logger)
-            out_logger.error([dir_work,error_message,'\n']);
+            out_logger.error([dir_work,error_message]);
         end
         error(['runSU2DEF: fatal error with SU2 DEF,proid=',num2str(procid),' error message: ',error_message]);
     end
