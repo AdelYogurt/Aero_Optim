@@ -119,7 +119,7 @@ clear('mesh_file');
             data_index=1;
             for element_index=1:length(number_list)
                 id=element_list(data_index);
-                node_number=number_list(element_index);
+                node_num=number_list(element_index);
                 switch id
                     case 3
                         id=3;
@@ -139,9 +139,9 @@ clear('mesh_file');
                         error('writeMeshSU2: SU2 unsupported element type');
                 end
                 fprintf(mesh_file,'%d',id);
-                fprintf(mesh_file,' %d',element_list((data_index+1):(data_index+node_number))-1);
+                fprintf(mesh_file,' %d',element_list((data_index+1):(data_index+node_num))-1);
                 fprintf(mesh_file,'\n');
-                data_index=data_index+node_number+1;
+                data_index=data_index+node_num+1;
             end
         else
             switch ID

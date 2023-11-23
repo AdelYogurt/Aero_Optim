@@ -145,23 +145,23 @@ mesh_data.geometry=geometry;
         % judge if have element index in each line
         switch element_list(1)-1
             case 3
-                node_number=2;
+                node_num=2;
             case 5
-                node_number=3;
+                node_num=3;
             case 9
-                node_number=4;
+                node_num=4;
             case 10
-                node_number=4;
+                node_num=4;
             case 12
-                node_number=8;
+                node_num=8;
             case 13
-                node_number=6;
+                node_num=6;
             case 14
-                node_number=5;
+                node_num=5;
             otherwise
                 error('idSU2Number: unknown SU2 identifier')
         end
-        if element_list(node_number+2) == 1
+        if element_list(node_num+2) == 1
             offset=1;
         else
             offset=0;
@@ -176,33 +176,33 @@ mesh_data.geometry=geometry;
         while data_index < data_number
             switch element_list(data_index)-1
                 case 3
-                    node_number=2;
+                    node_num=2;
                     id=3;
                 case 5
-                    node_number=3;
+                    node_num=3;
                     id=5;
                 case 9
-                    node_number=4;
+                    node_num=4;
                     id=7;
                 case 10
-                    node_number=4;
+                    node_num=4;
                     id=10;
                 case 12
-                    node_number=8;
+                    node_num=8;
                     id=17;
                 case 13
-                    node_number=6;
+                    node_num=6;
                     id=14;
                 case 14
-                    node_number=5;
+                    node_num=5;
                     id=12;
                 otherwise
                     error('idSU2Number: unknown SU2 identifier')
             end
             element_list(data_index)=id;
-            number_list(element_index)=node_number;
+            number_list(element_index)=node_num;
 
-            data_index=data_index+1+node_number;
+            data_index=data_index+1+node_num;
             if offset
                 index_list(element_index)=data_index;
                 data_index=data_index+1;
@@ -216,9 +216,9 @@ mesh_data.geometry=geometry;
         end
 
         % check if have same type
-        node_number=number_list(1);
+        node_num=number_list(1);
         for element_index=1:element_number
-            if number_list(element_index) ~= node_number
+            if number_list(element_index) ~= node_num
                 SAME_TYPE=false(1);
                 break;
             end
@@ -227,8 +227,8 @@ mesh_data.geometry=geometry;
         % if same type, reshape element
         if SAME_TYPE
             ID=element_list(1);
-            element_list=reshape(element_list,node_number+1,[])';
-            element_list=element_list(:,2:node_number+1);
+            element_list=reshape(element_list,node_num+1,[])';
+            element_list=element_list(:,2:node_num+1);
             number_list=number_list(1);
         else
             ID=20;

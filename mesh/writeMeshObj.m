@@ -47,11 +47,11 @@ for marker_index=1:length(marker_name_list)
     if ID == 20 % mixed element
         data_index=1;
         for element_index=1:length(number_list)
-            node_number=number_list(element_index);
+            node_num=number_list(element_index);
             fprintf(mesh_file,'f');
-            fprintf(mesh_file,' %d',element_list((data_index+1):(data_index+node_number)));
+            fprintf(mesh_file,' %d',element_list((data_index+1):(data_index+node_num)));
             fprintf(mesh_file,'\n');
-            data_index=data_index+node_number+1;
+            data_index=data_index+node_num+1;
         end
     else
         for element_index=1:size(element_list,1)

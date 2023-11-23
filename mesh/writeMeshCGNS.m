@@ -112,9 +112,9 @@ clear('mesh_file');
 
 end
 
-function element_dimension=getDimension(node_number, typestr)
+function element_dimension=getDimension(node_num, typestr)
 % Obtain the element-type ID and dimension of elements
-switch (node_number)
+switch (node_num)
     case 1
         if strcmpi(typestr, 'MIXED2')
             element_dimension=2;
@@ -154,7 +154,7 @@ switch (node_number)
     case {10,13,14,15,18,20,27}
         element_dimension=3;
     otherwise
-        error('ERROR: unknown element type with %d nodes.', node_number);
+        error('ERROR: unknown element type with %d nodes.', node_num);
 end
 end
 
