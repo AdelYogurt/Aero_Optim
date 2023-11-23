@@ -1,5 +1,5 @@
-classdef SurfaceBSpline
-    % B-spline surface 
+classdef SurfaceBSpline < handle
+    % B-spline surface
     % define reference to step standard
     %
     properties
@@ -7,11 +7,22 @@ classdef SurfaceBSpline
         u_degree;
         v_degree;
 
-        control_X;
-        control_Y;
-        control_Z;
-        control_rank_number;
-        control_colume_number;
+        ctrl_X;
+        ctrl_Y;
+        ctrl_Z;
+        u_ctrl_num;
+        v_ctrl_num;
+
+        surface_form='.UNSPECIFIED.'; %
+        u_closed='.F.'; % boolean
+        v_closed='.F.'; % boolean
+        self_intersect='.F.'; % boolean
+
+        u_knot_multi;
+        v_knot_multi;
+        u_knot_list;
+        v_knot_list;
+        knot_spec='.UNSPECIFIED.';
     end
 
     properties
@@ -21,585 +32,262 @@ classdef SurfaceBSpline
         node_X;
         node_Y;
         node_Z;
-        node_rank_number;
-        node_colume_number;
+        u_node_num;
+        v_node_num;
     end
 
-    % main function
+    % define surface
     methods
-        function self=SurfaceBSpline(name,control_X,control_Y,control_Z,...
-                node_X,node_Y,node_Z,u_degree,v_degree,u_list,v_list)
-            % generate BSpline surface by input control point or node point
+        function self=SurfaceBSpline(name,ctrl_X,ctrl_Y,ctrl_Z,...
+                node_X,node_Y,node_Z,u_degree,v_degree,...
+                u_knot_multi,v_knot_multi,u_knot_list,v_knot_list,...
+                u_ctrl_num,v_ctrl_num,U,V)
+            % generate BSpline surface by defining control point of fitting point
+            %
+            % input:
+            % name, ctrl_X, ctrl_Y, ctrl_Z
+            %
+            % output:
+            % SurfaceBSpline
             %
             % notice:
             % colume of X, Y, Z is LaWGS format
             % colume of node_X, node_Y, node_Z will by reseve calculate
             % colume direction is u(x), rank direction is v(y)
             %
-            % input:
-            %
-            %
-            if nargin < 11
-                v_list = [];
-                if nargin < 10
-                    u_list = [];
+            if nargin < 17
+                V=[];
+                if nargin < 16
+                    U=[];
+                    if nargin < 15
+                        v_ctrl_num=[];
+                        if nargin < 14
+                            u_ctrl_num=[];
+                            if nargin < 13
+                                v_knot_list=[];
+                                if nargin < 12
+                                    v_knot_multi = [];
+                                    if nargin < 11
+                                        u_knot_list=[];
+                                        if nargin < 10
+                                            u_knot_multi=[];
+                                            if nargin < 9
+                                                v_degree=[];
+                                                if nargin < 8
+                                                    u_degree=[];
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
                 end
             end
             self.name=name;
 
-            if isempty(control_X) && isempty(control_Y) && isempty(control_Z)
-                [node_rank_number,node_colume_number]=size(node_X);
-                if any(size(node_Y) ~= [node_rank_number,node_colume_number]) ||...
-                        any(size(node_Z) ~= [node_rank_number,node_colume_number])
-                    error('SurfaceBSpline: size of control_X, control_Y, control_Z do not equal');
-                end
-                if node_colume_number == 2
-                    u_degree=1;
+            if nargin > 1
+                % check input value size and giving default value
+                if isempty(ctrl_X) && isempty(ctrl_Y) && isempty(ctrl_Z)
+                    [v_node_num,u_node_num]=size(node_X);
+                    if any(size(node_Y) ~= [v_node_num,u_node_num]) ||...
+                            any(size(node_Z) ~= [v_node_num,u_node_num])
+                        error('SurfaceBSpline: size of node_X, node_Y, node_Z do not equal');
+                    end
+
+                    if isempty(u_ctrl_num),u_ctrl_num=min(u_node_num,10);end
+                    if u_ctrl_num > u_node_num
+                        error('SurfaceBSpline: u_control number more than u_node number')
+                    end
+                    if isempty(v_ctrl_num),v_ctrl_num=min(v_node_num,10);end
+                    if v_ctrl_num > v_node_num
+                        error('SurfaceBSpline: v_control number more than v_node number')
+                    end
                 else
-                    u_degree=3;
+                    if isempty(u_degree),u_degree=u_ctrl_num-1;end
+                    if isempty(v_degree),v_degree=v_ctrl_num-1;end
+                    [v_ctrl_num,u_ctrl_num]=size(ctrl_X);
+                    u_node_num=u_ctrl_num-v_degree+1;
+                    v_node_num=v_ctrl_num-u_degree+1;
+                    if any(size(ctrl_Y) ~= [v_ctrl_num,u_ctrl_num]) ||...
+                            any(size(ctrl_Z) ~= [v_ctrl_num,u_ctrl_num])
+                        error('SurfaceBSpline: size of ctrl_X, ctrl_Y, ctrl_Z do not equal');
+                    end
                 end
-                if node_rank_number == 2
-                    v_degree=1;
+
+                % default value u
+                if isempty(u_degree),u_degree=u_ctrl_num-1;end
+                if isempty(U),U=linspace(0,1,u_node_num);end;U=U(:);
+                if isempty(u_knot_multi),u_knot_multi=[u_degree+1,ones(1,u_ctrl_num-u_degree-1),u_degree+1];end
+                if isempty(u_knot_list),u_knot_list=interp1(linspace(0,1,u_node_num),U,linspace(0,1,u_ctrl_num-u_degree+1));end
+
+                u_list=getKnotVec(u_knot_multi,u_knot_list);
+
+                % default value v
+                if isempty(v_degree),v_degree=v_ctrl_num-1;end
+                if isempty(V),V=linspace(0,1,v_node_num);end;V=V(:);
+                if isempty(v_knot_multi),v_knot_multi=[v_degree+1,ones(1,v_ctrl_num-v_degree-1),v_degree+1];end
+                if isempty(v_knot_list),v_knot_list=interp1(linspace(0,1,v_node_num),V,linspace(0,1,v_ctrl_num-v_degree+1));end
+
+                v_list=getKnotVec(v_knot_multi,v_knot_list);
+
+                if u_ctrl_num < (u_degree+1) || v_ctrl_num < (v_degree+1)
+                    error('SurfaceBSpline: ctrl_num less than degree+1');
+                end
+
+                if isempty(ctrl_X) && isempty(ctrl_Y) && isempty(ctrl_Z)
+                    % base on node point list inverse calculate control point list
+                    matrix_v=zeros(v_node_num,v_ctrl_num);
+                    for node_idx=1:v_node_num
+                        v=V(node_idx);
+                        for ctrl_idx=1:v_ctrl_num
+                            matrix_v(node_idx,ctrl_idx)=baseFcnN(v_list,v,ctrl_idx,v_degree);
+                        end
+                    end
+
+                    matrix_u=zeros(u_ctrl_num,u_node_num);
+                    for node_idx=1:u_node_num
+                        u=U(node_idx);
+                        for ctrl_idx=1:u_ctrl_num
+                            matrix_u(ctrl_idx,node_idx)=baseFcnN(u_list,u,ctrl_idx,u_degree);
+                        end
+                    end
+
+                    % % old reverse calculate process, maybe no stable...
+                    % % while input number of node point is to large.
+                    % inv_matrix_hess_v=((matrix_v'*matrix_v)\eye(v_ctrl_num));
+                    % inv_matrix_hess_u=(eye(u_ctrl_num)/(matrix_u*matrix_u'));
+                    % 
+                    % ctrl_X=inv_matrix_hess_v*matrix_v'*node_X*matrix_u'*inv_matrix_hess_u;
+                    % ctrl_Y=inv_matrix_hess_v*matrix_v'*node_Y*matrix_u'*inv_matrix_hess_u;
+                    % ctrl_Z=inv_matrix_hess_v*matrix_v'*node_Z*matrix_u'*inv_matrix_hess_u;
+
+                    ctrl_X=matrix_v\node_X/matrix_u;
+                    ctrl_Y=matrix_v\node_Y/matrix_u;
+                    ctrl_Z=matrix_v\node_Z/matrix_u;
+                elseif ~isempty(ctrl_X) && ~isempty(ctrl_Y) && ~isempty(ctrl_Z)
+                    % generate B spline surface by control point
                 else
-                    v_degree=3;
+                    error('SurfaceBSpline: error input, lack control point or node point');
                 end
-                self.node_X=node_X;
-                self.node_Y=node_Y;
-                self.node_Z=node_Z;
-                self.node_rank_number=node_rank_number;
-                self.node_colume_number=node_colume_number;
+
+                % main properties
                 self.u_degree=u_degree;
                 self.v_degree=v_degree;
 
-                control_rank_number=node_rank_number+v_degree-1;
-                control_colume_number=node_colume_number+u_degree-1;
-                control_X=zeros(control_rank_number,control_colume_number);
-                control_Y=zeros(control_rank_number,control_colume_number);
-                control_Z=zeros(control_rank_number,control_colume_number);
+                self.ctrl_X=ctrl_X;
+                self.ctrl_Y=ctrl_Y;
+                self.ctrl_Z=ctrl_Z;
+                self.u_ctrl_num=u_ctrl_num;
+                self.v_ctrl_num=v_ctrl_num;
 
-                % create control point by colume of node_X, node_Y, node_Z
-                temp_control_X=zeros(control_rank_number,control_colume_number-u_degree+1);
-                temp_control_Y=zeros(control_rank_number,control_colume_number-u_degree+1);
-                temp_control_Z=zeros(control_rank_number,control_colume_number-u_degree+1);
-                if isempty(v_list)
-                    v_list=[zeros(1,v_degree),linspace(0,1,control_rank_number-v_degree+1),ones(1,v_degree)];
-                end
-                for colume_index=1:node_colume_number
-                    curve=CurveBSpline('',[],[node_X(:,colume_index),node_Y(:,colume_index),node_Z(:,colume_index)],v_degree,v_list);
-                    temp_control_X(:,colume_index)=curve.control_list(:,1);
-                    temp_control_Y(:,colume_index)=curve.control_list(:,2);
-                    temp_control_Z(:,colume_index)=curve.control_list(:,3);
-                end
-
-                % create control point by colume of node_X, node_Y, node_Z
-                if isempty(u_list)
-                    u_list=[zeros(1,u_degree),linspace(0,1,control_colume_number-u_degree+1),ones(1,u_degree)];
-                end
-                for rank_index=1:control_rank_number
-                    curve=CurveBSpline('',[],[temp_control_X(rank_index,:)',temp_control_Y(rank_index,:)',temp_control_Z(rank_index,:)'],u_degree,u_list);
-                    control_X(rank_index,:)=curve.control_list(:,1)';
-                    control_Y(rank_index,:)=curve.control_list(:,2)';
-                    control_Z(rank_index,:)=curve.control_list(:,3)';
-                end
-
-                self.u_list=u_list;
-                self.v_list=v_list;
-
-                self.control_X=control_X;
-                self.control_Y=control_Y;
-                self.control_Z=control_Z;
-                self.control_rank_number=control_rank_number;
-                self.control_colume_number=control_colume_number;
-
-            elseif ~isempty(control_X) && ~isempty(control_Y) && ~isempty(control_Z)
-                % generate B spline by control point
-                % input control_list, u_degree,v_degree, u_list(optional)
-                %
-                [control_rank_number,control_colume_number]=size(control_X);
-                if any(size(control_Y) ~= [control_rank_number,control_colume_number]) ||...
-                        any(size(control_Z) ~= [control_rank_number,control_colume_number])
-                    error('SurfaceBSpline: size of control_X, control_Y, control_Z do not equal');
-                end
-                if control_rank_number < (v_degree+1) || control_colume_number < (u_degree+1)
-                   error('SurfaceBSpline: control_number less than degree+1'); 
-                end
-                self.control_X=control_X;
-                self.control_Y=control_Y;
-                self.control_Z=control_Z;
-                self.control_rank_number=control_rank_number;
-                self.control_colume_number=control_colume_number;
-                self.u_degree=u_degree;
-                self.v_degree=v_degree;
-                
-                if isempty(u_list)
-                    u_list=[zeros(1,u_degree),linspace(0,1,control_colume_number-u_degree+1),ones(1,u_degree)];
-                end
-                if isempty(v_list)
-                    v_list=[zeros(1,v_degree),linspace(0,1,control_rank_number-v_degree+1),ones(1,v_degree)];
-                end
-
-                if (length(u_list) ~= control_colume_number+u_degree+1) ||...
-                        (length(v_list) ~= control_rank_number+v_degree+1)
-                    error('CurveBSpline: length of do not equal to control_number+degree+1');
-                end
-
-                self.u_list=u_list;
-                self.v_list=v_list;
+                self.u_knot_multi=u_knot_multi;
+                self.v_knot_multi=v_knot_multi;
+                self.u_knot_list=u_knot_list;
+                self.v_knot_list=v_knot_list;
 
                 % calculate node point list
-                node_rank_number=control_rank_number-v_degree+1;
-                node_colume_number=control_colume_number-u_degree+1;
-                [U_x,V_x]=meshgrid(u_list(u_degree+1:control_colume_number+1),v_list(v_degree+1:control_rank_number+1));
-                [self.node_X,self.node_Y,self.node_Z]=self.calPoint(U_x,V_x);
-                self.node_rank_number=node_rank_number;
-                self.node_colume_number=node_colume_number;
+                self.u_list=u_list;
+                self.v_list=v_list;
 
-            else
-                error('SurfaceBSpline: error input, lack control point or node point');
-            end
-
-        end
-
-        function writeStep(self,step_filestr,start_index,head_flag)
-            % write BSpline into step file
-            %
-
-            % cheak filename
-            if length(step_filestr) > 4
-                if ~strcmpi(step_filestr((end-3):end),'.inp')
-                    step_filestr=[step_filestr,'.inp'];
-                end
-            else
-                step_filestr=[step_filestr,'.inp'];
+                [U,V]=meshgrid(u_list(u_degree+1:u_ctrl_num+1),v_list(v_degree+1:v_ctrl_num+1));
+                [self.node_X,self.node_Y,self.node_Z]=self.calPoint(U,V);
+                self.u_node_num=u_node_num;
+                self.v_node_num=v_node_num;
             end
         end
-
-        function [step_str,object_index,ADVANCED_FACE_index]=getStep(self,object_index)
-            % write BSpline into step file
-            %
-            if nargin < 2
-                object_index=1;
-            end
-            step_str=[];
-            ctrl_rank_num=self.control_rank_number;
-            ctrl_colume_num=self.control_colume_number;
-            
-            % generate CARTESIAN_POINT
-            CARTESIAN_POINT_index=object_index;
-            for rank_index=1:ctrl_rank_num
-                for colume_index=1:ctrl_colume_num
-                    str=[num2str(object_index,'#%d ='),' CARTESIAN_POINT ( ''NONE'', ',...
-                        num2str(self.control_X(rank_index,colume_index),'( %.16f, '),...
-                        num2str(self.control_Y(rank_index,colume_index),'%.16f, '),...
-                        num2str(self.control_Z(rank_index,colume_index),'%.16f )'),...
-                        ' );\n'];
-                    step_str=[step_str,str];
-                    object_index=object_index+1;
-                end
-            end
-
-            step_str=[step_str,'\n'];
-
-            % generate B_SPLINE_CURVE
-            B_SPLINE_CURVE_index=object_index;
-            str=getCurveStep(((1:ctrl_colume_num)-1)*ctrl_rank_num+CARTESIAN_POINT_index,self.u_degree);
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=getCurveStep((((ctrl_colume_num-1)*ctrl_rank_num+1):ctrl_colume_num*ctrl_rank_num)+CARTESIAN_POINT_index-1,self.v_degree);
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=getCurveStep(((ctrl_colume_num:-1:1))*ctrl_rank_num+CARTESIAN_POINT_index-1,self.u_degree);
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=getCurveStep((ctrl_rank_num:-1:1)+CARTESIAN_POINT_index-1,self.v_degree);
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-
-            % generate VERTEX_POINT
-            VERTEX_POINT_index=object_index;
-            str=[num2str(object_index,'#%d'),' = VERTEX_POINT ',...
-                num2str(CARTESIAN_POINT_index,'( ''NONE'', #%d );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = VERTEX_POINT ',...
-                num2str((ctrl_colume_num-1)*ctrl_rank_num+CARTESIAN_POINT_index,'( ''NONE'', #%d );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = VERTEX_POINT ',...
-                num2str(ctrl_colume_num*ctrl_rank_num+CARTESIAN_POINT_index-1,'( ''NONE'', #%d );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = VERTEX_POINT ',...
-                num2str(ctrl_rank_num+CARTESIAN_POINT_index-1,'( ''NONE'', #%d );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-            
-            % generate EDGE_CURVE
-            EDGE_CURVE_index=object_index;
-            str=[num2str(object_index,'#%d'),' = EDGE_CURVE ',...
-                num2str([VERTEX_POINT_index,VERTEX_POINT_index+1,B_SPLINE_CURVE_index],'( ''NONE'', #%d, #%d, #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = EDGE_CURVE ',...
-                num2str([VERTEX_POINT_index+1,VERTEX_POINT_index+2,B_SPLINE_CURVE_index+1],'( ''NONE'', #%d, #%d, #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = EDGE_CURVE ',...
-                num2str([VERTEX_POINT_index+2,VERTEX_POINT_index+3,B_SPLINE_CURVE_index+2],'( ''NONE'', #%d, #%d, #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = EDGE_CURVE ',...
-                num2str([VERTEX_POINT_index+3,VERTEX_POINT_index,B_SPLINE_CURVE_index+3],'( ''NONE'', #%d, #%d, #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-
-            % generate ORIENTED_EDGE
-            ORIENTED_EDGE_index=object_index;
-            str=[num2str(object_index,'#%d'),' = ORIENTED_EDGE ',...
-                num2str(EDGE_CURVE_index,'( ''NONE'', *, *, #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = ORIENTED_EDGE ',...
-                num2str(EDGE_CURVE_index+1,'( ''NONE'', *, *, #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = ORIENTED_EDGE ',...
-                num2str(EDGE_CURVE_index+2,'( ''NONE'', *, *, #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = ORIENTED_EDGE ',...
-                num2str(EDGE_CURVE_index+3,'( ''NONE'', *, *, #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-
-            % generate EDGE_LOOP
-            EDGE_LOOP_index=object_index;
-            str=[num2str(object_index,'#%d'),' = EDGE_LOOP ',...
-                num2str((0:3)+ORIENTED_EDGE_index,'( ''NONE'', ( #%d, #%d, #%d, #%d ) );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-
-            % generate FACE_OUTER_BOUND
-            FACE_OUTER_BOUND_index=object_index;
-            str=[num2str(object_index,'#%d'),' = FACE_OUTER_BOUND ',...
-                num2str(EDGE_LOOP_index,'( ''NONE'', #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-
-            % generate B_SPLINE_SURFACE
-            B_SPLINE_SURFACE_index=object_index;
-            str=[num2str(object_index,'#%d'),' = B_SPLINE_SURFACE ( ''NONE'', 3, 3, (\n'];
-            for rank_index=1:ctrl_rank_num-1
-                str=[str,'( ',num2str((0:(ctrl_colume_num-2))*ctrl_rank_num+CARTESIAN_POINT_index+rank_index-1,'#%d, '),...
-                    ' ',num2str((ctrl_colume_num-1)*ctrl_rank_num+CARTESIAN_POINT_index+rank_index-1,'#%d'),' ),\n'];
-            end
-            str=[str,'( ',num2str((0:(ctrl_colume_num-2))*ctrl_rank_num+CARTESIAN_POINT_index+ctrl_rank_num-1,'#%d, '),...
-                ' ',num2str((ctrl_colume_num-1)*ctrl_rank_num+CARTESIAN_POINT_index+ctrl_rank_num-1,'#%d'),' )'];
-            str=[str,'),\n.UNSPECIFIED., .F., .F., .F.);\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-
-            % generate ADVANCED_FACE
-            ADVANCED_FACE_index=object_index;
-            str=[num2str(object_index,'#%d'),' = ADVANCED_FACE ',...
-                '( ''',self.name,''', ',num2str([FACE_OUTER_BOUND_index,B_SPLINE_SURFACE_index],'( #%d ), #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-
-            function str=getCurveStep(index_list,degree)
-                str=[num2str(object_index,'#%d ='),' B_SPLINE_CURVE(''NONE'', ',...
-                    num2str(degree,'%d, '),...
-                    '( ',num2str(index_list(1:end-1),'#%d, '),' ',num2str(index_list(end),'#%d'),' ),',...
-                    '.UNSPECIFIED., .F., .F.',...
-                    ');\n'];
-            end
-        end
-
-        function [step_str,object_index,ADVANCED_FACE_index]=getStepNode(self,object_index)
-            % write BSpline into step file
-            %
-            if nargin < 2
-                object_index=1;
-            end
-            step_str=[];
-            node_rank_num=self.node_rank_number;
-            node_colume_num=self.node_colume_number;
-            if node_colume_num == 2 || node_colume_num == 3
-                u_node_list=[0,1];
-            else
-                u_node_list=linspace(0,1,node_colume_num-2);
-            end
-            if node_rank_num == 2 || node_rank_num == 3
-                v_node_list=[0,1];
-            else
-                v_node_list=linspace(0,1,node_rank_num-2);
-            end
-
-            if node_colume_num == 2
-                u_degree_out=1;
-            elseif node_colume_num == 3
-                u_degree_out=2;
-            else
-                u_degree_out=3;
-            end
-            if node_rank_num == 2
-                v_degree_out=1;
-            elseif node_rank_num == 3
-                v_degree_out=2;
-            else
-                v_degree_out=3;
-            end
-            
-            % generate CARTESIAN_POINT
-            CARTESIAN_POINT_index=object_index;
-
-            for colume_index=1:node_colume_num
-                for rank_index=1:node_rank_num
-                    str=[num2str(object_index,'#%d ='),' CARTESIAN_POINT ( ''NONE'', ',...
-                        num2str(self.node_X(rank_index,colume_index),'( %.16f, '),...
-                        num2str(self.node_Y(rank_index,colume_index),'%.16f, '),...
-                        num2str(self.node_Z(rank_index,colume_index),'%.16f )'),...
-                        ' );\n'];
-                    step_str=[step_str,str];
-                    object_index=object_index+1;
-                end
-            end
-
-            step_str=[step_str,'\n'];
-
-            % generate B_SPLINE_CURVE_WITH_KNOTS
-            B_SPLINE_CURVE_WITH_KNOTS_index=object_index;
-
-            str=getCurveStep(((1:node_colume_num)-1)*node_rank_num+CARTESIAN_POINT_index,...
-                node_colume_num,u_degree_out,u_node_list);
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=getCurveStep((((node_colume_num-1)*node_rank_num+1):(node_colume_num*node_rank_num))+CARTESIAN_POINT_index-1,...
-                node_rank_num,v_degree_out,v_node_list);
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=getCurveStep((node_colume_num:-1:1)*node_rank_num+CARTESIAN_POINT_index-1,...
-                node_colume_num,u_degree_out,u_node_list);
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=getCurveStep((node_rank_num:-1:1)+CARTESIAN_POINT_index-1,...
-                node_rank_num,v_degree_out,v_node_list);
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-
-            % generate VERTEX_POINT
-            VERTEX_POINT_index=object_index;
-
-            str=[num2str(object_index,'#%d'),' = VERTEX_POINT ',...
-                num2str(CARTESIAN_POINT_index,'( ''NONE'', #%d );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = VERTEX_POINT ',...
-                num2str((node_colume_num-1)*node_rank_num+CARTESIAN_POINT_index,'( ''NONE'', #%d );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = VERTEX_POINT ',...
-                num2str(node_colume_num*node_rank_num+CARTESIAN_POINT_index-1,'( ''NONE'', #%d );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = VERTEX_POINT ',...
-                num2str(node_rank_num+CARTESIAN_POINT_index-1,'( ''NONE'', #%d );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-            
-            % generate EDGE_CURVE
-            EDGE_CURVE_index=object_index;
-
-            str=[num2str(object_index,'#%d'),' = EDGE_CURVE ',...
-                num2str([VERTEX_POINT_index,VERTEX_POINT_index+1,B_SPLINE_CURVE_WITH_KNOTS_index],'( ''NONE'', #%d, #%d, #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = EDGE_CURVE ',...
-                num2str([VERTEX_POINT_index+1,VERTEX_POINT_index+2,B_SPLINE_CURVE_WITH_KNOTS_index+1],'( ''NONE'', #%d, #%d, #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = EDGE_CURVE ',...
-                num2str([VERTEX_POINT_index+2,VERTEX_POINT_index+3,B_SPLINE_CURVE_WITH_KNOTS_index+2],'( ''NONE'', #%d, #%d, #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = EDGE_CURVE ',...
-                num2str([VERTEX_POINT_index+3,VERTEX_POINT_index,B_SPLINE_CURVE_WITH_KNOTS_index+3],'( ''NONE'', #%d, #%d, #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-
-            % generate ORIENTED_EDGE
-            ORIENTED_EDGE_index=object_index;
-
-            str=[num2str(object_index,'#%d'),' = ORIENTED_EDGE ',...
-                num2str(EDGE_CURVE_index,'( ''NONE'', *, *, #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = ORIENTED_EDGE ',...
-                num2str(EDGE_CURVE_index+1,'( ''NONE'', *, *, #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = ORIENTED_EDGE ',...
-                num2str(EDGE_CURVE_index+2,'( ''NONE'', *, *, #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-            str=[num2str(object_index,'#%d'),' = ORIENTED_EDGE ',...
-                num2str(EDGE_CURVE_index+3,'( ''NONE'', *, *, #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-
-            % generate EDGE_LOOP
-            EDGE_LOOP_index=object_index;
-            str=[num2str(object_index,'#%d'),' = EDGE_LOOP ',...
-                num2str((0:3)+ORIENTED_EDGE_index,'( ''NONE'', ( #%d, #%d, #%d, #%d ) );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-
-            % generate FACE_OUTER_BOUND
-            FACE_OUTER_BOUND_index=object_index;
-            str=[num2str(object_index,'#%d'),' = FACE_OUTER_BOUND ',...
-                num2str(EDGE_LOOP_index,'( ''NONE'', #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-
-            % generate B_SPLINE_SURFACE
-            B_SPLINE_SURFACE_index=object_index;
-            str=[num2str(object_index,'#%d'),' = B_SPLINE_SURFACE_WITH_KNOTS ( ''NONE'', ',num2str(v_degree_out,'%d,'),' ',num2str(u_degree_out,'%d,'),'(\n'];
-            for rank_index=1:node_rank_num-1
-                str=[str,'( ',num2str((0:(node_colume_num-2))*node_rank_num+CARTESIAN_POINT_index+rank_index-1,'#%d, '),...
-                    ' ',num2str((node_colume_num-1)*node_rank_num+CARTESIAN_POINT_index+rank_index-1,'#%d'),' ),\n'];
-            end
-            str=[str,'( ',num2str((0:(node_colume_num-2))*node_rank_num+CARTESIAN_POINT_index+node_rank_num-1,'#%d, '),...
-                ' ',num2str((node_colume_num-1)*node_rank_num+CARTESIAN_POINT_index+node_rank_num-1,'#%d'),' )'];
-            
-            str=[str,'),\n.UNSPECIFIED., .F., .F., .F.,\n',...
-                '( ',num2str(v_degree_out+1,'%d,'),' ',num2str(ones(1,node_rank_num-4),'%d, '),num2str(v_degree_out+1,'%d,'),' ), ',...
-                '( ',num2str(u_degree_out+1,'%d,'),' ',num2str(ones(1,node_colume_num-4),'%d, '),num2str(u_degree_out+1,'%d,'),' ), ',...
-                '( ',num2str(v_node_list(1:end-1),'%.16f, '),num2str(v_node_list(end),'%.16f'),' ),',...
-                '( ',num2str(u_node_list(1:end-1),'%.16f, '),num2str(u_node_list(end),'%.16f'),' ),',...
-                ' \n.UNSPECIFIED.);\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-
-            % generate ADVANCED_FACE
-            ADVANCED_FACE_index=object_index;
-            str=[num2str(object_index,'#%d'),' = ADVANCED_FACE ',...
-                '( ''',self.name,''', ',num2str([FACE_OUTER_BOUND_index,B_SPLINE_SURFACE_index],'( #%d ), #%d, .T. );'),'\n'];
-            step_str=[step_str,str];
-            object_index=object_index+1;
-
-            step_str=[step_str,'\n'];
-
-            function str=getCurveStep(index_list,node_number,degree,u_node_list)
-                str=[num2str(object_index,'#%d ='),' B_SPLINE_CURVE_WITH_KNOTS(''NONE'', ',...
-                    num2str(degree,'%d, '),...
-                    '( ',num2str(index_list(1:end-1),'#%d, '),' ',num2str(index_list(end),'#%d'),' ),\n',...
-                    '.UNSPECIFIED., .F., .F.,','( ',...
-                    num2str(degree+1,'%d, '),' ',num2str(ones(1,node_number-4),'%d, '),num2str(degree+1,'%d, '),' ), ',...
-                    '( ',num2str(u_node_list(1:end-1),'%.16f, '),num2str(u_node_list(end),'%.16f'),' ), \n',...
-                    '.UNSPECIFIED.);\n'];
-            end
-        end
-
     end
 
-    % calculate point function
+    % calculate point
     methods
-        function [X,Y,Z]=calSurface(self,varargin)
-            % generate surface matrix by u_x_list or point_number
+        function [X,Y,Z,U,V]=calSurface(self,u_param,v_param)
+            % generate surface matrix
             %
             % default
-            % u_list=linspace(0,1,xi_gird_num(default is 50)+1)
-            % v_list=linspace(0,1,psi_gird_num(default is 50)+1)
+            % u_list=linspace(0,1,u_gird_num(default is 20)+1)
+            % v_list=linspace(0,1,v_gird_num(default is 20)+1)
             % [U,V]=meshgrid(u_list,v_list), colume is LaWGS format line
+            % value_torl=1e-3
             %
             % input:
-            % U_x, V_x
-            % u_x_number, v_x_number
+            % U, V
+            % or:
+            % u_gird_num, v_gird_num
+            % or:
+            % value_torl, []
             %
             % output:
             % X,Y,Z (colume is LaWGS format line)
             %
+            if nargin < 3
+                v_param=[];
+                if nargin < 2
+                    u_param=[];
+                end
+            end
 
-            % u
-            if nargin < 2 || isempty(varargin{1})
-                % mean donot input xi_grid_number, use default number
-                U_x=[];
-                u_x_number=50;
+            if ~isempty(u_param) && u_param~=fix(u_param)
+                % input is torlance
+                value_torl=u_param;
+                max_level=50;
+
+                % adapt capture U, V
+                low_bou=[0,0];
+                up_bou=[1,1];
+                [U,V,data_list,~]=meshAdapt2DUV(@(x) coordFcn(self,x),low_bou,up_bou,value_torl,max_level,3);
+                X=data_list(:,:,1);
+                Y=data_list(:,:,2);
+                Z=data_list(:,:,3);
             else
-                if length(varargin{1}) == 1
-                    U_x=[];
-                    u_x_number=varargin{1};
+                % input is U, V or u_grid_number, v_grid_number
+                if isempty(u_param), u_param=40;end
+                if isempty(v_param), v_param=40;end
+
+                if length(u_param) == 1
+                    U=[];
+                    u_gird_num=u_param;
                 else
                     % mean input U matrix
-                    U_x=varargin{1};
-                    u_x_number=size(U_x,2)-1;
+                    U=u_param;
+                    u_gird_num=size(U,2)-1;
                 end
-            end
 
-            % v
-            if nargin < 3 || isempty(varargin{2})
-                % mean donot input psi_grid_numebr, use default number
-                V_x=[];
-                v_x_number=50;
-            else
-                if length(varargin{2}) == 1
-                    V_x=[];
-                    v_x_number=varargin{2};
+                if length(v_param) == 1
+                    V=[];
+                    v_gird_num=v_param;
                 else
                     % mean input V matrix
-                    V_x=varargin{2};
-                    v_x_number=size(V_x,1)-1;
+                    V=v_param;
+                    v_gird_num=size(V,1)-1;
                 end
+
+                % calculate local coordinate matrix
+                if isempty(U)
+                    U=linspace(0,1,u_gird_num+1);
+                    U=repmat(U,v_gird_num+1,1);
+                end
+                if isempty(V)
+                    V=linspace(0,1,v_gird_num+1)';
+                    V=repmat(V,1,u_gird_num+1);
+                end
+
+                [X,Y,Z]=self.calPoint(U,V);
             end
 
-            % calculate local coordinate matrix
-            if isempty(U_x)
-                U_x=repmat(linspace(0,1,u_x_number+1),v_x_number+1,1);
+            function fval=coordFcn(self,x)
+                [x,y,z]=self.calPoint(x(1),x(2));
+                fval=[x,y,z];
             end
-            if isempty(V_x)
-                V_x=repmat(linspace(0,1,v_x_number+1)',1,u_x_number+1);
-            end
-
-            [X,Y,Z]=calPoint(self,U_x,V_x);
         end
 
-        function [X,Y,Z]=calPoint(self,U_x,V_x)
+        function [X,Y,Z]=calPoint(self,U,V)
             % according u_x to calculate point
-            % u_x_list is u_x_number x 1 matrix
+            % u_x_list is u_num x 1 matrix
             % point_list is point_number x dimension matrix
             %
-            [rank_num,colume_num]=size(U_x);
-            if any(size(V_x) ~= [rank_num,colume_num])
+            [rank_num,colume_num]=size(U);
+            if any(size(V) ~= [rank_num,colume_num])
                 error('SurfaceBSpline.calPoint: size of U_x do not equal to size of V_x');
             end
 
@@ -612,109 +300,398 @@ classdef SurfaceBSpline
             for rank_idx=1:rank_num
                 for colume_idx=1:colume_num
                     % local index of u_x in u_list, v_list
-                    u_x=U_x(rank_idx,colume_idx);
-                    v_x=V_x(rank_idx,colume_idx);
-                    
-                    %                     [index_end_v,index_end_u]=getIndex(); % y, x
+                    u_x=U(rank_idx,colume_idx);
+                    v_x=V(rank_idx,colume_idx);
 
-                    index_end_u=self.control_colume_number; % is equal to the section index
-                    while index_end_u > self.u_degree+1 && u_x < self.u_list(index_end_u)
-                        index_end_u=index_end_u-1;
+                    % [index_end_v,index_end_u]=getIndex(); % y, x
+
+                    idx_end_u=self.u_ctrl_num; % is equal to the section index
+                    while idx_end_u > self.u_degree+1 && u_x < self.u_list(idx_end_u)
+                        idx_end_u=idx_end_u-1;
                     end
-                    index_end_v=self.control_rank_number; % is equal to the section index
-                    while index_end_v > self.v_degree+1 && v_x < self.v_list(index_end_v)
-                        index_end_v=index_end_v-1;
+                    idx_end_v=self.v_ctrl_num; % is equal to the section index
+                    while idx_end_v > self.v_degree+1 && v_x < self.v_list(idx_end_v)
+                        idx_end_v=idx_end_v-1;
                     end
 
-                    index_start_u=index_end_u-self.u_degree;
-                    index_start_v=index_end_v-self.v_degree;
+                    idx_start_u=idx_end_u-self.u_degree;
+                    idx_start_v=idx_end_v-self.v_degree;
 
                     % calculate base function
                     for N_idx=1:self.u_degree+1
-                        N_u_list(N_idx)=baseFunction(self.u_list,u_x,N_idx+index_start_u-1,self.u_degree);
-                        
+                        N_u_list(N_idx)=baseFcnN(self.u_list,u_x,N_idx+idx_start_u-1,self.u_degree);
                     end
 
                     for N_idx=1:self.v_degree+1
-                        N_v_list(N_idx)=baseFunction(self.v_list,v_x,N_idx+index_start_v-1,self.v_degree);
+                        N_v_list(N_idx)=baseFcnN(self.v_list,v_x,N_idx+idx_start_v-1,self.v_degree);
                     end
 
-                    X(rank_idx,colume_idx)=N_v_list*self.control_X(index_start_v:index_end_v,index_start_u:index_end_u)*N_u_list/sum(N_u_list)/sum(N_v_list);
-                    Y(rank_idx,colume_idx)=N_v_list*self.control_Y(index_start_v:index_end_v,index_start_u:index_end_u)*N_u_list/sum(N_u_list)/sum(N_v_list);
-                    Z(rank_idx,colume_idx)=N_v_list*self.control_Z(index_start_v:index_end_v,index_start_u:index_end_u)*N_u_list/sum(N_u_list)/sum(N_v_list);
+                    X(rank_idx,colume_idx)=N_v_list*self.ctrl_X(idx_start_v:idx_end_v,idx_start_u:idx_end_u)*N_u_list;
+                    Y(rank_idx,colume_idx)=N_v_list*self.ctrl_Y(idx_start_v:idx_end_v,idx_start_u:idx_end_u)*N_u_list;
+                    Z(rank_idx,colume_idx)=N_v_list*self.ctrl_Z(idx_start_v:idx_end_v,idx_start_u:idx_end_u)*N_u_list;
                 end
             end
-
-%             function [index_end_v,index_end_u]=getIndex()
-%                 for index_end_u=self.degree+1:self.control_number % is equal to the section index
-%                     for index_end_v=self.degree+1:self.control_number % is equal to the section index
-%                         if u_x >= self.U(index_end_v,index_end_u) && v_x >= self.V(index_end_v,index_end_u)
-%                             return;
-%                         end
-%                     end
-%                 end
-%             end
         end
 
-        function drawSurface(self,surface_option,control_option,figure_handle,U_x,V_x,node_option)
-            % draw curve on figure handle
+    end
+
+    % calculate coord
+    methods
+        function [U,V,X,Y,Z]=calCoord(self,X,Y,Z)
+            % base on X, Y, Z calculate local coordinate in surface
+            %
+            XO=X;YO=Y;ZO=Z;geo_torl=100*eps;
+
+            % base on range of node point to preliminary project to U, V
+            
+
+            % use project function to adjust parameter
+            [X,Y,Z,U,V]=self.calProject(XO,YO,ZO,U,V,geo_torl);
+        end
+
+        function [X,Y,Z,U,V]=calProject(self,XO,YO,ZO,U,V,geo_torl)
+            % adjust u, v by Jacobian transformation
+            % also can project point to surface
+            %
+            if nargin < 7,geo_torl=1e-6;end
+
+            iter=0;iter_max=50;
+
+            [X,Y,Z]=self.calPoint(U,V);
+            %             scatter3(X,Y,Z);
+            dX=XO-X;dY=YO-Y;dZ=ZO-Z;
+            boolean=(abs(dX)+abs(dY)+abs(dZ)) > geo_torl;
+            while any(any(boolean)) && iter < iter_max
+                [dX_dU,dY_dU,dZ_dU,dX_dV,dY_dV,dZ_dV]=self.calGradient(U(boolean),V(boolean),X(boolean),Y(boolean),Z(boolean));
+
+                RU_RU=dX_dU.^2+dY_dU.^2+dZ_dU.^2;
+                RV_RV=dX_dV.^2+dY_dV.^2+dZ_dV.^2;
+                RU_RV=dX_dU.*dX_dV+dY_dU.*dY_dV+dZ_dU.*dZ_dV;
+                RU_D=dX_dU.*dX(boolean)+dY_dU.*dY(boolean)+dZ_dU.*dZ(boolean);
+                RV_D=dX_dV.*dX(boolean)+dY_dV.*dY(boolean)+dZ_dV.*dZ(boolean);
+                RRRR_RR=RU_RU.*RV_RV-(RU_RV).^2;
+                dU=(RU_D.*RV_RV-RV_D.*RU_RV)./RRRR_RR;
+                dV=(RV_D.*RU_RU-RU_D.*RU_RV)./RRRR_RR;
+
+                U(boolean)=U(boolean)+dU;
+                V(boolean)=V(boolean)+dV;
+                U=max(U,0);U=min(U,1);
+                V=max(V,0);V=min(V,1);
+
+                [X,Y,Z]=self.calPoint(U,V);
+                %                 scatter3(X,Y,Z);
+
+                dX=XO-X;dY=YO-Y;dZ=ZO-Z;
+                iter=iter+1;
+                boolean=(abs(dX)+abs(dY)+abs(dZ)) > geo_torl;
+            end
+        end
+
+        function [dX_dU,dY_dU,dZ_dU,dX_dV,dY_dV,dZ_dV]=calGradient(self,U,V,X,Y,Z)
+            % use differ ot calculate gradient
+            %
+            if nargin < 5
+                [X,Y,Z]=self.calPoint(U,V);
+            end
+            step=100*eps;
+
+            [X_UF,Y_UF,Z_UF]=self.calPoint(U+step,V);
+            [X_UB,Y_UB,Z_UB]=self.calPoint(U-step,V);
+            dX_dU=(X_UF-X_UB)/step;dY_dU=(Y_UF-Y_UB)/step;dZ_dU=(Z_UF-Z_UB)/step;
+            bool=~isreal(dX_dU) | isnan(dX_dU) |...
+                ~isreal(dY_dU) | isnan(dY_dU) |...
+                ~isreal(dZ_dU) | isnan(dZ_dU);
+            if any(bool) %% try forward walk differ
+                dX_dU(bool)=(X_UF(bool)-X(bool))/step;dY_dU(bool)=(Y_UF(bool)-Y(bool))/step;dZ_dU(bool)=(Z_UF(bool)-Z(bool))/step;
+                bool=~isreal(dX_dU) | isnan(dX_dU) |...
+                    ~isreal(dY_dU) | isnan(dY_dU) |...
+                    ~isreal(dZ_dU) | isnan(dZ_dU);
+                if any(bool) %% try back walk differ
+                    dX_dU(bool)=(X(bool)-X_UB(bool))/step;dY_dU(bool)=(Y(bool)-Y_UB(bool))/step;dZ_dU(bool)=(Z(bool)-Z_UB(bool))/step;
+                end
+            end
+            dX_dU=real(dX_dU);dY_dU=real(dY_dU);dZ_dU=real(dZ_dU);
+
+            [X_VF,Y_VF,Z_VF]=self.calPoint(U,V+step);
+            [X_VB,Y_VB,Z_VB]=self.calPoint(U,V-step);
+            dX_dV=(X_VF-X_VB)/step;dY_dV=(Y_VF-Y_VB)/step;dZ_dV=(Z_VF-Z_VB)/step;
+            bool=~isreal(dX_dV) | isnan(dX_dV) |...
+                ~isreal(dY_dV) | isnan(dY_dV) |...
+                ~isreal(dZ_dV) | isnan(dZ_dV);
+            if any(bool) %% try back walk differ
+                dX_dV(bool)=(X_VF(bool)-X(bool))/step;dY_dV(bool)=(Y_VF(bool)-Y(bool))/step;dZ_dV(bool)=(Z_VF(bool)-Z(bool))/step;
+                bool=~isreal(dX_dV) | isnan(dX_dV) |...
+                    ~isreal(dY_dV) | isnan(dY_dV) |...
+                    ~isreal(dZ_dV) | isnan(dZ_dV);
+                dX_dV(bool)=(X(bool)-X_VB(bool))/step;dY_dV(bool)=(Y(bool)-Y_VB(bool))/step;dZ_dV(bool)=(Z(bool)-Z_VB(bool))/step;
+            end
+            dX_dV=real(dX_dV);dY_dV=real(dY_dV);dZ_dV=real(dZ_dV);
+        end
+    end
+
+    % visualizate function
+    methods
+        function drawSurface(self,axe_hdl,U,V,surface_option,control_option,node_option)
+            % draw surface on axes handle
             %
             if nargin < 7
                 node_option=[];
                 if nargin < 5
-                    V_x=[];
+                    control_option=[];
                     if nargin < 5
-                        U_x=[];
+                        surface_option=[];
                         if nargin < 4
-                            figure_handle=[];
+                            V=[];
                             if nargin < 3
-                                control_option=[];
+                                U=[];
                                 if nargin < 2
-                                    surface_option=[];
+                                    axe_hdl=[];
                                 end
                             end
                         end
                     end
                 end
             end
-            
-            if isempty(figure_handle)
-                figure_handle=figure(101);
-            end
-            axes_handle=figure_handle.CurrentAxes;
-            if isempty(axes_handle)
-                axes_handle=axes(figure_handle);
-            end
+
+            if isempty(axe_hdl),axe_hdl=axes(figure());end
 
             % default draw option
             if isempty(surface_option)
                 surface_option=struct('LineStyle','none');
             end
             if isempty(node_option)
-                node_option=struct('Marker','o','LineStyle','none','MarkerEdgeColor','b','FaceAlpha',0);
+                node_option=struct('Marker','o','MarkerEdgeColor','b','LineStyle','none','FaceAlpha',0);
             end
             if isempty(control_option)
-                control_option=struct('Marker','s','EdgeColor','r','LineStyle','--','MarkerEdgeColor','r','FaceAlpha',0);
+                control_option=struct('Marker','s','MarkerEdgeColor','r','EdgeColor','r','LineStyle','--','FaceAlpha',0);
             end
 
-            % calculate point on curve
-            [X,Y,Z]=calSurface(self,U_x,V_x);
+            % calculate point on surface
+            [X,Y,Z]=calSurface(self,U,V);
 
             % plot surface
-            surface(axes_handle,X,Y,Z,surface_option);
-            surface(axes_handle,self.node_X,self.node_Y,self.node_Z,node_option);
-            surface(axes_handle,self.control_X,self.control_Y,self.control_Z,control_option);
+            surface(axe_hdl,X,Y,Z,surface_option);
+            surface(axe_hdl,self.node_X,self.node_Y,self.node_Z,node_option);
+            surface(axe_hdl,self.ctrl_X,self.ctrl_Y,self.ctrl_Z,control_option);
             view(3);
+            xlabel('x');
+            ylabel('y');
+            zlabel('z');
 
+            %             axis equal
+            %             x_range=xlim();
+            %             y_range=ylim();
+            %             z_range=zlim();
+            %             center=[mean(x_range),mean(y_range),mean(z_range)];
+            %             range=max([x_range(2)-x_range(1),y_range(2)-y_range(1),z_range(2)-z_range(1)])/2;
+            %             xlim([center(1)-range,center(1)+range]);
+            %             ylim([center(2)-range,center(2)+range]);
+            %             zlim([center(3)-range,center(3)+range]);
+        end
+
+        function [step_str,object_index,ADVANCED_FACE]=getStep(self,object_index)
+            % write BSpline into step file
+            %
+            if nargin < 2,object_index=1;end
+            out_name=self.name;
+            if isempty(out_name),out_name='NONE';end
+
+            u_num=self.u_ctrl_num;
+            v_num=self.v_ctrl_num;
+
+            % generate CARTESIAN_POINT
+            CARTESIAN_POINT=object_index;
+
+            str_control=[];
+            for u_idx=1:u_num
+                for v_idx=1:v_num
+                    str=[num2str(object_index,'#%d ='),' CARTESIAN_POINT ',...
+                        '( ',...
+                        '''NONE'', ',...
+                        '( ',num2str(self.ctrl_X(v_idx,u_idx),'%.16f'),', ',...
+                        num2str(self.ctrl_Y(v_idx,u_idx),'%.16f'),', ',...
+                        num2str(self.ctrl_Z(v_idx,u_idx),'%.16f'),' )',...
+                        ' ) ;\n'];
+                    str_control=[str_control,str];
+                    object_index=object_index+1;
+                end
+            end
+
+            % generate B_SPLINE_CURVE_WITH_KNOTS
+            B_SPLINE_CURVE_WITH_KNOTS=object_index;
+            str_curve=[];
+            str_curve=[str_curve,stepCurve((1:v_num) +CARTESIAN_POINT-1,...
+                self.v_degree,self.v_knot_multi,self.v_knot_list)];
+            str_curve=[str_curve,stepCurve(((1:u_num)*v_num) +CARTESIAN_POINT-1,...
+                self.u_degree,self.u_knot_multi,self.u_knot_list)];
+            str_curve=[str_curve,stepCurve(((v_num*u_num):-1:(v_num*u_num-v_num+1)) +CARTESIAN_POINT-1,...
+                self.v_degree,self.v_knot_multi,self.v_knot_list)];
+            str_curve=[str_curve,stepCurve((((u_num-1):-1:0)*v_num+1) +CARTESIAN_POINT-1,...
+                self.u_degree,self.u_knot_multi,self.u_knot_list)];
+
+            % generate VERTEX_POINT
+            VERTEX_POINT=object_index;
+            str_vertex=[];
+            str_vertex=[str_vertex,stepVertex(1 +CARTESIAN_POINT-1)];
+            str_vertex=[str_vertex,stepVertex(v_num +CARTESIAN_POINT-1)];
+            str_vertex=[str_vertex,stepVertex(v_num*u_num +CARTESIAN_POINT-1)];
+            str_vertex=[str_vertex,stepVertex(v_num*u_num-v_num+1 +CARTESIAN_POINT-1)];
+
+            % generate EDGE_CURVE
+            EDGE_CURVE=object_index;
+            str_edge=[];
+            str_edge=[str_edge,stepEdge(VERTEX_POINT,VERTEX_POINT+1,B_SPLINE_CURVE_WITH_KNOTS)];
+            str_edge=[str_edge,stepEdge(VERTEX_POINT+1,VERTEX_POINT+2,B_SPLINE_CURVE_WITH_KNOTS+1)];
+            str_edge=[str_edge,stepEdge(VERTEX_POINT+2,VERTEX_POINT+3,B_SPLINE_CURVE_WITH_KNOTS+2)];
+            str_edge=[str_edge,stepEdge(VERTEX_POINT+3,VERTEX_POINT,B_SPLINE_CURVE_WITH_KNOTS+3)];
+
+            % generate ORIENTED_EDGE
+            ORIENTED_EDGE=object_index;
+            str_oriented=[];
+            str_oriented=[str_oriented,stepOriented(EDGE_CURVE)];
+            str_oriented=[str_oriented,stepOriented(EDGE_CURVE+1)];
+            str_oriented=[str_oriented,stepOriented(EDGE_CURVE+2)];
+            str_oriented=[str_oriented,stepOriented(EDGE_CURVE+3)];
+
+            % generate EDGE_LOOP
+            EDGE_LOOP=object_index;
+            str_loop=[num2str(object_index,'#%d ='),' EDGE_LOOP',...
+                ' ( ',...
+                '''NONE''',', ',...
+                '( ',num2str(ORIENTED_EDGE,'#%d'),', ',...
+                num2str(ORIENTED_EDGE+1,'#%d'),', ',...
+                num2str(ORIENTED_EDGE+2,'#%d'),', ',...
+                num2str(ORIENTED_EDGE+3,'#%d'),') ',...
+                ' ) ;\n'];
+            object_index=object_index+1;
+
+            % generate FACE_OUTER_BOUND
+            FACE_OUTER_BOUND=object_index;
+            str_outer=[num2str(object_index,'#%d ='),' FACE_OUTER_BOUND',...
+                ' ( ',...
+                '''NONE''',', ',...
+                num2str(EDGE_LOOP,'#%d'),', ',...
+                '.T.',...
+                ' ) ;\n'];
+            object_index=object_index+1;
+
+            % generate B_SPLINE_SURFACE_WITH_KNOTS
+            B_SPLINE_SURFACE_WITH_KNOTS=object_index;
+            str_surface=[num2str(object_index,'#%d ='),' B_SPLINE_SURFACE_WITH_KNOTS',...
+                ' ( ',...
+                '''',out_name,'''',', ',...
+                num2str(self.u_degree,'%d'),', ',num2str(self.v_degree,'%d'),', \n'];
+            str_surface=[str_surface,'('];
+            for u_bias=0:v_num:v_num*(u_num-2)
+                str_surface=[str_surface,'( ',...
+                    num2str((v_num+u_bias) +CARTESIAN_POINT-1,'#%d'),...
+                    num2str((((v_num-1):-1:1)+u_bias) +CARTESIAN_POINT-1,', #%d'),...
+                    ' ),\n'];
+            end
+            u_bias=v_num*(u_num-1);
+            str_surface=[str_surface,'( ',...
+                num2str((v_num+u_bias) +CARTESIAN_POINT-1,'#%d'),...
+                num2str((((v_num-1):-1:1)+u_bias) +CARTESIAN_POINT-1,', #%d'),...
+                ' )'];
+            str_surface=[str_surface,'),\n'];
+            str_surface=[str_surface,'.UNSPECIFIED.',', ','.F.',', ','.F.',', ','.F.',',\n',...
+                '( ',num2str(self.u_knot_multi(1),'%d'),num2str(self.u_knot_multi(2:end),', %d'),' ),\n',...
+                '( ',num2str(self.v_knot_multi(1),'%d'),num2str(self.v_knot_multi(2:end),', %d'),' ),\n',...
+                '( ',num2str(self.u_knot_list(1),'%.16f'),num2str(self.u_knot_list(2:end),', %.16f'),' ),\n',...
+                '( ',num2str(self.v_knot_list(1),'%.16f'),num2str(self.v_knot_list(2:end),', %.16f'),' ),\n',...
+                '.UNSPECIFIED.',...
+                ') ;\n'];
+            object_index=object_index+1;
+
+            % generate ADVANCED_FACE
+            ADVANCED_FACE=object_index;
+            str_face=[num2str(object_index,'#%d ='),' ADVANCED_FACE',...
+                ' ( ',...
+                '''',out_name,'''',', ',...
+                '( ',num2str(FACE_OUTER_BOUND,'#%d'),' )',', '...
+                num2str(B_SPLINE_SURFACE_WITH_KNOTS,'#%d'),', ',...
+                '.T.',...
+                ' ) ;\n'];
+            object_index=object_index+1;
+
+            % generate all
+            step_str=[str_control,'\n',str_curve,'\n',str_vertex,'\n',...
+                str_edge,'\n',str_oriented,'\n',str_loop,'\n',str_outer,'\n',...
+                str_surface,'\n',str_face,'\n'];
+
+            function str_curve=stepCurve(point_index,degree,knot_multi,knot_list)
+                str_curve=[num2str(object_index,'#%d ='),' B_SPLINE_CURVE_WITH_KNOTS',...
+                    ' ( ',...
+                    '''NONE''',', ',...
+                    num2str(degree,'%d'),', \n',...
+                    '( ',num2str(point_index(1),'#%d'),num2str(point_index(2:end),', #%d'),' ),\n',...
+                    '.UNSPECIFIED., .F., .F.,\n',...
+                    '( ',num2str(knot_multi(1),'%d'),num2str(knot_multi(2:end),', %d'),' ),\n',...
+                    '( ',num2str(knot_list(1),'%.16f'),num2str(knot_list(2:end),', %.16f'),' ),\n',...
+                    '.UNSPECIFIED.',...
+                    ' ) ;\n'];
+                object_index=object_index+1;
+            end
+
+            function str_vertex=stepVertex(point_index)
+                str_vertex=[num2str(object_index,'#%d ='),' VERTEX_POINT',...
+                    ' ( ',...
+                    '''NONE''',', ',...
+                    num2str(point_index,'#%d'),...
+                    ' ) ;\n'];
+                object_index=object_index+1;
+            end
+
+            function str_edge=stepEdge(start_vertex,end_vertex,curve_index)
+                str_edge=[num2str(object_index,'#%d ='),' EDGE_CURVE',...
+                    ' ( ',...
+                    '''NONE''',', ',...
+                    num2str(start_vertex,'#%d'),', ',...
+                    num2str(end_vertex,'#%d'),', ',...
+                    num2str(curve_index,'#%d'),', ',...
+                    '.T.',...
+                    ' ) ;\n'];
+                object_index=object_index+1;
+            end
+
+            function str_oriented=stepOriented(edge_index)
+                str_oriented=[num2str(object_index,'#%d ='),' ORIENTED_EDGE',...
+                    ' ( ',...
+                    '''NONE''',', ',...
+                    '*',', ','*',', ',...
+                    num2str(edge_index,'#%d'),', ',...
+                    '.T.',...
+                    ' ) ;\n'];
+                object_index=object_index+1;
+            end
         end
     end
 end
 
-% base function
-function N=baseFunction(u_list,u_x,i,k)
-if k==0
+%% common function
+
+function knot_vec=getKnotVec(knot_multi,knot_list)
+% base on knot_multi and knot_list to create knot vector
+%
+knot_vec=zeros(1,sum(knot_multi));
+start_idx=1;end_idx=knot_multi(1);
+for n_idx=1:length(knot_list)
+    knot_vec(start_idx:end_idx)=knot_list(n_idx);
+    start_idx=start_idx+knot_multi(n_idx);
+    end_idx=end_idx+knot_multi(n_idx);
+end
+end
+
+function N=baseFcnN(u_list,u_x,i,k)
+% base function of BSpline curve
+%
+if k == 0
     if ((u_list(i) <= u_x) && (u_x <= u_list(i+1)))
-        N=1;
+        if any(u_list == u_x) && u_x ~= u_list(1) && u_x ~= u_list(end)
+            N=0.5;
+        else
+            N=1;
+        end
     else
         N=0;
     end
@@ -730,8 +707,232 @@ else
     else
         B=(u_list(i+k+1)-u_x)/(u_list(i+k+1)-u_list(i+1));
     end
-    
-    N=A*baseFunction(u_list,u_x,i,k-1)+B*baseFunction(u_list,u_x,i+1,k-1);
+
+    N=A*baseFcnN(u_list,u_x,i,k-1)+B*baseFcnN(u_list,u_x,i+1,k-1);
 end
 end
 
+function [U,V,Fval,node_list]=meshAdapt2DUV(fcn,low_bou,up_bou,torl,max_level,fval_num)
+% 2D Omni-Tree
+% adapt capture 2 dimemsion function value
+% ensure error of linear interplation will less than torl
+%
+if nargin < 6
+    fval_num=1;
+end
+
+% node_list which is a matrix store all node
+% a node is a array, contain:
+% level, idx_1-8(index of data_list), idx_c, node_index_1-4
+% place:
+% 3-8-4 or 3-4 or 3-8-4
+% 1-5-2    6-7    6-c-7
+%          1-2    1-5-2
+% node:
+% 1-2 or 3 or 3-4
+%        1    1-2
+% if children node is empty, left_index or right_index will be zero
+list_add_num=50; % list will be extend only when list is not enough
+node_list=zeros(list_add_num,14,'int64');
+% data_list use to sort all float data include coodinate, function value
+data_list=zeros(list_add_num,fval_num+2);
+
+% add vertex of cell into data_list first
+bou_1=[low_bou(1),low_bou(2)];
+data_list(1,:)=[bou_1,fcn(bou_1)];
+bou_2=[up_bou(1),low_bou(2)];
+data_list(2,:)=[bou_2,fcn(bou_2)];
+bou_3=[low_bou(1),up_bou(2)];
+data_list(3,:)=[bou_3,fcn(bou_3)];
+bou_4=[up_bou(1),up_bou(2)];
+data_list(4,:)=[bou_4,fcn(bou_4)];
+
+% create base root
+node_list(1,:)=[0,1,2,3,4,0,0,0,0,0,0,0,0,0];
+
+% create node tree from root
+[node_num,data_num]=createNodeTree(1,4);
+node_list=node_list(1:node_num,:);
+data_list=data_list(1:data_num,:);
+
+% generate U and V
+[u_list,~,u_idx]=unique(data_list(:,1));
+[v_list,~,v_idx]=unique(data_list(:,2));
+idx_list=[u_idx,v_idx];
+
+[U,V]=meshgrid(u_list,v_list);
+
+% local data to Fval
+Fval=nan(length(v_list),length(u_list),fval_num);
+
+for data_index=1:data_num
+    if all([idx_list(data_index,2),idx_list(data_index,1)] ~= 0)
+        Fval(idx_list(data_index,2),idx_list(data_index,1),:)=data_list(data_index,3:end);
+    end
+end
+
+% fit nan data
+for rank_idx=1:length(v_list)
+    for colume_idx=1:length(u_list)
+        if isnan(Fval(rank_idx,colume_idx,1))
+            Fval(rank_idx,colume_idx,:)=fcn([U(rank_idx,colume_idx),V(rank_idx,colume_idx)]);
+        end
+    end
+end
+
+    function [node_num,data_num]=createNodeTree(root_idx,data_num)
+        % create quad tree
+        %
+        stack=root_idx;
+        node_num=root_idx;
+
+        while ~isempty(stack)
+            % current node information
+            node_idx=stack(end);
+            node=node_list(node_idx,:);
+            stack=stack(1:end-1);
+
+            if node(1) < max_level
+                % judge if linear predict if accptable
+                % if not, create children cell
+                %
+                [coord_c,coord_5,coord_6,coord_7,coord_8,...
+                    fval_c,fval_5,fval_6,fval_7,fval_8]=calCell(node(2),node(3),node(4),node(5));
+                [fval_pred_c,fval_pred_5,fval_pred_6,...
+                    fval_pred_7,fval_pred_8]=calCellPred(node(2),node(3),node(4),node(5));
+
+                % check u direction
+                if any(abs(fval_5-fval_pred_5) > torl) || any(abs(fval_8-fval_pred_8) > torl)
+                    add_u_flag=true(1);
+                else
+                    add_u_flag=false(1);
+                end
+
+                % check v direction
+                if any(abs(fval_6-fval_pred_6) > torl) || any(abs(fval_7-fval_pred_7) > torl)
+                    add_v_flag=true(1);
+                else
+                    add_v_flag=false(1);
+                end
+
+                % check center place
+                if ~add_u_flag && ~add_v_flag && any(abs(fval_c-fval_pred_c) > torl)
+                    add_u_flag=true(1);
+                    add_v_flag=true(1);
+                end
+
+                if add_u_flag && add_v_flag
+                    % add 5 data into data_list
+                    data_new_idx=data_num+(1:5);
+                    if data_num+5 > size(data_list,1)
+                        data_list=[data_list;zeros(list_add_num,fval_num+2)];
+                    end
+                    data_list(data_new_idx,:)=[
+                        coord_5,fval_5;
+                        coord_6,fval_6;
+                        coord_7,fval_7;
+                        coord_8,fval_8;
+                        coord_c,fval_c;];
+                    node(6:10)=data_new_idx;
+                    data_num=data_num+5;
+
+                    % add 4 new node to node_list
+                    node_new_idx=node_num+(1:4);
+                    if node_num+4 > size(node_list,1)
+                        node_list=[node_list;zeros(list_add_num,14)];
+                    end
+                    node_list(node_new_idx,:)=[...
+                        node(1)+1,node(2),node(6),node(7),node(10),0,0,0,0,0,0,0,0,0;
+                        node(1)+1,node(6),node(3),node(10),node(8),0,0,0,0,0,0,0,0,0;
+                        node(1)+1,node(7),node(10),node(4),node(9),0,0,0,0,0,0,0,0,0;
+                        node(1)+1,node(10),node(8),node(9),node(5),0,0,0,0,0,0,0,0,0;];
+                    node(11:14)=node_new_idx;
+                    node_num=node_num+4;
+
+                elseif add_u_flag
+                    % add 2 data into data_list
+                    data_new_idx=data_num+(1:2);
+                    if data_num+2 > size(data_list,1)
+                        data_list=[data_list;zeros(list_add_num,fval_num+2)];
+                    end
+                    data_list(data_new_idx,:)=[
+                        coord_5,fval_5;
+                        coord_8,fval_8;];
+                    node([6,9])=data_new_idx;
+                    data_num=data_num+2;
+
+                    % add 2 new node to node_list
+                    node_new_idx=node_num+(1:2);
+                    if node_num+2 > size(node_list,1)
+                        node_list=[node_list;zeros(list_add_num,14)];
+                    end
+                    node_list(node_new_idx,:)=[...
+                        node(1)+1,node(2),node(6),node(4),node(9),0,0,0,0,0,0,0,0,0;
+                        node(1)+1,node(6),node(3),node(9),node(5),0,0,0,0,0,0,0,0,0;];
+                    node([11,12])=node_new_idx;
+                    node_num=node_num+2;
+
+                elseif add_v_flag
+                    % add 2 data into data_list
+                    data_new_idx=data_num+(1:2);
+                    if data_num+2 > size(data_list,1)
+                        data_list=[data_list;zeros(list_add_num,fval_num+2)];
+                    end
+                    data_list(data_new_idx,:)=[
+                        coord_6,fval_6;
+                        coord_7,fval_7;];
+                    node([7,8])=data_new_idx;
+                    data_num=data_num+2;
+
+                    % add 2 new node to node_list
+                    node_new_idx=node_num+(1:2);
+                    if node_num+2 > size(node_list,1)
+                        node_list=[node_list;zeros(list_add_num,14)];
+                    end
+                    node_list(node_num+(1:2),:)=[...
+                        node(1)+1,node(2),node(3),node(7),node(8),0,0,0,0,0,0,0,0,0;
+                        node(1)+1,node(7),node(8),node(4),node(5),0,0,0,0,0,0,0,0,0;];
+                    node([11,13])=node_new_idx;
+                    node_num=node_num+2;
+                else
+                    node_new_idx=[];
+                end
+
+                % add to stack
+                stack=[stack,node_new_idx];
+                node_list(node_idx,:)=node;
+            end
+        end
+    end
+
+    function [coord_c,coord_5,coord_6,coord_7,coord_8,...
+            fval_c,fval_5,fval_6,fval_7,fval_8]=calCell(vidx_1,vidx_2,vidx_3,vidx_4)
+        % calculate index of c, 5, 6, 7, 8 place function value
+        % abbreviation:
+        % vidx: vertex index
+        %
+        coord_c=(data_list(vidx_1,[1,2])+data_list(vidx_4,[1,2]))/2;
+        fval_c=fcn(coord_c);
+
+        coord_5=(data_list(vidx_1,[1,2])+data_list(vidx_2,[1,2]))/2;
+        fval_5=fcn(coord_5);
+        coord_6=(data_list(vidx_1,[1,2])+data_list(vidx_3,[1,2]))/2;
+        fval_6=fcn(coord_6);
+        coord_7=(data_list(vidx_2,[1,2])+data_list(vidx_4,[1,2]))/2;
+        fval_7=fcn(coord_7);
+        coord_8=(data_list(vidx_3,[1,2])+data_list(vidx_4,[1,2]))/2;
+        fval_8=fcn(coord_8);
+    end
+
+    function [fval_pred_c,fval_pred_5,fval_pred_6,...
+            fval_pred_7,fval_pred_8]=calCellPred(vidx_1,vidx_2,vidx_3,vidx_4)
+        % calculate index of c, 5, 6, 7, 8 place linear predict function value
+        %
+        fval_pred_c=(data_list(vidx_1,3:end)+data_list(vidx_2,3:end)+data_list(vidx_3,3:end)+data_list(vidx_4,3:end))/4;
+        fval_pred_5=(data_list(vidx_1,3:end)+data_list(vidx_2,3:end))/2;
+        fval_pred_6=(data_list(vidx_1,3:end)+data_list(vidx_3,3:end))/2;
+        fval_pred_7=(data_list(vidx_2,3:end)+data_list(vidx_4,3:end))/2;
+        fval_pred_8=(data_list(vidx_3,3:end)+data_list(vidx_4,3:end))/2;
+    end
+
+end

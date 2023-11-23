@@ -21,10 +21,12 @@ classdef WaveriderCone < Body
 
     % main function
     methods
-        function self=WaveriderCone(Ma_in,T_in,P_in,beta,...
+        function self=WaveriderCone(name,Ma_in,T_in,P_in,beta,...
                 lead_edge_fcn,R_0,L_total,W_total)
             % lead_edge_fcn is YOZ plane function
             %
+            self=self@Body(name);
+
             self.beta=beta;
             self.lead_edge_fcn=lead_edge_fcn;
             self.R_0=R_0;
@@ -187,18 +189,76 @@ classdef WaveriderCone < Body
             end
         end
 
+        function surf_total=reverseUV(~,surf_total)
+            % reverse UV of low and up
+            %
+            for surf_idx=1:length(surf_total)
+                surf=surf_total{surf_idx};
+                if strcmp(surf.name,'up')
+                    X_old=surf.X;Y_old=surf.Y;Z_old=surf.Z;
+                    X=repmat(X_old(1,:),size(X_old,1),1);
+                    V=Y_old(:,end)/Y_old(end,end);
+                    Y=interp1(X_old(:,1),Y_old(:,1),X(1,:)')';
+                    Y=V.*Y;
+
+                    % base on old X, old Y, old Z to interp Z
+                    Z=zeros(size(X));
+                    Z(:,1)=Z_old(1,1);
+                    for u_idx=2:size(X,2)-1
+                        X_line=X(:,u_idx);
+                        Y_line=[];Z_line=[];
+                        v_idx=1;
+                        while X_old(v_idx,1) < X_line(1) && v_idx < size(X_old,1)+1
+                            Y_line=[Y_line,interp1(X_old(v_idx,:),Y_old(v_idx,:),X_line(1))];
+                            Z_line=[Z_line,interp1(X_old(v_idx,:),Z_old(v_idx,:),X_line(1))];
+                            v_idx=v_idx+1;
+                        end
+                        if length(Y_line) < 3
+                            error('too less lead edge gird');
+                        end
+                        Z_line=interp1(Y_line,Z_line,Y(:,u_idx),"spline");
+                        Z(:,u_idx)=Z_line;
+                    end
+                    Z(:,end)=Z_old(:,end);
+
+                    surf.X=X;surf.Y=Y;surf.Z=Z;
+                elseif strcmp(surf.name,'low')
+                    X_old=surf.X;Y_old=surf.Y;Z_old=surf.Z;
+
+                    X=repmat(X_old(end,:),size(X_old,1),1);
+                    V=Y_old(:,end)/Y_old(1,end);
+                    Y=interp1(X_old(:,1),Y_old(:,1),X(1,:)')';
+                    Y=V.*Y;
+
+                    % base on old X, old Y, old Z to interp Z
+                    Z=zeros(size(X));
+                    Z(:,1)=Z_old(end,1);
+                    for u_idx=2:size(X,2)-1
+                        X_line=X(:,u_idx);
+                        Y_line=[];Z_line=[];
+                        v_idx=size(X_old,1);
+                        while X_old(v_idx,1) < X_line(1) && v_idx > 0
+                            Y_line=[Y_line,interp1(X_old(v_idx,:),Y_old(v_idx,:),X_line(1))];
+                            Z_line=[Z_line,interp1(X_old(v_idx,:),Z_old(v_idx,:),X_line(1))];
+                            v_idx=v_idx-1;
+                        end
+                        if length(Y_line) < 3
+                            error('too less lead edge gird');
+                        end
+                        Z_line=interp1(Y_line,Z_line,Y(:,u_idx),"spline");
+                        Z(:,u_idx)=Z_line;
+                    end
+                    Z(:,end)=Z_old(:,end);
+
+                    surf.X=X;surf.Y=Y;surf.Z=Z;
+                end
+                surf_total{surf_idx}=surf;
+            end
+        end
+
         function writeStepOpenShell(self,step_filestr,U_num,V_num,W_num)
             % write surface into step file
             %
-
-            % check file name
-            if length(step_filestr) > 4
-                if ~strcmp(step_filestr((end-4):end),'.step')
-                    step_filestr=[step_filestr,'.step'];
-                end
-            else
-                step_filestr=[step_filestr,'.step'];
-            end
             [~,step_filename,~]=fileparts(step_filestr);
 
             % write head
@@ -210,22 +270,14 @@ classdef WaveriderCone < Body
             ADVANCED_FACE_index_list=zeros(1,length(self.surface_list));
 
             surf_total=calSurfaceMatrix(self,U_num,V_num,W_num);
+            surf_num=length(surf_total);
 
-            for surf_idx=1:length(surf_total)
+            for surf_idx=1:surf_num
                 surf=surf_total{surf_idx};
                 surf_name=surf.name;
-                if size(surf.X,2) == 2
-                    u_list=[0,0,1,1];
-                else
-                    u_list=[0,0,0,linspace(0,1,size(surf.X,2)),1,1,1];
-                end
-                if size(surf.X,1) == 2
-                    v_list=[0,0,1,1];
-                else
-                    v_list=[0,0,0,linspace(0,1,size(surf.X,1)),1,1,1];
-                end
-                surf=SurfaceBSpline(surf_name,[],[],[],surf.X,surf.Y,surf.Z,[],[],u_list,v_list);
-                [step_str,object_index,ADVANCED_FACE_index_list(surf_idx)]=surf.getStepNode(object_index);
+                u_degree=min(size(surf.X,2)-1,3);v_degree=min(size(surf.X,1)-1,3);
+                surf=SurfaceBSpline(surf_name,[],[],[],surf.X,surf.Y,surf.Z,u_degree,v_degree,[],[],[],[],[],[]);
+                [step_str,object_index,ADVANCED_FACE_index_list(surf_idx)]=surf.getStep(object_index);
                 fprintf(step_file,step_str);
                 fprintf(step_file,'\n');
             end
@@ -255,22 +307,33 @@ classdef WaveriderCone < Body
             clear('step_file');
 
         end
- 
-        function drawBody(self,U_num,V_par,W_num)
+
+        function drawBody(self,axes_handle,U_num,V_par,W_num)
             % show all surface of body
             %
+            if isempty(axes_handle),axes_handle=axes(figure());end
+
             surf_total=self.calSurfaceMatrix(U_num,V_par,W_num);
 
             for surf_index=1:length(surf_total)
                 surf=surf_total{surf_index};
-                surface(surf.X,surf.Y,surf.Z,LineStyle="none");
+                surface(axes_handle,surf.X,surf.Y,surf.Z,'FaceAlpha',0.5);
             end
 
             xlabel('x');
             ylabel('y');
             zlabel('z');
-            axis equal;
             view(3);
+
+            axis equal;
+            %             x_range=xlim();
+            %             y_range=ylim();
+            %             z_range=zlim();
+            %             center=[mean(x_range),mean(y_range),mean(z_range)];
+            %             range=max([x_range(2)-x_range(1),y_range(2)-y_range(1),z_range(2)-z_range(1)])/2;
+            %             xlim([center(1)-range,center(1)+range]);
+            %             ylim([center(2)-range,center(2)+range]);
+            %             zlim([center(3)-range,center(3)+range]);
         end
     end
 
@@ -424,7 +487,7 @@ function dV=differConicalFlowVelocity...
 % notice: the characteristic of cone shock flow is the physical quantity is
 % the same on the same radial line
 %
-% reference: [1] 童秉纲, 孔祥言, 邓国华. 气体动力学[M]. 气体动力学, 2012, 
+% reference: [1] 童秉纲, 孔祥言, 邓国华. 气体动力学[M]. 气体动力学, 2012,
 % 158-159.
 %
 V_r=V(1);
