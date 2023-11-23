@@ -1,10 +1,10 @@
-function [index_up,index_low,point_up,point_low]=divideUL(index,point,threshold)
+function [index_low,index_up,point_low,point_up]=dividePoint(index,point,dimension,threshold)
 % divide point up and down by threshold
 %
-if nargin < 3
+if nargin < 4
     threshold=0;
 end
-Bool=point(:,3) >= threshold;
+Bool=point(:,dimension) >= threshold;
 
 index_up=index(Bool,:);
 index_low=index(~Bool,:);
