@@ -26,25 +26,26 @@ close all hidden;
 
 %% fit airfoil with CST2D
 
-% airfoil_data=importdata('airfoil\airfoil_NACA0012.txt');
+% airfoil_data=importdata('airfoil\NACA0012.txt');
 % airfoil_up=airfoil_data(1:67,:);airfoil_low=airfoil_data(68:end,:);
 
-% airfoil_data=importdata('airfoil\airfoil_NACA4412.txt');
+% airfoil_data=importdata('airfoil\NACA4412.txt');
 % airfoil_up=airfoil_data(1:18,:);airfoil_low=airfoil_data(19:end,:);
 
-% airfoil_data=importdata('airfoil\airfoil_RAE2822.txt');
+% airfoil_data=importdata('airfoil\RAE2822.txt');
 % airfoil_up=airfoil_data(1:65,:);airfoil_low=airfoil_data(66:end,:);
 
-% airfoil_data=importdata('airfoil\airfoil_Clark_Y.txt');
+% airfoil_data=importdata('airfoil\Clark_Y.txt');
 % airfoil_up=airfoil_data(1:61,:);airfoil_low=airfoil_data(62:end,:);
-
+% 
 % LX=1;LY=1;C_par=[0.5,1];sym=false;
-% degree=3;ctrl_num=4;
+% degree=4;ctrl_num=5;
 % 
 % curve_up=CurveCST2D('',LX,LY,C_par,sym);
-% curve_low=CurveCST2D('',LX,LY,C_par,sym);
+% curve_low=CurveCST2D('',LX,-LY,C_par,sym);
 % curve_up.addShapeBSpline([],[],airfoil_up(:,1),airfoil_up(:,2),degree,[],[],ctrl_num,airfoil_up(:,1));
 % curve_low.addShapeBSpline([],[],airfoil_low(:,1),airfoil_low(:,2),degree,[],[],ctrl_num,airfoil_low(:,1));
+% 
 % curve_up.optimClass();
 % curve_low.optimClass();
 % 
@@ -54,6 +55,9 @@ close all hidden;
 % curve_up.drawCurve(axe_hdl);
 % curve_low.drawCurve(axe_hdl);
 % axis equal;
+% 
+% writematrix([curve_up.ctrl_X,curve_up.ctrl_Y,curve_up.ctrl_Z],'CSTshape_up.txt')
+% writematrix([curve_low.ctrl_X,curve_low.ctrl_Y,curve_low.ctrl_Z],'CSTshape_low.txt')
 
 %% BSpline surface
 

@@ -428,6 +428,66 @@ classdef CurveCST2D < CurveBSpline
             U=max(U,0);U=min(U,1);
         end
     end
+
+        % visualizate function
+    methods
+        function drawCurve(self,axe_hdl,u_param,line_option,ctrl_option,node_option)
+            % draw curve on figure handle
+            %
+            if nargin < 6
+                node_option=[];
+                if nargin < 5
+                    ctrl_option=[];
+                    if nargin < 4
+                        line_option=[];
+                        if nargin < 3
+                            u_param=[];
+                            if nargin < 2
+                                axe_hdl=[];
+                            end
+                        end
+                    end
+                end
+            end
+
+            if isempty(axe_hdl),axe_hdl=axes(figure());end
+
+            % default draw option
+            if isempty(line_option)
+                line_option=struct();
+            end
+            if isempty(node_option)
+                node_option=struct('Marker','o','LineStyle','none');
+            end
+            if isempty(ctrl_option)
+                ctrl_option=struct('Marker','s','LineStyle','--','Color','r');
+            end
+
+            % calculate point on curve
+            if self.dimension == 2
+                [X,Y]=self.calCurve(u_param);
+
+                % plot line
+                line(axe_hdl,X,Y,line_option);
+                if ~isempty(self.node_X) && ~isempty(self.node_Y)
+                    line(axe_hdl,self.node_X,self.node_Y,node_option);
+                end
+                if ~isempty(self.ctrl_X) && ~isempty(self.ctrl_Y)
+                    line(axe_hdl,self.ctrl_X*self.LX,self.ctrl_Y*self.LY,ctrl_option);
+                end
+            end
+            xlabel('x');
+            ylabel('y');
+
+%             axis equal
+%             x_range=xlim();
+%             y_range=ylim();
+%             center=[mean(x_range),mean(y_range)];
+%             range=max([x_range(2)-x_range(1),y_range(2)-y_range(1)])/2;
+%             xlim([center(1)-range,center(1)+range]);
+%             ylim([center(2)-range,center(2)+range]);
+        end
+    end
 end
 
 %% common function

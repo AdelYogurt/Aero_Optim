@@ -518,6 +518,64 @@ classdef SurfaceCST < SurfaceBSpline
 
     % visualizate function
     methods
+        function drawSurface(self,axe_hdl,U,V,surface_option,control_option,node_option)
+            % draw surface on axes handle
+            %
+            if nargin < 7
+                node_option=[];
+                if nargin < 5
+                    control_option=[];
+                    if nargin < 5
+                        surface_option=[];
+                        if nargin < 4
+                            V=[];
+                            if nargin < 3
+                                U=[];
+                                if nargin < 2
+                                    axe_hdl=[];
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+            if isempty(axe_hdl),axe_hdl=axes(figure());end
+
+            % default draw option
+            if isempty(surface_option)
+                surface_option=struct('LineStyle','none');
+            end
+            if isempty(node_option)
+                node_option=struct('Marker','o','MarkerEdgeColor','b','LineStyle','none','FaceAlpha',0);
+            end
+            if isempty(control_option)
+                control_option=struct('Marker','s','MarkerEdgeColor','r','EdgeColor','r','LineStyle','--','FaceAlpha',0);
+            end
+
+            % calculate point on surface
+            [X,Y,Z]=calSurface(self,U,V);
+
+            % plot surface
+            surface(axe_hdl,X,Y,Z,surface_option);
+            surface(axe_hdl,self.node_X,self.node_Y,self.node_Z,node_option);
+            surface(axe_hdl,self.ctrl_X*self.LX,self.ctrl_Y*self.LY,self.ctrl_Z*self.LZ,control_option);
+            view(3);
+            xlabel('x');
+            ylabel('y');
+            zlabel('z');
+
+%             axis equal
+%             x_range=xlim();
+%             y_range=ylim();
+%             z_range=zlim();
+%             center=[mean(x_range),mean(y_range),mean(z_range)];
+%             range=max([x_range(2)-x_range(1),y_range(2)-y_range(1),z_range(2)-z_range(1)])/2;
+%             xlim([center(1)-range,center(1)+range]);
+%             ylim([center(2)-range,center(2)+range]);
+%             zlim([center(3)-range,center(3)+range]);
+        end
+
         function surface_BSpline=getSurfaceBSpline(self,u_param,v_param)
             % convert CST surface into BSpline surface
             %
