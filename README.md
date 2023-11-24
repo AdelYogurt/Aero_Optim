@@ -9,5 +9,5 @@ MultiDisciplinary Analysis and design Optimization for aeronautics and astronaut
 `coord/`: local coordination data calculate.  
 `mesh/`: STL, WGS, CGNS, INP and SU2 format mesh file toolbox.  
 `model/`: Multidisciplinary analysis model.  
-`optimal/`: optimize algorithm.  
+`optimizer/`: optimize algorithm.  
 
