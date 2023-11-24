@@ -15,7 +15,7 @@ dir_cur=pwd();
 % get dir work
 [str_filedir__,~]=fileparts(which('runFluentCFD.m'));
 if isempty(dir_temp)
-    dir_temp=fullfile(str_filedir__,'fluent_temp');
+    dir_temp=fullfile(str_filedir__,'Fluent_temp');
     if ~exist(dir_temp,'dir')
         mkdir(dir_temp);
     end
