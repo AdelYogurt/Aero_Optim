@@ -159,7 +159,7 @@ classdef CurveBSpline < handle
 
     % calculate point function
     methods
-        function [X,Y,Z,U]=calCurve(self,u_param)
+        function varargout=calCurve(self,u_param)
             % generate curve matrix by u_x_list or point_number
             %
             if nargin < 2 || isempty(u_param)
@@ -167,15 +167,20 @@ classdef CurveBSpline < handle
             end
 
             if  u_param ~= fix(u_param) && length(u_param) == 1
-                value_torl=u_param;
-                max_level=50;
-
-                low_bou=0;
-                up_bou=1;
-                [U,data_list,~]=meshAdapt1D(@(x) coordFcn(self,x),low_bou,up_bou,value_torl,max_level,3);
-                X=data_list(:,1);
-                Y=data_list(:,2);
-                Z=data_list(:,3);
+                value_torl=u_param;max_level=50;
+                low_bou=0;up_bou=1;
+                if self.dimension == 2
+                    [U,data_list,~]=meshAdapt1D(@(x) coordFcn2D(self,x),low_bou,up_bou,value_torl,max_level,2);
+                    X=data_list(:,1);
+                    Y=data_list(:,2);
+                    varargout={X,Y,U};
+                else
+                    [U,data_list,~]=meshAdapt1D(@(x) coordFcn(self,x),low_bou,up_bou,value_torl,max_level,3);
+                    X=data_list(:,1);
+                    Y=data_list(:,2);
+                    Z=data_list(:,3);
+                    varargout={X,Y,Z,U};
+                end
             else
                 if length(u_param) == 1
                     U=[];
@@ -190,12 +195,23 @@ classdef CurveBSpline < handle
                     U=linspace(0,1,u_grid_numebr+1);
                 end
 
-                [X,Y,Z]=self.calPoint(U);
+                if self.dimension == 2
+                    [X,Y]=self.calPoint(U);
+                    varargout={X,Y,U};
+                else
+                    [X,Y,Z]=self.calPoint(U);
+                    varargout={X,Y,Z,U};
+                end
             end
 
             function fval=coordFcn(self,x)
                 [X_cal,Y_cal,Z_cal]=self.calPoint(x);
                 fval=[X_cal,Y_cal,Z_cal];
+            end
+
+            function fval=coordFcn2D(self,x)
+                [X_cal,Y_cal]=self.calPoint(x);
+                fval=[X_cal,Y_cal];
             end
         end
 
