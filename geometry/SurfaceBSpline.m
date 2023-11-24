@@ -343,7 +343,37 @@ classdef SurfaceBSpline < handle
             XO=X;YO=Y;ZO=Z;geo_torl=100*eps;
 
             % base on range of node point to preliminary project to U, V
+            node_1=[self.node_X(1,1);self.node_Y(1,1);self.node_Z(1,1)];
+            node_2=[self.node_X(1,end);self.node_Y(1,end);self.node_Z(1,end)];
+            node_3=[self.node_X(end,1);self.node_Y(end,1);self.node_Z(end,1)];
+            node_4=[self.node_X(end,end);self.node_Y(end,end);self.node_Z(end,end)];
+            node_c=(node_1+node_2+node_3+node_4)/4;
+            vector_z=cross(node_4-node_1,node_3-node_2);vector_z=vector_z/norm(vector_z);
+            vector_x=(node_2+node_4)/2-node_c;vector_x=vector_x/norm(vector_x);
+            vector_y=cross(vector_z,vector_x);
+            proj_matrix=[vector_x,vector_y,vector_z]';
+            proj_base=node_c;
+            proj_node_1=proj_matrix*(node_1-proj_base);
+            proj_node_2=proj_matrix*(node_2-proj_base);
+            proj_node_3=proj_matrix*(node_3-proj_base);
+            proj_node_4=proj_matrix*(node_4-proj_base);
+            proj_point=proj_matrix*([X,Y,Z]'-proj_base);
+            proj_node=[proj_node_1,proj_node_2,proj_node_3,proj_node_4];
+
+            % project to 2D
+            proj_point=proj_point(1:2,:);
+            proj_node=proj_node(1:2,:);
             
+            % re-deform of uv
+            vector_e1=(proj_node(:,2)-proj_node(:,3))/2;
+            vector_e1=vector_e1/norm(vector_e1)*max(norm(proj_node(:,2)),norm(proj_node(:,3)));
+            vector_e2=(proj_node(:,4)-proj_node(:,1))/2;
+            vector_e2=vector_e2/norm(vector_e2)*max(norm(proj_node(:,4)),norm(proj_node(:,1)));
+            sqrt2_2=sqrt(2)/2;
+            tran_matrix=[sqrt2_2,sqrt2_2;-sqrt2_2,sqrt2_2]/[vector_e1,vector_e2];
+            proj_point=tran_matrix*proj_point;
+
+            U=(proj_point(1,:)/2+0.5)';V=(proj_point(2,:)/2+0.5)';
 
             % use project function to adjust parameter
             [X,Y,Z,U,V]=self.calProject(XO,YO,ZO,U,V,geo_torl);
@@ -353,12 +383,12 @@ classdef SurfaceBSpline < handle
             % adjust u, v by Jacobian transformation
             % also can project point to surface
             %
-            if nargin < 7,geo_torl=1e-6;end
+            if nargin < 7,geo_torl=double(eps('single'));end
 
             iter=0;iter_max=50;
 
             [X,Y,Z]=self.calPoint(U,V);
-            %             scatter3(X,Y,Z);
+            % scatter3(X,Y,Z);
             dX=XO-X;dY=YO-Y;dZ=ZO-Z;
             boolean=(abs(dX)+abs(dY)+abs(dZ)) > geo_torl;
             while any(any(boolean)) && iter < iter_max
@@ -372,6 +402,8 @@ classdef SurfaceBSpline < handle
                 RRRR_RR=RU_RU.*RV_RV-(RU_RV).^2;
                 dU=(RU_D.*RV_RV-RV_D.*RU_RV)./RRRR_RR;
                 dV=(RV_D.*RU_RU-RU_D.*RU_RV)./RRRR_RR;
+                dU(isnan(dU) & isinf(dU))=0;
+                dV(isnan(dV) & isinf(dV))=0;
 
                 U(boolean)=U(boolean)+dU;
                 V(boolean)=V(boolean)+dV;
@@ -379,7 +411,7 @@ classdef SurfaceBSpline < handle
                 V=max(V,0);V=min(V,1);
 
                 [X,Y,Z]=self.calPoint(U,V);
-                %                 scatter3(X,Y,Z);
+                % scatter3(X,Y,Z);
 
                 dX=XO-X;dY=YO-Y;dZ=ZO-Z;
                 iter=iter+1;
@@ -397,34 +429,36 @@ classdef SurfaceBSpline < handle
 
             [X_UF,Y_UF,Z_UF]=self.calPoint(U+step,V);
             [X_UB,Y_UB,Z_UB]=self.calPoint(U-step,V);
-            dX_dU=(X_UF-X_UB)/step;dY_dU=(Y_UF-Y_UB)/step;dZ_dU=(Z_UF-Z_UB)/step;
-            bool=~isreal(dX_dU) | isnan(dX_dU) |...
-                ~isreal(dY_dU) | isnan(dY_dU) |...
-                ~isreal(dZ_dU) | isnan(dZ_dU);
-            if any(bool) %% try forward walk differ
-                dX_dU(bool)=(X_UF(bool)-X(bool))/step;dY_dU(bool)=(Y_UF(bool)-Y(bool))/step;dZ_dU(bool)=(Z_UF(bool)-Z(bool))/step;
-                bool=~isreal(dX_dU) | isnan(dX_dU) |...
-                    ~isreal(dY_dU) | isnan(dY_dU) |...
-                    ~isreal(dZ_dU) | isnan(dZ_dU);
-                if any(bool) %% try back walk differ
-                    dX_dU(bool)=(X(bool)-X_UB(bool))/step;dY_dU(bool)=(Y(bool)-Y_UB(bool))/step;dZ_dU(bool)=(Z(bool)-Z_UB(bool))/step;
-                end
-            end
+            Bool_U=(U+step) > 1;
+            Bool_D=(U-step) < 0;
+            Bool_C=~any([Bool_U,Bool_D],2);
+            dX_dU=X;dY_dU=Y;dZ_dU=Z; % allocate memory
+            dX_dU(Bool_C)=(X_UF(Bool_C)-X_UB(Bool_C))/2/step;
+            dY_dU(Bool_C)=(Y_UF(Bool_C)-Y_UB(Bool_C))/2/step;
+            dZ_dU(Bool_C)=(Z_UF(Bool_C)-Z_UB(Bool_C))/2/step;
+            dX_dU(Bool_U)=(X(Bool_U)-X_UB(Bool_U))/2/step;
+            dY_dU(Bool_U)=(Y(Bool_U)-Y_UB(Bool_U))/2/step;
+            dZ_dU(Bool_U)=(Z(Bool_U)-Z_UB(Bool_U))/2/step;
+            dX_dU(Bool_D)=(X_UF(Bool_D)-X(Bool_D))/step;
+            dY_dU(Bool_D)=(Y_UF(Bool_D)-Y(Bool_D))/step;
+            dZ_dU(Bool_D)=(Z_UF(Bool_D)-Z(Bool_D))/step;
             dX_dU=real(dX_dU);dY_dU=real(dY_dU);dZ_dU=real(dZ_dU);
 
             [X_VF,Y_VF,Z_VF]=self.calPoint(U,V+step);
             [X_VB,Y_VB,Z_VB]=self.calPoint(U,V-step);
-            dX_dV=(X_VF-X_VB)/step;dY_dV=(Y_VF-Y_VB)/step;dZ_dV=(Z_VF-Z_VB)/step;
-            bool=~isreal(dX_dV) | isnan(dX_dV) |...
-                ~isreal(dY_dV) | isnan(dY_dV) |...
-                ~isreal(dZ_dV) | isnan(dZ_dV);
-            if any(bool) %% try back walk differ
-                dX_dV(bool)=(X_VF(bool)-X(bool))/step;dY_dV(bool)=(Y_VF(bool)-Y(bool))/step;dZ_dV(bool)=(Z_VF(bool)-Z(bool))/step;
-                bool=~isreal(dX_dV) | isnan(dX_dV) |...
-                    ~isreal(dY_dV) | isnan(dY_dV) |...
-                    ~isreal(dZ_dV) | isnan(dZ_dV);
-                dX_dV(bool)=(X(bool)-X_VB(bool))/step;dY_dV(bool)=(Y(bool)-Y_VB(bool))/step;dZ_dV(bool)=(Z(bool)-Z_VB(bool))/step;
-            end
+            Bool_U=(V+step) > 1;
+            Bool_D=(V-step) < 0;
+            Bool_C=~any([Bool_U,Bool_D],2);
+            dX_dV=X;dY_dV=Y;dZ_dV=Z; % allocate memory
+            dX_dV(Bool_C)=(X_VF(Bool_C)-X_VB(Bool_C))/2/step;
+            dY_dV(Bool_C)=(Y_VF(Bool_C)-Y_VB(Bool_C))/2/step;
+            dZ_dV(Bool_C)=(Z_VF(Bool_C)-Z_VB(Bool_C))/2/step;
+            dX_dV(Bool_U)=(X(Bool_U)-X_VB(Bool_U))/2/step;
+            dY_dV(Bool_U)=(Y(Bool_U)-Y_VB(Bool_U))/2/step;
+            dZ_dV(Bool_U)=(Z(Bool_U)-Z_VB(Bool_U))/2/step;
+            dX_dV(Bool_D)=(X_VF(Bool_D)-X(Bool_D))/step;
+            dY_dV(Bool_D)=(Y_VF(Bool_D)-Y(Bool_D))/step;
+            dZ_dV(Bool_D)=(Z_VF(Bool_D)-Z(Bool_D))/step;
             dX_dV=real(dX_dV);dY_dV=real(dY_dV);dZ_dV=real(dZ_dV);
         end
     end
