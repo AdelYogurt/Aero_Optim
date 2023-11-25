@@ -507,9 +507,9 @@ classdef SurfaceCST < SurfaceBSpline
             U=max(U,0);U=min(U,1);
             V=max(V,0);V=min(V,1);
 
-%             % re deform surface
-%             if ~isempty(self.deform_fcn_Y),Y=Y-self.deform_fcn_Y(U);end
-%             if ~isempty(self.deform_fcn_X),X=X-self.deform_fcn_X(V);end
+            % % re deform surface
+            % if ~isempty(self.deform_fcn_Y),Y=Y-self.deform_fcn_Y(U);end
+            % if ~isempty(self.deform_fcn_X),X=X-self.deform_fcn_X(V);end
 
             % use project function to adjust parameter
             [X,Y,Z,U,V]=self.calProject(XO,YO,ZO,U,V,geo_torl);

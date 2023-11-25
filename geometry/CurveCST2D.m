@@ -310,12 +310,10 @@ classdef CurveCST2D < CurveBSpline
         function [X,Y]=calPoint(self,U)
             % calculate point on curve
             %
-            U=U(:);
-            if self.sym,U=U-0.5;end
-
+            
             % calculate origin surface matrix
             U_class=U;
-            if self.sym,U_class=U_class+0.5;end
+            if self.sym,U_class=(U_class/2)+0.5;end
             X=self.LX;
             Y=self.LY*self.class_fcn(U_class);
 

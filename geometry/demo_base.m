@@ -80,11 +80,6 @@ close all hidden;
 % surf_up.drawSurface(axe_hdl);
 % surf_low.drawSurface(axe_hdl);
 % axis equal
-% 
-% u_num=10;v_num=10;
-% [U,V]=meshgrid(linspace(0,1,u_num+1),linspace(0,1,v_num+1));
-% [X,Y,Z]=surf_low.calPoint(U,V);
-% [U,V,X,Y,Z]=surf_low.calCoord(X,Y,Z);
 
 %% Fit 3D wing
 
