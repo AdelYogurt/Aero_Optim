@@ -61,14 +61,14 @@ close all hidden;
 
 %% BSpline surface
 
-u_degree=3;v_degree=3;point_num=4;
-[point_X,point_Y]=meshgrid(linspace(0,1,point_num),linspace(0,1,point_num));point_Z=rands(point_num,point_num)*0.1+0.5;
-axe_hdl=axes(figure());
-surface(axe_hdl,point_X,point_Y,point_Z,'Marker','*','MarkerEdgeColor','r','LineStyle','none','FaceAlpha',0);
-surf=SurfaceBSpline('',point_X,point_Y,point_Z,[],[],[],u_degree,v_degree);
+% u_degree=3;v_degree=3;point_num=4;
+% [point_X,point_Y]=meshgrid(linspace(0,1,point_num),linspace(0,1,point_num));point_Z=rands(point_num,point_num)*0.1+0.5;
+% axe_hdl=axes(figure());
+% surface(axe_hdl,point_X,point_Y,point_Z,'Marker','*','MarkerEdgeColor','r','LineStyle','none','FaceAlpha',0);
+% surf=SurfaceBSpline('',point_X,point_Y,point_Z,[],[],[],u_degree,v_degree);
 % surf=SurfaceBSpline('',[],[],[],point_X,point_Y,point_Z,u_degree,v_degree);
-surf.drawSurface(axe_hdl);
-axis equal;
+% surf.drawSurface(axe_hdl);
+% axis equal;
 
 %% CST surface
 
