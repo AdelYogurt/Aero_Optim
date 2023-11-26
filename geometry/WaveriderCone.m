@@ -255,7 +255,10 @@ classdef WaveriderCone < Body
                 surf_total{surf_idx}=surf;
             end
         end
+    end
 
+    % visualizate function
+    methods
         function writeStepOpenShell(self,step_filestr,U_num,V_num,W_num)
             % write surface into step file
             %
@@ -276,7 +279,7 @@ classdef WaveriderCone < Body
                 surf=surf_total{surf_idx};
                 surf_name=surf.name;
                 u_degree=min(size(surf.X,2)-1,3);v_degree=min(size(surf.X,1)-1,3);
-                surf=SurfaceBSpline(surf_name,[],[],[],surf.X,surf.Y,surf.Z,u_degree,v_degree,[],[],[],[],[],[]);
+                surf=SurfaceBSpline(surf_name,surf.X,surf.Y,surf.Z,true,u_degree,v_degree);
                 [step_str,object_index,ADVANCED_FACE_index_list(surf_idx)]=surf.getStep(object_index);
                 fprintf(step_file,step_str);
                 fprintf(step_file,'\n');
@@ -325,15 +328,14 @@ classdef WaveriderCone < Body
             zlabel('z');
             view(3);
 
-            axis equal;
-            %             x_range=xlim();
-            %             y_range=ylim();
-            %             z_range=zlim();
-            %             center=[mean(x_range),mean(y_range),mean(z_range)];
-            %             range=max([x_range(2)-x_range(1),y_range(2)-y_range(1),z_range(2)-z_range(1)])/2;
-            %             xlim([center(1)-range,center(1)+range]);
-            %             ylim([center(2)-range,center(2)+range]);
-            %             zlim([center(3)-range,center(3)+range]);
+            % x_range=xlim();
+            % y_range=ylim();
+            % z_range=zlim();
+            % center=[mean(x_range),mean(y_range),mean(z_range)];
+            % range=max([x_range(2)-x_range(1),y_range(2)-y_range(1),z_range(2)-z_range(1)])/2;
+            % xlim([center(1)-range,center(1)+range]);
+            % ylim([center(2)-range,center(2)+range]);
+            % zlim([center(3)-range,center(3)+range]);
         end
     end
 
@@ -357,7 +359,8 @@ classdef WaveriderCone < Body
     end
 end
 
-% aerodynamci function
+%% aerodynamci function
+
 function [beta,eta,Ma_2,...
     T_2__T_1,P_2__P_1,rho_2__rho_1,P_02__P_01]=aerodynamicShockWave...
     (gamma,Ma_1,beta,eta)
@@ -501,7 +504,8 @@ dV_deta=(V_r+V_eta*cot(eta))/(V_eta*V_eta/a_sq-1)-V_r;
 dV=[dV_dr;dV_deta];
 end
 
-% auxiliary function
+%% auxiliary function
+
 function [Y_pred,X_pred_idx]=interpLinear(X_pred,X,Y)
 % a simple linear interpolation to calculate data
 % Y can be m x n matrix, n is variable

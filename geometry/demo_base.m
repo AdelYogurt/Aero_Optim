@@ -4,12 +4,12 @@ close all hidden;
 
 %% BSpline curve
 
-% degree=3;point_num=10;
+% degree=3;point_num=5;
 % point_X=rand(point_num,1);point_Y=rand(point_num,1);point_Z=rand(point_num,1);
 % axe_hdl=axes(figure());
 % scatter3(axe_hdl,point_X,point_Y,point_Z,'Marker','*','MarkerEdgeColor',[0.9290 0.6940 0.1250]);
-% curve=CurveBSpline('',point_X,point_Y,point_Z,[],[],[],degree);
-% curve=CurveBSpline('',[],[],[],point_X,point_Y,point_Z,degree);
+% curve=CurveBSpline('',point_X,point_Y,point_Z,[],degree);
+% curve=CurveBSpline('',point_X,point_Y,point_Z,true,degree);
 % curve.drawCurve(axe_hdl);
 % axis equal
 
@@ -19,8 +19,8 @@ close all hidden;
 % degree=3;ctrl_num=5;
 % ctrl_X=linspace(0,1,ctrl_num);ctrl_Y=rand(ctrl_num,1);
 % axe_hdl=axes(figure());
-% curve=CurveCST2D('',LX,LY,C_par_Y,sym);
-% curve.addShapeBSpline(ctrl_X,ctrl_Y,[],[],degree);
+% curve=CurveCST2D('',C_par_Y,sym,LX,LY);
+% curve.addShapeBSpline(ctrl_X,ctrl_Y,[],degree);
 % curve.drawCurve(axe_hdl);
 % axis equal;
 
@@ -28,23 +28,23 @@ close all hidden;
 
 % airfoil_data=importdata('airfoil\NACA0012.txt');
 % airfoil_up=airfoil_data(1:67,:);airfoil_low=airfoil_data(68:end,:);
-
+% 
 % airfoil_data=importdata('airfoil\NACA4412.txt');
 % airfoil_up=airfoil_data(1:18,:);airfoil_low=airfoil_data(19:end,:);
-
+% 
 % airfoil_data=importdata('airfoil\RAE2822.txt');
 % airfoil_up=airfoil_data(1:65,:);airfoil_low=airfoil_data(66:end,:);
-
+% 
 % airfoil_data=importdata('airfoil\Clark_Y.txt');
 % airfoil_up=airfoil_data(1:61,:);airfoil_low=airfoil_data(62:end,:);
 % 
 % LX=1;LY=1;C_par=[0.5,1];sym=false;
 % degree=4;ctrl_num=5;
 % 
-% curve_up=CurveCST2D('',LX,LY,C_par,sym);
-% curve_low=CurveCST2D('',LX,-LY,C_par,sym);
-% curve_up.addShapeBSpline([],[],airfoil_up(:,1),airfoil_up(:,2),degree,[],[],ctrl_num,airfoil_up(:,1));
-% curve_low.addShapeBSpline([],[],airfoil_low(:,1),airfoil_low(:,2),degree,[],[],ctrl_num,airfoil_low(:,1));
+% curve_up=CurveCST2D('',C_par,sym,LX,LY);
+% curve_low=CurveCST2D('',C_par,sym,LX,-LY);
+% curve_up.addShapeBSpline(airfoil_up(:,1),airfoil_up(:,2),true,degree,[],[],ctrl_num,airfoil_up(:,1));
+% curve_low.addShapeBSpline(airfoil_low(:,1),airfoil_low(:,2),true,degree,[],[],ctrl_num,airfoil_low(:,1));
 % 
 % curve_up.optimClass();
 % curve_low.optimClass();
@@ -65,8 +65,8 @@ close all hidden;
 % [point_X,point_Y]=meshgrid(linspace(0,1,point_num),linspace(0,1,point_num));point_Z=rands(point_num,point_num)*0.1+0.5;
 % axe_hdl=axes(figure());
 % surface(axe_hdl,point_X,point_Y,point_Z,'Marker','*','MarkerEdgeColor','r','LineStyle','none','FaceAlpha',0);
-% surf=SurfaceBSpline('',point_X,point_Y,point_Z,[],[],[],u_degree,v_degree);
-% surf=SurfaceBSpline('',[],[],[],point_X,point_Y,point_Z,u_degree,v_degree);
+% surf=SurfaceBSpline('',point_X,point_Y,point_Z,[],u_degree,v_degree);
+% surf=SurfaceBSpline('',point_X,point_Y,point_Z,true,u_degree,v_degree);
 % surf.drawSurface(axe_hdl);
 % axis equal;
 
@@ -85,48 +85,15 @@ close all hidden;
 
 % load('wing/wing_RAE2822_NACA4412.mat');
 % u_degree=3;v_degree=3;u_ctrl_num=4;v_ctrl_num=8;
-% LX=1;LY=1;LZ=1;C_par_X=[0,0];C_par_Y=[0,0];C_par_ZV=[0,0];C_par_ZU=[0.5,1];sym_x=false;sym_y=false;
-% surf_up=SurfaceCST('',LX,LY,LZ,C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y);
-% surf_low=SurfaceCST('',LX,LY,LZ,C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y);
-% surf_up.addShapeBSpline([],[],[],X_up,Y_up,Z_up,u_degree,v_degree,[],[],[],[],u_ctrl_num,v_ctrl_num,X_up(1,:)/max(X_up(1,:)),Y_up(:,1)/max(Y_up(:,1)));
-% surf_low.addShapeBSpline([],[],[],X_low,Y_low,Z_low,u_degree,v_degree,[],[],[],[],u_ctrl_num,v_ctrl_num,X_low(1,:)/max(X_low(1,:)),Y_low(:,1)/max(Y_low(:,1)));
+% C_par_X=[0,0];C_par_Y=[0,0];C_par_ZV=[0,0];C_par_ZU=[0.5,1];sym_x=false;sym_y=false;
+% surf_up=SurfaceCST('',C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y);
+% surf_low=SurfaceCST('',C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y);
+% surf_up.addShapeBSpline(X_up,Y_up,Z_up,true,u_degree,v_degree,[],[],[],[],u_ctrl_num,v_ctrl_num,X_up(1,:)/max(X_up(1,:)),Y_up(:,1)/max(Y_up(:,1)));
+% surf_low.addShapeBSpline(X_low,Y_low,Z_low,true,u_degree,v_degree,[],[],[],[],u_ctrl_num,v_ctrl_num,X_low(1,:)/max(X_low(1,:)),Y_low(:,1)/max(Y_low(:,1)));
 % 
 % axe_hdl=axes(figure());
-% surf_up.drawSurface(axe_hdl);
-% surf_low.drawSurface(axe_hdl);
-% axis equal
-
-%% Fit cone waverider
-
-% load('wing/cone_waverider.mat');
-% X_up=X_up-X_up(1,1);Z_up=Z_up-Z_up(1,1);
-% X_low=X_low-X_low(end,1);Z_low=Z_low-Z_low(end,1);
-% X_low=flipud(X_low);Y_low=flipud(Y_low);Z_low=flipud(Z_low);
-% % surface(X_up,Y_up,Z_up);surface(X_low,Y_low,Z_low);view(3);axis equal;
-% X_LE=X_up(end,:);Y_LE=Y_up(end,:);Z_LE=Z_up(end,:);
-% LX_LE=X_LE(end)-X_LE(1);LY_LE=Y_LE(end)-Y_LE(1);LZ_LE=Z_LE(end)-Z_LE(1);
-% U_LE=(X_LE-X_LE(1))/LX_LE;V_LE=(Y_LE-Y_LE(1))/LY_LE;W_LE=(Z_LE-Z_LE(1))/LZ_LE;
-% par_F=log(U_LE(2:end-1)')\log(W_LE(2:end-1)');par_G=LZ_LE; % fit lead edge
-% deform_Z=@(U,V) U.^par_F*par_G;
-% par_T=log(U_LE(2:end-1)')\log(V_LE(2:end-1)'); % fit lead edge
-% 
-% u_degree=2;v_degree=3;u_ctrl_num=3;v_ctrl_num=4;
-% LX=1;LY=1;LZ=1;C_par_X=[0,0];C_par_Y=[par_T,0];C_par_ZV=[0.5,0.5];C_par_ZU=[1,0];sym_x=false;sym_y=true;
-% surf_up=SurfaceCST('',LX,LY,LZ,C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y);
-% surf_low=SurfaceCST('',LX,LY,LZ,C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y);
-% 
-% surf_up.addDeform([],[],deform_Z)
-% surf_low.addDeform([],[],deform_Z)
-% 
-% U=(X_up(1,:)-min(X_up(1,:)))/(max(X_up(1,:))-min(X_up(1,:)));
-% V=(Y_up(:,end)-min(Y_up(:,end)))/(max(Y_up(:,end))-min(Y_up(:,end)));
-% 
-% surf_up.addShapeBSpline([],[],[],X_up,Y_up,Z_up,u_degree,v_degree,[],[],[],[],u_ctrl_num,v_ctrl_num,U,V);
-% surf_low.addShapeBSpline([],[],[],X_low,Y_low,Z_low,u_degree,v_degree,[],[],[],[],u_ctrl_num,v_ctrl_num,U,V);
-% 
-% axe_hdl=axes(figure());
-% surf_up.drawSurface(axe_hdl);
-% surf_low.drawSurface(axe_hdl);
+% surf_up.drawSurface(axe_hdl,20,20);
+% surf_low.drawSurface(axe_hdl,20,20);
 % axis equal
 
 %% generate 3D wing

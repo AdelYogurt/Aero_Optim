@@ -38,14 +38,18 @@ classdef SurfaceBSpline < handle
 
     % define surface
     methods
-        function self=SurfaceBSpline(name,ctrl_X,ctrl_Y,ctrl_Z,...
-                node_X,node_Y,node_Z,u_degree,v_degree,...
-                u_knot_multi,v_knot_multi,u_knot_list,v_knot_list,...
+        function self=SurfaceBSpline(name,point_X,point_Y,point_Z,FLAG_FIT,...
+                u_degree,v_degree,u_knot_multi,v_knot_multi,u_knot_list,v_knot_list,...
                 u_ctrl_num,v_ctrl_num,U,V)
             % generate BSpline surface by defining control point of fitting point
             %
             % input:
-            % name, ctrl_X, ctrl_Y, ctrl_Z
+            % name, point_X, point_Y, point_Z(control/fit point), FLAG_FIT,...
+            % u_degree(optional), v_degree(optional), ...
+            % u_knot_multi(optional), v_knot_multi(optional),...
+            % u_knot_list(optional), v_knot_list(optional),...
+            % u_ctrl_num(optional), v_ctrl_num(optional),...
+            % U(optional), V(optional)
             %
             % output:
             % SurfaceBSpline
@@ -55,26 +59,29 @@ classdef SurfaceBSpline < handle
             % colume of node_X, node_Y, node_Z will by reseve calculate
             % colume direction is u(x), rank direction is v(y)
             %
-            if nargin < 17
+            if nargin < 15
                 V=[];
-                if nargin < 16
+                if nargin < 14
                     U=[];
-                    if nargin < 15
+                    if nargin < 13
                         v_ctrl_num=[];
-                        if nargin < 14
+                        if nargin < 12
                             u_ctrl_num=[];
-                            if nargin < 13
+                            if nargin < 11
                                 v_knot_list=[];
-                                if nargin < 12
+                                if nargin < 10
                                     v_knot_multi = [];
-                                    if nargin < 11
+                                    if nargin < 9
                                         u_knot_list=[];
-                                        if nargin < 10
+                                        if nargin < 8
                                             u_knot_multi=[];
-                                            if nargin < 9
+                                            if nargin < 7
                                                 v_degree=[];
-                                                if nargin < 8
+                                                if nargin < 6
                                                     u_degree=[];
+                                                    if nargin < 5
+                                                        FLAG_FIT=[];
+                                                    end
                                                 end
                                             end
                                         end
@@ -88,8 +95,11 @@ classdef SurfaceBSpline < handle
             self.name=name;
 
             if nargin > 1
+                if isempty(FLAG_FIT),FLAG_FIT=false;end
+
                 % check input value size and giving default value
-                if isempty(ctrl_X) && isempty(ctrl_Y) && isempty(ctrl_Z)
+                if FLAG_FIT
+                    node_X=point_X;node_Y=point_Y;node_Z=point_Z;
                     [v_node_num,u_node_num]=size(node_X);
                     if any(size(node_Y) ~= [v_node_num,u_node_num]) ||...
                             any(size(node_Z) ~= [v_node_num,u_node_num])
@@ -105,38 +115,37 @@ classdef SurfaceBSpline < handle
                         error('SurfaceBSpline: v_control number more than v_node number')
                     end
                 else
+                    ctrl_X=point_X;ctrl_Y=point_Y;ctrl_Z=point_Z;
+                    [v_ctrl_num,u_ctrl_num]=size(ctrl_X);
                     if isempty(u_degree),u_degree=u_ctrl_num-1;end
                     if isempty(v_degree),v_degree=v_ctrl_num-1;end
-                    [v_ctrl_num,u_ctrl_num]=size(ctrl_X);
-                    u_node_num=u_ctrl_num-v_degree+1;
-                    v_node_num=v_ctrl_num-u_degree+1;
+                    u_node_num=u_ctrl_num-u_degree+1;
+                    v_node_num=v_ctrl_num-v_degree+1;
                     if any(size(ctrl_Y) ~= [v_ctrl_num,u_ctrl_num]) ||...
                             any(size(ctrl_Z) ~= [v_ctrl_num,u_ctrl_num])
                         error('SurfaceBSpline: size of ctrl_X, ctrl_Y, ctrl_Z do not equal');
                     end
                 end
 
-                % default value u
-                if isempty(u_degree),u_degree=u_ctrl_num-1;end
-                if isempty(U),U=linspace(0,1,u_node_num);end;U=U(:);
-                if isempty(u_knot_multi),u_knot_multi=[u_degree+1,ones(1,u_ctrl_num-u_degree-1),u_degree+1];end
-                if isempty(u_knot_list),u_knot_list=interp1(linspace(0,1,u_node_num),U,linspace(0,1,u_ctrl_num-u_degree+1));end
-
-                u_list=getKnotVec(u_knot_multi,u_knot_list);
-
-                % default value v
-                if isempty(v_degree),v_degree=v_ctrl_num-1;end
-                if isempty(V),V=linspace(0,1,v_node_num);end;V=V(:);
-                if isempty(v_knot_multi),v_knot_multi=[v_degree+1,ones(1,v_ctrl_num-v_degree-1),v_degree+1];end
-                if isempty(v_knot_list),v_knot_list=interp1(linspace(0,1,v_node_num),V,linspace(0,1,v_ctrl_num-v_degree+1));end
-
-                v_list=getKnotVec(v_knot_multi,v_knot_list);
-
                 if u_ctrl_num < (u_degree+1) || v_ctrl_num < (v_degree+1)
                     error('SurfaceBSpline: ctrl_num less than degree+1');
                 end
 
-                if isempty(ctrl_X) && isempty(ctrl_Y) && isempty(ctrl_Z)
+                % default value
+                if isempty(u_degree),u_degree=u_ctrl_num-1;end
+                if isempty(U),U=linspace(0,1,u_node_num);end;U=U(:);
+                if isempty(u_knot_multi),u_knot_multi=[u_degree+1,ones(1,u_ctrl_num-u_degree-1),u_degree+1];end
+                if isempty(u_knot_list),u_knot_list=interp1(linspace(0,1,u_node_num),U,linspace(0,1,u_ctrl_num-u_degree+1));end
+                u_list=getKnotVec(u_knot_multi,u_knot_list);
+
+                % default value
+                if isempty(v_degree),v_degree=v_ctrl_num-1;end
+                if isempty(V),V=linspace(0,1,v_node_num);end;V=V(:);
+                if isempty(v_knot_multi),v_knot_multi=[v_degree+1,ones(1,v_ctrl_num-v_degree-1),v_degree+1];end
+                if isempty(v_knot_list),v_knot_list=interp1(linspace(0,1,v_node_num),V,linspace(0,1,v_ctrl_num-v_degree+1));end
+                v_list=getKnotVec(v_knot_multi,v_knot_list);
+
+                if FLAG_FIT
                     % base on node point list inverse calculate control point list
                     matrix_v=zeros(v_node_num,v_ctrl_num);
                     for node_idx=1:v_node_num
@@ -166,10 +175,8 @@ classdef SurfaceBSpline < handle
                     ctrl_X=matrix_v\node_X/matrix_u;
                     ctrl_Y=matrix_v\node_Y/matrix_u;
                     ctrl_Z=matrix_v\node_Z/matrix_u;
-                elseif ~isempty(ctrl_X) && ~isempty(ctrl_Y) && ~isempty(ctrl_Z)
-                    % generate B spline surface by control point
                 else
-                    error('SurfaceBSpline: error input, lack control point or node point');
+                    % generate B spline surface by control point
                 end
 
                 % main properties
@@ -227,7 +234,8 @@ classdef SurfaceBSpline < handle
                 end
             end
 
-            if ~isempty(u_param) && u_param~=fix(u_param)
+            if isempty(u_param),u_param=1e-3;end
+            if u_param~=fix(u_param)
                 % input is torlance
                 value_torl=u_param;
                 max_level=50;

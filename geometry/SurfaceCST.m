@@ -3,9 +3,6 @@ classdef SurfaceCST < SurfaceBSpline
     %
     properties
         % base parameter
-        LX;
-        LY;
-        LZ;
         sym_x; % if true, class fcn will start from 0.5 to 1
         sym_y; % if true, class fcn will start from 0.5 to 1
 
@@ -20,7 +17,7 @@ classdef SurfaceCST < SurfaceBSpline
         class_fcn_ZV; % (U,V), direction is V
         class_fcn_ZU; % (U,V), direction is U
 
-        shape_fcn; % (U, V)
+        shape_fcn; % (U, V), default is LX, LY, LZ
     end
 
     properties
@@ -30,7 +27,7 @@ classdef SurfaceCST < SurfaceBSpline
         deform_fcn_Z=[]; % (U,V)
 
         % rotation parameter
-        rotation_matrix=[];
+        rotate_matrix=[];
 
         % translation parameter
         translation=[];
@@ -42,7 +39,7 @@ classdef SurfaceCST < SurfaceBSpline
 
     % define surface
     methods
-        function self=SurfaceCST(name,LX,LY,LZ,C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y)
+        function self=SurfaceCST(name,C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y,LX,LY,LZ)
             % generate 3D CST surface by LX, LY, LZ, C_par_X, C_par_Y, C_par_ZU, C_par_ZV
             %
             % u, x=LX*C(v)*S(v)
@@ -62,30 +59,35 @@ classdef SurfaceCST < SurfaceBSpline
             %
             self=self@SurfaceBSpline(name);
             if nargin < 10
-                sym_y=[];
+                LZ=[];
                 if nargin < 9
-                    sym_x=[];
+                    LY=[];
                     if nargin < 8
-                        C_par_ZU=[];
+                        LX=[];
                         if nargin < 7
-                            C_par_ZV=[];
+                            sym_y=[];
                             if nargin < 6
-                                C_par_Y=[];
+                                sym_x=[];
                                 if nargin < 5
-                                    C_par_X=[];
+                                    C_par_ZU=[];
+                                    if nargin < 4
+                                        C_par_ZV=[];
+                                        if nargin < 3
+                                            C_par_Y=[];
+                                            if nargin < 2
+                                                C_par_X=[];
+                                            end
+                                        end
+                                    end
                                 end
                             end
                         end
                     end
                 end
             end
-            self.LX=LX;
-            self.LY=LY;
-            self.LZ=LZ;
 
             if isempty(sym_x),self.sym_x=false;
             else,self.sym_x=sym_x; end
-
             if isempty(sym_y),self.sym_y=false;
             else,self.sym_y=sym_y; end
 
@@ -93,6 +95,10 @@ classdef SurfaceCST < SurfaceBSpline
             if isempty(C_par_Y),C_par_Y=[0,0];end
             if isempty(C_par_ZV),C_par_ZV=[0,0];end
             if isempty(C_par_ZU),C_par_ZU=[0,0];end
+
+            if isempty(LX),LX=1;end
+            if isempty(LY),LY=1;end
+            if isempty(LZ),LZ=1;end
 
             % class function
             if isnumeric(C_par_X)
@@ -126,39 +132,41 @@ classdef SurfaceCST < SurfaceBSpline
 
             self.shape_fcn=@(U,V) defcnShape(U,V);
 
-            function [X,Y,Z]=defcnShape(U,V)
-                X=U;Y=V;Z=ones(size(U));
+            function [X,Y,Z]=defcnShape(U,V,LX,LY,LZ)
+                X=U*LX;Y=V*LY;Z=ones(size(U))*LZ;
             end
         end
     end
 
     % fit shape
     methods
-        function addShapeBSpline(self,ctrl_X,ctrl_Y,ctrl_Z,...
-                node_X,node_Y,node_Z,u_degree,v_degree,...
-                u_knot_multi,v_knot_multi,u_knot_list,v_knot_list,...
+        function addShapeBSpline(self,point_X,point_Y,point_Z,FLAG_FIT,...
+                u_degree,v_degree,u_knot_multi,v_knot_multi,u_knot_list,v_knot_list,...
                 u_ctrl_num,v_ctrl_num,U,V)
             % fit node point to generate shape function
-            if nargin < 17
+            if nargin < 15
                 V=[];
-                if nargin < 16
+                if nargin < 14
                     U=[];
-                    if nargin < 15
+                    if nargin < 13
                         v_ctrl_num=[];
-                        if nargin < 14
+                        if nargin < 12
                             u_ctrl_num=[];
-                            if nargin < 13
+                            if nargin < 11
                                 v_knot_list=[];
-                                if nargin < 12
+                                if nargin < 10
                                     v_knot_multi = [];
-                                    if nargin < 11
+                                    if nargin < 9
                                         u_knot_list=[];
-                                        if nargin < 10
+                                        if nargin < 8
                                             u_knot_multi=[];
-                                            if nargin < 9
+                                            if nargin < 7
                                                 v_degree=[];
-                                                if nargin < 8
+                                                if nargin < 6
                                                     u_degree=[];
+                                                    if nargin < 5
+                                                        FLAG_FIT=[];
+                                                    end
                                                 end
                                             end
                                         end
@@ -170,8 +178,11 @@ classdef SurfaceCST < SurfaceBSpline
                 end
             end
 
+            if isempty(FLAG_FIT),FLAG_FIT=false;end
+
             % check input value size and giving default value
-            if isempty(ctrl_X) && isempty(ctrl_Y) && isempty(ctrl_Z)
+            if FLAG_FIT
+                node_X=point_X;node_Y=point_Y;node_Z=point_Z;
                 [v_node_num,u_node_num]=size(node_X);
                 if any(size(node_Y) ~= [v_node_num,u_node_num]) ||...
                         any(size(node_Z) ~= [v_node_num,u_node_num])
@@ -187,38 +198,37 @@ classdef SurfaceCST < SurfaceBSpline
                     error('SurfaceCST.addShapeBSpline: v_control number more than v_node number')
                 end
             else
+                ctrl_X=point_X;ctrl_Y=point_Y;ctrl_Z=point_Z;
                 [v_ctrl_num,u_ctrl_num]=size(ctrl_X);
                 if isempty(u_degree),u_degree=u_ctrl_num-1;end
                 if isempty(v_degree),v_degree=v_ctrl_num-1;end
-                u_node_num=u_ctrl_num-v_degree+1;
-                v_node_num=v_ctrl_num-u_degree+1;
+                u_node_num=u_ctrl_num-u_degree+1;
+                v_node_num=v_ctrl_num-v_degree+1;
                 if any(size(ctrl_Y) ~= [v_ctrl_num,u_ctrl_num]) ||...
                         any(size(ctrl_Z) ~= [v_ctrl_num,u_ctrl_num])
                     error('SurfaceCST.addShapeBSpline: size of ctrl_X, ctrl_Y, ctrl_Z do not equal');
                 end
             end
 
-            % default value u
-            if isempty(u_degree),u_degree=u_ctrl_num-1;end
-            if isempty(U),U=linspace(0,1,u_node_num);end;U=U(:);
-            if isempty(u_knot_multi),u_knot_multi=[u_degree+1,ones(1,u_ctrl_num-u_degree-1),u_degree+1];end
-            if isempty(u_knot_list),u_knot_list=interp1(linspace(0,1,u_node_num),U,linspace(0,1,u_ctrl_num-u_degree+1));end
-
-            u_list=getKnotVec(u_knot_multi,u_knot_list);
-
-            % default value v
-            if isempty(v_degree),v_degree=v_ctrl_num-1;end
-            if isempty(V),V=linspace(0,1,v_node_num);end;V=V(:);
-            if isempty(v_knot_multi),v_knot_multi=[v_degree+1,ones(1,v_ctrl_num-v_degree-1),v_degree+1];end
-            if isempty(v_knot_list),v_knot_list=interp1(linspace(0,1,v_node_num),V,linspace(0,1,v_ctrl_num-v_degree+1));end
-
-            v_list=getKnotVec(v_knot_multi,v_knot_list);
-
             if u_ctrl_num < (u_degree+1) || v_ctrl_num < (v_degree+1)
                 error('SurfaceCST.addShapeBSpline: ctrl_num less than degree+1');
             end
 
-            if isempty(ctrl_X) && isempty(ctrl_Y) && isempty(ctrl_Z)
+            % default value
+            if isempty(u_degree),u_degree=u_ctrl_num-1;end
+            if isempty(U),U=linspace(0,1,u_node_num);end;U=U(:);
+            if isempty(u_knot_multi),u_knot_multi=[u_degree+1,ones(1,u_ctrl_num-u_degree-1),u_degree+1];end
+            if isempty(u_knot_list),u_knot_list=interp1(linspace(0,1,u_node_num),U,linspace(0,1,u_ctrl_num-u_degree+1));end
+            u_list=getKnotVec(u_knot_multi,u_knot_list);
+
+            % default value
+            if isempty(v_degree),v_degree=v_ctrl_num-1;end
+            if isempty(V),V=linspace(0,1,v_node_num);end;V=V(:);
+            if isempty(v_knot_multi),v_knot_multi=[v_degree+1,ones(1,v_ctrl_num-v_degree-1),v_degree+1];end
+            if isempty(v_knot_list),v_knot_list=interp1(linspace(0,1,v_node_num),V,linspace(0,1,v_ctrl_num-v_degree+1));end
+            v_list=getKnotVec(v_knot_multi,v_knot_list);
+
+            if FLAG_FIT
                 % process symmetry
                 U_class=U;V_class=V;
                 if self.sym_y,V_class=(V_class/2)+0.5;end
@@ -257,8 +267,8 @@ classdef SurfaceCST < SurfaceBSpline
                 end
     
                 % undone rotation surface
-                if ~isempty(self.rotation_matrix)
-                    matrix=self.rotation_matrix';
+                if ~isempty(self.rotate_matrix)
+                    matrix=self.rotate_matrix';
                     X_old=node_X;Y_old=node_Y;Z_old=Z;
                     node_X=matrix(1,1)*X_old+matrix(1,2)*Y_old+matrix(1,3)*Z_old;
                     node_Y=matrix(2,1)*X_old+matrix(2,2)*Y_old+matrix(2,3)*Z_old;
@@ -270,11 +280,7 @@ classdef SurfaceCST < SurfaceBSpline
                 if ~isempty(self.deform_fcn_Y),node_Y=node_Y-self.deform_fcn_Y(U_Mat);end
                 if ~isempty(self.deform_fcn_X),node_X=node_X-self.deform_fcn_X(V_Mat);end
                 if ~isempty(self.deform_fcn_Z),node_Z=node_Z-self.deform_fcn_Z(U_Mat,V_Mat);end
-    
-                node_Y=node_Y./self.LY;
-                node_X=node_X./self.LX;
-                node_Z=node_Z./self.LZ;
-    
+ 
                 ctrl_X=matrix_v_class_X\node_X/matrix_u_class_X;
                 ctrl_Y=matrix_v_class_Y\node_Y/matrix_u_class_Y;
                 ctrl_Z=matrix_v_class_ZV\node_Z/matrix_u_class_ZU;
@@ -415,7 +421,7 @@ classdef SurfaceCST < SurfaceBSpline
                     0 sRX cRX]*matrix;
             end
 
-            self.rotation_matrix=matrix;
+            self.rotate_matrix=matrix;
         end
 
         function addTranslate(self,tran_x,tran_y,tran_z)
@@ -436,18 +442,16 @@ classdef SurfaceCST < SurfaceBSpline
             % w, z=LZ*C(u,v)*S(u,v)
             %
 
-            % calculate origin surface matrix
+            % calculate origin surface
+            [X,Y,Z]=self.shape_fcn(U,V);
+
+            % calculate class
             U_class=U;V_class=V;
             if self.sym_y,V_class=(V_class/2)+0.5;end
             if self.sym_x,U_class=(U_class/2)+0.5;end
-            X=self.LX*self.class_fcn_X(V_class);
-            Y=self.LY*self.class_fcn_Y(U_class);
-            Z=self.LZ*self.class_fcn_ZV(U_class,V_class).*self.class_fcn_ZU(U_class,V_class);
-
-            [X_cal,Y_cal,Z_cal]=self.shape_fcn(U,V);
-            X=X.*X_cal;
-            Y=Y.*Y_cal;
-            Z=Z.*Z_cal;
+            X=X.*self.class_fcn_X(V_class);
+            Y=Y.*self.class_fcn_Y(U_class);
+            Z=Z.*self.class_fcn_ZV(U_class,V_class).*self.class_fcn_ZU(U_class,V_class);
 
             % deform surface
             if ~isempty(self.deform_fcn_X)
@@ -461,8 +465,8 @@ classdef SurfaceCST < SurfaceBSpline
             end
 
             % rotation surface
-            if ~isempty(self.rotation_matrix)
-                matrix=self.rotation_matrix;
+            if ~isempty(self.rotate_matrix)
+                matrix=self.rotate_matrix;
                 X_old=X;Y_old=Y;Z_old=Z;
                 X=matrix(1,1)*X_old+matrix(1,2)*Y_old+matrix(1,3)*Z_old;
                 Y=matrix(2,1)*X_old+matrix(2,2)*Y_old+matrix(2,3)*Z_old;
@@ -493,8 +497,8 @@ classdef SurfaceCST < SurfaceBSpline
             end
 
             % undone rotation surface
-            if ~isempty(self.rotation_matrix)
-                matrix=self.rotation_matrix';
+            if ~isempty(self.rotate_matrix)
+                matrix=self.rotate_matrix';
                 X_old=X;Y_old=Y;Z_old=Z;
                 X=matrix(1,1)*X_old+matrix(1,2)*Y_old+matrix(1,3)*Z_old;
                 Y=matrix(2,1)*X_old+matrix(2,2)*Y_old+matrix(2,3)*Z_old;
@@ -558,22 +562,70 @@ classdef SurfaceCST < SurfaceBSpline
 
             % plot surface
             surface(axe_hdl,X,Y,Z,surface_option);
-            surface(axe_hdl,self.node_X,self.node_Y,self.node_Z,node_option);
-            surface(axe_hdl,self.ctrl_X*self.LX,self.ctrl_Y*self.LY,self.ctrl_Z*self.LZ,control_option);
+            if ~isempty(self.node_X) && ~isempty(self.node_Y) && ~isempty(self.node_Z)
+                [U,V]=meshgrid(self.u_list(self.u_degree+1:self.u_ctrl_num+1),self.v_list(self.v_degree+1:self.v_ctrl_num+1));
+                [X,Y,Z]=calPointPure(self.node_X,self.node_Y,self.node_Z,U,V);
+                surface(axe_hdl,X,Y,Z,node_option);
+            end
+            if ~isempty(self.ctrl_X) && ~isempty(self.ctrl_Y) && ~isempty(self.ctrl_Z)
+                u_list=interp1(linspace(0,1,self.u_ctrl_num-self.u_degree+1),self.u_list(self.u_degree+1:self.u_ctrl_num+1),linspace(0,1,self.u_ctrl_num));
+                v_list=interp1(linspace(0,1,self.v_ctrl_num-self.v_degree+1),self.v_list(self.v_degree+1:self.v_ctrl_num+1),linspace(0,1,self.v_ctrl_num));
+                [U,V]=meshgrid(u_list,v_list);
+                [X,Y,Z]=calPointPure(self.ctrl_X,self.ctrl_Y,self.ctrl_Z,U,V);
+                surface(axe_hdl,X,Y,Z,control_option);
+            end
             view(3);
             xlabel('x');
             ylabel('y');
             zlabel('z');
 
-%             axis equal
-%             x_range=xlim();
-%             y_range=ylim();
-%             z_range=zlim();
-%             center=[mean(x_range),mean(y_range),mean(z_range)];
-%             range=max([x_range(2)-x_range(1),y_range(2)-y_range(1),z_range(2)-z_range(1)])/2;
-%             xlim([center(1)-range,center(1)+range]);
-%             ylim([center(2)-range,center(2)+range]);
-%             zlim([center(3)-range,center(3)+range]);
+            % axis equal
+            % x_range=xlim();
+            % y_range=ylim();
+            % z_range=zlim();
+            % center=[mean(x_range),mean(y_range),mean(z_range)];
+            % range=max([x_range(2)-x_range(1),y_range(2)-y_range(1),z_range(2)-z_range(1)])/2;
+            % xlim([center(1)-range,center(1)+range]);
+            % ylim([center(2)-range,center(2)+range]);
+            % zlim([center(3)-range,center(3)+range]);
+
+            function [X,Y,Z]=calPointPure(PX,PY,PZ,U,V)
+                % calculate class
+                U_class=U;V_class=V;
+                if self.sym_y,V_class=(V_class/2)+0.5;end
+                if self.sym_x,U_class=(U_class/2)+0.5;end
+                
+                X=PX.*self.class_fcn_X(V_class);
+                Y=PY.*self.class_fcn_Y(U_class);
+                Z=PZ.*self.class_fcn_ZV(U_class,V_class).*self.class_fcn_ZU(U_class,V_class);
+
+                % deform surface
+                if ~isempty(self.deform_fcn_X)
+                    X=X+self.deform_fcn_X(V);
+                end
+                if ~isempty(self.deform_fcn_Y)
+                    Y=Y+self.deform_fcn_Y(U);
+                end
+                if ~isempty(self.deform_fcn_Z)
+                    Z=Z+self.deform_fcn_Z(U,V);
+                end
+
+                % rotation surface
+                if ~isempty(self.rotate_matrix)
+                    matrix=self.rotate_matrix;
+                    X_old=X;Y_old=Y;Z_old=Z;
+                    X=matrix(1,1)*X_old+matrix(1,2)*Y_old+matrix(1,3)*Z_old;
+                    Y=matrix(2,1)*X_old+matrix(2,2)*Y_old+matrix(2,3)*Z_old;
+                    Z=matrix(3,1)*X_old+matrix(3,2)*Y_old+matrix(3,3)*Z_old;
+                end
+
+                % translation surface
+                if ~isempty(self.translation)
+                    X=X+self.translation(1);
+                    Y=Y+self.translation(2);
+                    Z=Z+self.translation(3);
+                end
+            end
         end
 
         function surface_BSpline=getSurfaceBSpline(self,u_param,v_param)
@@ -600,7 +652,7 @@ classdef SurfaceCST < SurfaceBSpline
             [X,Y,Z,u_param,v_param]=calSurface(self,u_param,v_param);
 
             u_degree=min(size(u_param,2)-1,3);v_degree=min(size(v_param,1)-1,3);
-            surface_BSpline=SurfaceBSpline(self.name,[],[],[],X,Y,Z,u_degree,v_degree,[],[],[],[],[],[]);
+            surface_BSpline=SurfaceBSpline(self.name,X,Y,Z,true,u_degree,v_degree);
         end
 
         function [step_str,object_index,ADVANCED_FACE]=getStep(self,object_index)
@@ -619,26 +671,6 @@ function C=defcnClass(U,N1,N2)
 %
 NP=calNormPar(N1,N2);
 C=U.^N1.*(1-U).^N2/NP;
-end
-
-function C=defcnClassU(U,V,NU1,NU2)
-% default shape function of Z
-% default N1, N2 is relation with V
-%
-N1=NU1(1).*(1-V)+NU2(1).*V;
-N2=NU1(2).*(1-V)+NU2(2).*V;
-NP=calNormPar(N1,N2);
-C=U.^N1.*(1-U).^N2./NP;
-end
-
-function C=defcnClassV(U,V,NV1,NV2)
-% default class function of Z
-% default N1, N2 is relation with U
-%
-N1=NV1(1).*(1-U)+NV2(1).*U;
-N2=NV1(2).*(1-U)+NV2(2).*U;
-NP=calNormPar(N1,N2);
-C=V.^N1.*(1-V).^N2./NP;
 end
 
 function nomlz_par=calNormPar(N1,N2)

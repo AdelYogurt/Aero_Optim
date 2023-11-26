@@ -2,8 +2,6 @@ classdef CurveCST2D < CurveBSpline
     % CST curve
     %
     properties
-        LX;
-        LY;
         sym; % if true, class U will start from 0.5 to 1
 
         % origin parameter
@@ -11,7 +9,7 @@ classdef CurveCST2D < CurveBSpline
 
         class_fcn; % (U)
 
-        shape_fcn; % (U), default is 1
+        shape_fcn; % (U), default is LX, LY
     end
 
     properties
@@ -19,7 +17,7 @@ classdef CurveCST2D < CurveBSpline
         deform_fcn=[]; % (U), only y direction
 
         % rotation parameter
-        rotation_matrix=[];
+        rotate_matrix=[];
 
         % translation parameter
         translation=[];
@@ -31,7 +29,7 @@ classdef CurveCST2D < CurveBSpline
 
     % define curve
     methods
-        function self=CurveCST2D(name,LX,LY,C_par,sym)
+        function self=CurveCST2D(name,C_par,sym,LX,LY)
             % generate 2D CST line by LX, LY, C_par
             %
             % u, x=LX*S(u)
@@ -47,18 +45,23 @@ classdef CurveCST2D < CurveBSpline
             %
             self=self@CurveBSpline(name)
             if nargin < 5
-                sym=[];
+                LY=[];
                 if nargin < 4
-                    C_par=[];
+                    LX=[];
+                    if nargin < 3
+                        sym=[];
+                        if nargin < 2
+                            C_par=[];
+                        end
+                    end
                 end
             end
-            self.LX=LX;
-            self.LY=LY;
 
             if isempty(sym),self.sym=false;
             else,self.sym=sym; end
-
             if isempty(C_par),C_par=[0,0];end
+            if isempty(LX),LX=1;end
+            if isempty(LY),LY=1;end
 
             % class function
             if isnumeric(C_par)
@@ -69,40 +72,44 @@ classdef CurveCST2D < CurveBSpline
                 self.class_fcn=C_par;
             end
 
-            self.shape_fcn=@(U) defcnShape(U);
+            self.shape_fcn=@(U) defcnShape(U,LX,LY);
             self.dimension=2;
 
-            function [X,Y]=defcnShape(U)
-                X=U;Y=ones(size(X));
+            function [X,Y]=defcnShape(U,LX,LY)
+                X=U*LX;Y=ones(size(X))*LY;
             end
         end
     end
 
     % add BSpline shape function
     methods
-        function addShapeBSpline(self,ctrl_X,ctrl_Y,...
-                node_X,node_Y,degree,...
-                knot_multi,knot_list,ctrl_num,U)
+        function addShapeBSpline(self,point_X,point_Y,FLAG_FIT,...
+                degree,knot_multi,knot_list,ctrl_num,U)
             % fit node point to generate shape function
-            if nargin < 10
+            if nargin < 9
                 U=[];
-                if nargin < 9
+                if nargin < 8
                     ctrl_num=[];
-                    if nargin < 8
+                    if nargin < 7
                         knot_list=[];
-                        if nargin < 7
+                        if nargin < 6
                             knot_multi = [];
-                            if nargin < 6
+                            if nargin < 5
                                 degree=[];
+                                if nargin < 4
+                                    FLAG_FIT=[];
+                                end
                             end
                         end
                     end
                 end
             end
 
+            if isempty(FLAG_FIT),FLAG_FIT=false;end
+
             % check input value size and giving default value
-            if isempty(ctrl_X) && isempty(ctrl_Y)
-                node_X=node_X(:);node_Y=node_Y(:);
+            if FLAG_FIT
+                node_X=point_X(:);node_Y=point_Y(:);
                 node_num=length(node_X);
                 if length(node_Y) ~= node_num
                     error('CurveCST2D.addShapeBSpline: size of node_X, node_Y do not equal');
@@ -113,7 +120,7 @@ classdef CurveCST2D < CurveBSpline
                     error('CurveCST2D.addShapeBSpline: ctrl_num can not more than node_num')
                 end
             else
-                ctrl_X=ctrl_X(:);ctrl_Y=ctrl_Y(:);
+                ctrl_X=point_X(:);ctrl_Y=point_Y(:);
                 ctrl_num=length(ctrl_X);
                 if isempty(degree),degree=ctrl_num-1;end
                 node_num=ctrl_num-degree+1;
@@ -122,32 +129,32 @@ classdef CurveCST2D < CurveBSpline
                 end
             end
 
-            % default value u
+            if ctrl_num < (degree+1)
+                error('CurveCST2D.addShapeBSpline: ctrl_num less than degree+1');
+            end
+
+            % default value
             if isempty(degree),degree=ctrl_num-1;end
             if isempty(U),U=linspace(0,1,node_num);end;U=U(:);
             if isempty(knot_multi),knot_multi=[degree+1,ones(1,ctrl_num-degree-1),degree+1];end
             if isempty(knot_list),knot_list=interp1(linspace(0,1,node_num),U,linspace(0,1,ctrl_num-degree+1));end
             u_list=getKnotVec(knot_multi,knot_list);
 
-            if ctrl_num < (degree+1)
-                error('CurveCST2D.addShapeBSpline: ctrl_num less than degree+1');
-            end
-
-            if isempty(ctrl_X) && isempty(ctrl_Y)
+            if FLAG_FIT
                 % process symmetry
                 U_class=U;
                 if self.sym,U_class=U_class+0.5;end
 
                 % base on node point list inverse calculate control point list
-                matrix=zeros(node_num,ctrl_num);
+                fit_matrix=zeros(node_num,ctrl_num);
                 for node_idx=1:node_num
                     u=U(node_idx);
                     for ctrl_idx=1:ctrl_num
-                        matrix(node_idx,ctrl_idx)=baseFcnN(u_list,u,ctrl_idx,degree);
+                        fit_matrix(node_idx,ctrl_idx)=baseFcnN(u_list,u,ctrl_idx,degree);
                     end
                 end
 
-                matrix_class=matrix.*self.class_fcn(U_class);
+                matrix_class=fit_matrix.*self.class_fcn(U_class);
 
                 % undone translation surface
                 if ~isempty(self.translation)
@@ -156,8 +163,8 @@ classdef CurveCST2D < CurveBSpline
                 end
 
                 % undone rotation surface
-                if ~isempty(self.rotation_matrix)
-                    matrix=self.rotation_matrix';
+                if ~isempty(self.rotate_matrix)
+                    matrix=self.rotate_matrix';
                     X_old=node_X;Y_old=node_Y;
                     node_X=matrix(1,1)*X_old+matrix(1,2)*Y_old;
                     node_Y=matrix(2,1)*X_old+matrix(2,2)*Y_old;
@@ -165,21 +172,16 @@ classdef CurveCST2D < CurveBSpline
 
                 if ~isempty(self.deform_fcn),node_Y=node_Y-self.deform_fcn(U);end
 
-                node_Y=node_Y./self.LY;
-                node_X=node_X./self.LX;
-
-                ctrl_X=matrix\node_X;
+                ctrl_X=fit_matrix\node_X;
                 ctrl_Y=matrix_class\node_Y;
 
                 self.fit_data.node_X=node_X;
                 self.fit_data.node_Y=node_Y;
                 self.fit_data.U=U;
-                self.fit_data.matrix=matrix;
-            elseif ~isempty(ctrl_X) && ~isempty(ctrl_Y)
+                self.fit_data.matrix=fit_matrix;
+            else
                 % generate B spline curve by control point
                 self.fit_data=[];
-            else
-                error('CurveBSpline: error input, lack control point or node point');
             end
 
             % main properties
@@ -295,7 +297,7 @@ classdef CurveCST2D < CurveBSpline
                 cR -sR
                 sR cR];
 
-            self.rotation_matrix=matrix;
+            self.rotate_matrix=matrix;
         end
 
         function addTranslate(self,tran_x,tran_y)
@@ -311,15 +313,13 @@ classdef CurveCST2D < CurveBSpline
             % calculate point on curve
             %
             
-            % calculate origin surface matrix
+            % calculate origin curve
+            [X,Y]=self.shape_fcn(U);
+
+            % calculate class
             U_class=U;
             if self.sym,U_class=(U_class/2)+0.5;end
-            X=self.LX;
-            Y=self.LY*self.class_fcn(U_class);
-
-            [X_cal,Y_cal]=self.shape_fcn(U);
-            X=X.*X_cal;
-            Y=Y.*Y_cal;
+            Y=Y.*self.class_fcn(U_class);
 
             % deform curve
             if ~isempty(self.deform_fcn)
@@ -327,8 +327,8 @@ classdef CurveCST2D < CurveBSpline
             end
 
             % rotation curve
-            if ~isempty(self.rotation_matrix)
-                matrix=self.rotation_matrix;
+            if ~isempty(self.rotate_matrix)
+                matrix=self.rotate_matrix;
                 X_old=X;Y_old=Y;
                 X=matrix(1,1)*X_old+matrix(1,2)*Y_old;
                 Y=matrix(2,1)*X_old+matrix(2,2)*Y_old;
@@ -340,7 +340,6 @@ classdef CurveCST2D < CurveBSpline
                 Y=Y+self.translation(2);
             end
         end
-    
     end
 
     % calculate coord
@@ -356,8 +355,8 @@ classdef CurveCST2D < CurveBSpline
             end
 
             % undone rotation surface
-            if ~isempty(self.rotation_matrix)
-                matrix=self.rotation_matrix';
+            if ~isempty(self.rotate_matrix)
+                matrix=self.rotate_matrix';
                 X_old=X;Y_old=Y;
                 X=matrix(1,1)*X_old+matrix(1,2)*Y_old;
                 Y=matrix(2,1)*X_old+matrix(2,2)*Y_old;
@@ -408,23 +407,50 @@ classdef CurveCST2D < CurveBSpline
 
                 % plot line
                 line(axe_hdl,X,Y,line_option);
-                if ~isempty(self.node_X) && ~isempty(self.node_Y)
-                    line(axe_hdl,self.node_X,self.node_Y,node_option);
-                end
                 if ~isempty(self.ctrl_X) && ~isempty(self.ctrl_Y)
-                    line(axe_hdl,self.ctrl_X*self.LX,self.ctrl_Y*self.LY,ctrl_option);
+                    u_list=interp1(linspace(0,1,self.ctrl_num-self.degree+1),self.u_list(self.degree+1:self.ctrl_num+1),linspace(0,1,self.ctrl_num));
+                    [X,Y]=calPointPure(self.ctrl_X,self.ctrl_Y,u_list');
+                    line(axe_hdl,X,Y,ctrl_option);
                 end
             end
             xlabel('x');
             ylabel('y');
 
-%             axis equal
-%             x_range=xlim();
-%             y_range=ylim();
-%             center=[mean(x_range),mean(y_range)];
-%             range=max([x_range(2)-x_range(1),y_range(2)-y_range(1)])/2;
-%             xlim([center(1)-range,center(1)+range]);
-%             ylim([center(2)-range,center(2)+range]);
+            % axis equal
+            % x_range=xlim();
+            % y_range=ylim();
+            % center=[mean(x_range),mean(y_range)];
+            % range=max([x_range(2)-x_range(1),y_range(2)-y_range(1)])/2;
+            % xlim([center(1)-range,center(1)+range]);
+            % ylim([center(2)-range,center(2)+range]);
+
+            function [X,Y]=calPointPure(PX,PY,U)
+                % calculate class
+                U_class=U;
+                if self.sym,U_class=(U_class/2)+0.5;end
+
+                X=PX;
+                Y=PY.*self.class_fcn(U_class);
+
+                % deform curve
+                if ~isempty(self.deform_fcn)
+                    Y=Y+self.deform_fcn(U);
+                end
+
+                % rotation curve
+                if ~isempty(self.rotate_matrix)
+                    matrix=self.rotate_matrix;
+                    X_old=X;Y_old=Y;
+                    X=matrix(1,1)*X_old+matrix(1,2)*Y_old;
+                    Y=matrix(2,1)*X_old+matrix(2,2)*Y_old;
+                end
+
+                % translation curve
+                if ~isempty(self.translation)
+                    X=X+self.translation(1);
+                    Y=Y+self.translation(2);
+                end
+            end
         end
     end
 end

@@ -32,17 +32,14 @@ classdef CurveBSpline < handle
 
     % define function
     methods
-        function self=CurveBSpline(name,ctrl_X,ctrl_Y,ctrl_Z,...
-                node_X,node_Y,node_Z,degree,...
-                knot_multi,knot_list,ctrl_num,U)
+        function self=CurveBSpline(name,point_X,point_Y,point_Z,FLAG_FIT,...
+                degree,knot_multi,knot_list,ctrl_num,U)
             % generate BSpline curve by defining control point of fitting point
             %
             % input:
-            % name, [], [], [], node_X, node_Y, node_Z (Bspline will fit),...
-            % degree, knot_multi(optional), knot_list(optional),...
+            % name, point_X, point_Y, point_Z(control/fit point), FLAG_FIT,...
+            % degree(optional), knot_multi(optional), knot_list(optional),...
             % ctrl_num(optional), U(optional)
-            % or:
-            % name, ctrl_list, [], degree, u_list(optional)
             %
             % output:
             % CurveBSpline
@@ -51,16 +48,19 @@ classdef CurveBSpline < handle
             % if input degree is empty, degree default is ctrl_num-1,...
             % which is Bezier curve
             %
-            if nargin < 12
+            if nargin < 10
                 U=[];
-                if nargin < 11
+                if nargin < 9
                     ctrl_num=[];
-                    if nargin < 10
+                    if nargin < 8
                         knot_list=[];
-                        if nargin < 9
+                        if nargin < 7
                             knot_multi = [];
-                            if nargin < 8
+                            if nargin < 6
                                 degree=[];
+                                if nargin < 5
+                                    FLAG_FIT=[];
+                                end
                             end
                         end
                     end
@@ -69,9 +69,11 @@ classdef CurveBSpline < handle
             self.name=name;
 
             if nargin > 1
+                if isempty(FLAG_FIT),FLAG_FIT=false;end
+                
                 % check input value size and giving default value
-                if isempty(ctrl_X) && isempty(ctrl_Y) && isempty(ctrl_Z)
-                    node_X=node_X(:);node_Y=node_Y(:);node_Z=node_Z(:);
+                if FLAG_FIT
+                    node_X=point_X(:);node_Y=point_Y(:);node_Z=point_Z(:);
                     node_num=length(node_X);
                     if length(node_Y) ~= node_num || length(node_Z) ~= node_num
                         error('CurveBSpline: size of node_X, node_Y, node_Z do not equal');
@@ -82,7 +84,7 @@ classdef CurveBSpline < handle
                         error('CurveBSpline: ctrl_num more than node_num')
                     end
                 else
-                    ctrl_X=ctrl_X(:);ctrl_Y=ctrl_Y(:);ctrl_Z=ctrl_Z(:);
+                    ctrl_X=point_X(:);ctrl_Y=point_Y(:);ctrl_Z=point_Z(:);
                     ctrl_num=length(ctrl_X);
                     if isempty(degree),degree=ctrl_num-1;end
                     node_num=ctrl_num-degree+1;
@@ -91,34 +93,31 @@ classdef CurveBSpline < handle
                     end
                 end
 
-                if isempty(degree),degree=ctrl_num-1;end
-                if isempty(U),U=linspace(0,1,node_num);end;U=U(:);
-                if isempty(knot_multi),knot_multi=[degree+1,ones(1,ctrl_num-degree-1),degree+1];end
-                if isempty(knot_list),knot_list=interp1(linspace(0,1,node_num),U,linspace(0,1,ctrl_num-degree+1));end
-
-                u_list=getKnotVec(knot_multi,knot_list);
-
                 if ctrl_num < (degree+1)
                     error('CurveBSpline: ctrl_num less than degree+1');
                 end
 
-                if isempty(ctrl_X) && isempty(ctrl_Y) && isempty(ctrl_Z)
+                % default value
+                if isempty(degree),degree=ctrl_num-1;end
+                if isempty(U),U=linspace(0,1,node_num);end;U=U(:);
+                if isempty(knot_multi),knot_multi=[degree+1,ones(1,ctrl_num-degree-1),degree+1];end
+                if isempty(knot_list),knot_list=interp1(linspace(0,1,node_num),U,linspace(0,1,ctrl_num-degree+1));end
+                u_list=getKnotVec(knot_multi,knot_list);
+
+                if FLAG_FIT
                     % base on node point list inverse calculate control point list
-                    matrix=zeros(node_num,ctrl_num);
+                    fit_matrix=zeros(node_num,ctrl_num);
                     for node_idx=1:node_num
                         u=U(node_idx);
                         for ctrl_idx=1:ctrl_num
-                            matrix(node_idx,ctrl_idx)=baseFcnN(u_list,u,ctrl_idx,degree);
+                            fit_matrix(node_idx,ctrl_idx)=baseFcnN(u_list,u,ctrl_idx,degree);
                         end
                     end
-                    inv_matrix_hess=((matrix'*matrix)\eye(ctrl_num));
-                    ctrl_X=inv_matrix_hess*matrix'*node_X;
-                    ctrl_Y=inv_matrix_hess*matrix'*node_Y;
-                    ctrl_Z=inv_matrix_hess*matrix'*node_Z;
-                elseif ~isempty(ctrl_X) && ~isempty(ctrl_Y) && ~isempty(ctrl_Z)
-                    % generate B spline curve by control point
+                    ctrl_X=fit_matrix\node_X;
+                    ctrl_Y=fit_matrix\node_Y;
+                    ctrl_Z=fit_matrix\node_Z;
                 else
-                    error('CurveBSpline: error input, lack control point or node point');
+                    % generate B spline curve by control point
                 end
 
                 % main properties
