@@ -362,7 +362,7 @@ classdef CurveCST2D < CurveBSpline
                 Y=matrix(2,1)*X_old+matrix(2,2)*Y_old;
             end
             
-            U=X./self.LX;
+            U=X./abs(self.shape_fcn(0)-self.shape_fcn(1));
             U=max(U,0);U=min(U,1);
         end
     end

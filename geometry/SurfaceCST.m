@@ -130,7 +130,7 @@ classdef SurfaceCST < SurfaceBSpline
                 self.class_fcn_ZU=C_par_ZU;
             end
 
-            self.shape_fcn=@(U,V) defcnShape(U,V);
+            self.shape_fcn=@(U,V) defcnShape(U,V,LX,LY,LZ);
 
             function [X,Y,Z]=defcnShape(U,V,LX,LY,LZ)
                 X=U*LX;Y=V*LY;Z=ones(size(U))*LZ;
@@ -505,8 +505,11 @@ classdef SurfaceCST < SurfaceBSpline
                 Z=matrix(3,1)*X_old+matrix(3,2)*Y_old+matrix(3,3)*Z_old;
             end
 
-            V=Y./self.LY;
-            U=X./self.LX;
+            [X_S,Y_S]=self.shape_fcn(0,0);
+            [X_E,Y_E]=self.shape_fcn(1,1);
+
+            V=Y./abs(Y_E-Y_S);
+            U=X./abs(X_E-X_S);
 
             U=max(U,0);U=min(U,1);
             V=max(V,0);V=min(V,1);

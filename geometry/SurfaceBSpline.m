@@ -235,7 +235,7 @@ classdef SurfaceBSpline < handle
             end
 
             if isempty(u_param),u_param=1e-3;end
-            if u_param~=fix(u_param)
+            if length(u_param) == 1 && u_param ~= fix(u_param)
                 % input is torlance
                 value_torl=u_param;
                 max_level=50;

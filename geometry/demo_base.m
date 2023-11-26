@@ -74,8 +74,8 @@ close all hidden;
 
 % LX=2;LY=1/2;LZ=0.3;
 % C_par_X=[0,0];C_par_Y=[0.5,0];C_par_ZV=[15,15];C_par_ZU=[0.5,0];sym_x=false;sym_y=true;
-% surf_up=SurfaceCST('',LX,LY,LZ,C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y);
-% surf_low=SurfaceCST('',LX,-LY,LZ,C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y);
+% surf_up=SurfaceCST('',C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y,LX,LY,LZ);
+% surf_low=SurfaceCST('',C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y,LX,-LY,LZ);
 % axe_hdl=axes(figure());
 % surf_up.drawSurface(axe_hdl);
 % surf_low.drawSurface(axe_hdl);

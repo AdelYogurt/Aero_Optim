@@ -165,7 +165,7 @@ classdef CurveBSpline < handle
                 u_param=1e-3;
             end
 
-            if  u_param ~= fix(u_param) && length(u_param) == 1
+            if length(u_param) == 1 && u_param ~= fix(u_param) 
                 value_torl=u_param;max_level=50;
                 low_bou=0;up_bou=1;
                 if self.dimension == 2
