@@ -87,7 +87,8 @@ for body_idx=1:length(Idx_body)
                 case 'PLANE'
                     surf=getPLANE(Data,idx_face,idx_surf);
                 otherwise
-                    error('readGeomStep: unknown surface type');
+                    continue;
+                    % error('readGeomStep: unknown surface type');
             end
             surf_shell{face_idx}=surf;
         end
@@ -169,7 +170,7 @@ for u_idx=1:u_ctrl_num
 end
 
 surf=SurfaceBSpline(name,ctrl_X,ctrl_Y,ctrl_Z,...
-    [],[],[],u_degree,v_degree,...
+    [],u_degree,v_degree,...
     u_knot_multi,v_knot_multi,u_knot_list,v_knot_list);
 
 surf.surface_form=surface_form;
@@ -253,13 +254,13 @@ end
 [ctrl_X,ctrl_Y,ctrl_Z]=geomMapGrid(control_2,control_3,control_4,control_1);
 
 % process bound with axis
-surf=SurfaceBSpline(name,ctrl_X,ctrl_Y,ctrl_Z,[],[],[],u_degree,v_degree);
+surf=SurfaceBSpline(name,ctrl_X,ctrl_Y,ctrl_Z,[],u_degree,v_degree);
 
     function [ctrl_list,curve]=increaseDegree(curve,control_num,degree)
         % increase degree of ctrl_list by connect center point
-        node_list=curve.calPoint(linspace(0,1,control_num));
-        curve=CurveBSpline(curve.name,[],node_list,degree);
-        ctrl_list=curve.ctrl_list;
+        [node_X,node_X,node_Z]=curve.calPoint(linspace(0,1,control_num));
+        curve=CurveBSpline(curve.name,node_X,node_X,node_Z,true,degree);
+        ctrl_list=[curve.ctrl_X,curve.ctrl_Y,curve.ctrl_Z];
     end
 end
 
@@ -398,7 +399,7 @@ if norm(point_start-ctrl_list(1,:)) > 100*eps &&...
     knot_list=1-fliplr(knot_list);
 end
 
-curve=CurveBSpline(name,ctrl_list,[],degree,...
+curve=CurveBSpline(name,ctrl_list(:,1),ctrl_list(:,2),ctrl_list(:,3),[],degree,...
     knot_multi,knot_list);
 
 curve.curve_form=curve_form;
@@ -445,7 +446,8 @@ idx=find(str_vertex == ',',1);str_vertex(1:idx)=[];
 idx_point_end=str2double(str_vertex(2:end));
 point_end=getPoint(Data,idx_point_end);
 
-curve=CurveBSpline(name,[point_start;point_end]);
+point=[point_start;point_end];
+curve=CurveBSpline(name,point(:,1),point(:,2),point(:,3));
 
 end
 

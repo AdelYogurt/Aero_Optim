@@ -484,7 +484,7 @@ classdef SurfaceBSpline < handle
             %
             if nargin < 7
                 node_option=[];
-                if nargin < 5
+                if nargin < 6
                     control_option=[];
                     if nargin < 5
                         surface_option=[];
