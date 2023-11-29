@@ -81,6 +81,49 @@ close all hidden;
 % surf_low.drawSurface(axe_hdl);
 % axis equal
 
+%% Coons surface
+
+% curve_u0=CurveBSpline('',[0,0,0.5],[0,1,2],[0,0,0]);
+% curve_u1=CurveBSpline('',[0,0.5,1],[0,1,2.5],[2.5,2,2]);
+% curve_0v=CurveBSpline('',[0,0,0],[0,1,0],[0,1,2.5]);
+% curve_1v=CurveBSpline('',[0.5,0.5,1],[2,1.5,2.5],[0,1,2]);
+% 
+% axe_hdl=axes(figure());
+% axis equal;view(3);
+%
+% curve_u0.drawCurve(axe_hdl);
+% curve_1v.drawCurve(axe_hdl);
+% curve_u1.drawCurve(axe_hdl);
+% curve_0v.drawCurve(axe_hdl);
+% 
+% surf=SurfaceCoons('',@(u) curve_u0.calPoint(u),@(u) curve_u1.calPoint(u),...
+%     @(v) curve_0v.calPoint(v),@(v) curve_1v.calPoint(v));
+% [U,V]=meshgrid(0:0.1:1,0:0.1:1);
+% [X,Y,Z]=surf.calPoint(U,V);
+% surface(X,Y,Z);
+
+%% mapping generate surface
+
+axe_hdl=axes(figure());
+axis equal;view(3);
+
+line_u0=[0,0,0.5;0,1,2;0,0,0]';
+line_u1=[0,0.5,1;0,1,2.5;2.5,2,2]';
+line_v0=[0,0,0;0,1,0;0,1,2.5]';
+line_v1=[0.5,0.5,1;2,1.5,2.5;0,1,2]';
+curve_u0=CurveBSpline('',[0,0,0.5],[0,1,2],[0,0,0]);
+curve_u1=CurveBSpline('',[0,0.5,1],[0,1,2.5],[2.5,2,2]);
+curve_0v=CurveBSpline('',[0,0,0],[0,1,0],[0,1,2.5]);
+curve_1v=CurveBSpline('',[0.5,0.5,1],[2,1.5,2.5],[0,1,2]);
+curve_u0.drawCurve(axe_hdl);
+curve_1v.drawCurve(axe_hdl);
+curve_u1.drawCurve(axe_hdl);
+curve_0v.drawCurve(axe_hdl);
+
+[point_X,point_Y,point_Z]=geomMapGrid(line_u0,line_u1,line_v0,line_v1);
+surf=SurfaceBSpline('',point_X,point_Y,point_Z);
+surf.drawSurface(axe_hdl,[],[],struct('LineStyle','none','FaceAlpha',0.5));
+
 %% Fit 3D wing
 
 % load('wing/wing_RAE2822_NACA4412.mat');
