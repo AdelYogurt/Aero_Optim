@@ -102,7 +102,7 @@ classdef CurveBSpline < handle
                 if isempty(U),U=linspace(0,1,node_num);end;U=U(:);
                 if isempty(knot_multi),knot_multi=[degree+1,ones(1,ctrl_num-degree-1),degree+1];end
                 if isempty(knot_list),knot_list=interp1(linspace(0,1,node_num),U,linspace(0,1,ctrl_num-degree+1));end
-                u_list=getKnotVec(knot_multi,knot_list);
+                u_list=baseKnotVec(knot_multi,knot_list);
 
                 if FLAG_FIT
                     % base on node point list inverse calculate control point list
@@ -136,6 +136,7 @@ classdef CurveBSpline < handle
                 [self.node_X,self.node_Y,self.node_Z]=self.calPoint(u_list(degree+1:ctrl_num+1));
                 self.node_num=node_num;
             end
+            
         end
     end
 
@@ -217,11 +218,15 @@ classdef CurveBSpline < handle
         function [X,Y,Z]=calPoint(self,U)
             % according U to calculate point
             %
-            point_num=length(U);
+            [X,Y,Z]=calBSpline(self,U);
+        end
 
-            X=zeros(point_num,1);
-            Y=zeros(point_num,1);
-            Z=zeros(point_num,1);
+        function [X,Y,Z]=calBSpline(self,U)
+            point_num=numel(U);
+
+            X=zeros(size(U));
+            Y=zeros(size(U));
+            Z=zeros(size(U));
 
             N_list=zeros(1,self.degree+1);
             for point_idx=1:point_num
@@ -363,48 +368,6 @@ classdef CurveBSpline < handle
 end
 
 %% common function
-
-function knot_vec=getKnotVec(knot_multi,knot_list)
-% base on knot_multi and knot_list to create knot vector
-%
-knot_vec=zeros(1,sum(knot_multi));
-start_idx=1;end_idx=knot_multi(1);
-for n_idx=1:length(knot_list)
-    knot_vec(start_idx:end_idx)=knot_list(n_idx);
-    start_idx=start_idx+knot_multi(n_idx);
-    end_idx=end_idx+knot_multi(n_idx);
-end
-end
-
-function N=baseFcnN(u_list,u_x,i,k)
-% base function of BSpline curve
-%
-if k == 0
-    if ((u_list(i) <= u_x) && (u_x <= u_list(i+1)))
-        if any(u_list == u_x) && u_x ~= u_list(1) && u_x ~= u_list(end)
-            N=0.5;
-        else
-            N=1;
-        end
-    else
-        N=0;
-    end
-else
-    if u_list(i+k) == u_list(i)
-        A=0;
-    else
-        A=(u_x-u_list(i))/(u_list(i+k)-u_list(i));
-    end
-
-    if u_list(i+k+1) == u_list(i+1)
-        B=0;
-    else
-        B=(u_list(i+k+1)-u_x)/(u_list(i+k+1)-u_list(i+1));
-    end
-
-    N=A*baseFcnN(u_list,u_x,i,k-1)+B*baseFcnN(u_list,u_x,i+1,k-1);
-end
-end
 
 function [x_list,fval_list,node_list]=meshAdapt1D(fcn,low_bou,up_bou,torl,max_level,fval_num)
 % Binary-tree

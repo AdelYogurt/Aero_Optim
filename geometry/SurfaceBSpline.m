@@ -136,14 +136,14 @@ classdef SurfaceBSpline < handle
                 if isempty(U),U=linspace(0,1,u_node_num);end;U=U(:);
                 if isempty(u_knot_multi),u_knot_multi=[u_degree+1,ones(1,u_ctrl_num-u_degree-1),u_degree+1];end
                 if isempty(u_knot_list),u_knot_list=interp1(linspace(0,1,u_node_num),U,linspace(0,1,u_ctrl_num-u_degree+1));end
-                u_list=getKnotVec(u_knot_multi,u_knot_list);
+                u_list=baseKnotVec(u_knot_multi,u_knot_list);
 
                 % default value
                 if isempty(v_degree),v_degree=v_ctrl_num-1;end
                 if isempty(V),V=linspace(0,1,v_node_num);end;V=V(:);
                 if isempty(v_knot_multi),v_knot_multi=[v_degree+1,ones(1,v_ctrl_num-v_degree-1),v_degree+1];end
                 if isempty(v_knot_list),v_knot_list=interp1(linspace(0,1,v_node_num),V,linspace(0,1,v_ctrl_num-v_degree+1));end
-                v_list=getKnotVec(v_knot_multi,v_knot_list);
+                v_list=baseKnotVec(v_knot_multi,v_knot_list);
 
                 if FLAG_FIT
                     % base on node point list inverse calculate control point list
@@ -203,6 +203,7 @@ classdef SurfaceBSpline < handle
                 self.u_node_num=u_node_num;
                 self.v_node_num=v_node_num;
             end
+
         end
     end
 
@@ -299,6 +300,11 @@ classdef SurfaceBSpline < handle
                 error('SurfaceBSpline.calPoint: size of U_x do not equal to size of V_x');
             end
 
+            [X,Y,Z]=self.calBSpline(U,V);
+        end
+
+        function [X,Y,Z]=calBSpline(self,U,V)
+            [rank_num,colume_num]=size(U);
             X=zeros(rank_num,colume_num);
             Y=zeros(rank_num,colume_num);
             Z=zeros(rank_num,colume_num);
@@ -393,7 +399,7 @@ classdef SurfaceBSpline < handle
             %
             if nargin < 7,geo_torl=double(eps('single'));end
 
-            iter=0;iter_max=50;
+            iter=0;iter_max=20;
 
             [X,Y,Z]=self.calPoint(U,V);
             % scatter3(X,Y,Z);
@@ -711,48 +717,6 @@ classdef SurfaceBSpline < handle
 end
 
 %% common function
-
-function knot_vec=getKnotVec(knot_multi,knot_list)
-% base on knot_multi and knot_list to create knot vector
-%
-knot_vec=zeros(1,sum(knot_multi));
-start_idx=1;end_idx=knot_multi(1);
-for n_idx=1:length(knot_list)
-    knot_vec(start_idx:end_idx)=knot_list(n_idx);
-    start_idx=start_idx+knot_multi(n_idx);
-    end_idx=end_idx+knot_multi(n_idx);
-end
-end
-
-function N=baseFcnN(u_list,u_x,i,k)
-% base function of BSpline curve
-%
-if k == 0
-    if ((u_list(i) <= u_x) && (u_x <= u_list(i+1)))
-        if any(u_list == u_x) && u_x ~= u_list(1) && u_x ~= u_list(end)
-            N=0.5;
-        else
-            N=1;
-        end
-    else
-        N=0;
-    end
-else
-    if u_list(i+k) == u_list(i)
-        A=0;
-    else
-        A=(u_x-u_list(i))/(u_list(i+k)-u_list(i));
-    end
-
-    if u_list(i+k+1) == u_list(i+1)
-        B=0;
-    else
-        B=(u_list(i+k+1)-u_x)/(u_list(i+k+1)-u_list(i+1));
-    end
-
-    N=A*baseFcnN(u_list,u_x,i,k-1)+B*baseFcnN(u_list,u_x,i+1,k-1);
-end
-end
 
 function [U,V,Fval,node_list]=meshAdapt2DUV(fcn,low_bou,up_bou,torl,max_level,fval_num)
 % 2D Omni-Tree

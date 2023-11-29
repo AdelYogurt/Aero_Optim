@@ -1,6 +1,14 @@
 classdef SurfaceCST < SurfaceBSpline
     % CST surface
     %
+    % notice:
+    % shape function in origin reference is local coordinate,
+    % point calculate by class and shape will be translate to global
+    %
+    % reference: [1] Kulfan B. A Universal Parametric Geometry
+    % Representation Method - "CST" [C]. 45th AIAA Aerospace Sciences
+    % Meeting and Exhibit, Reno, Nevada, U.S.A.
+    %
     properties
         % base parameter
         sym_x; % if true, class fcn will start from 0.5 to 1
@@ -17,7 +25,8 @@ classdef SurfaceCST < SurfaceBSpline
         class_fcn_ZV; % (U,V), direction is V
         class_fcn_ZU; % (U,V), direction is U
 
-        shape_fcn; % (U, V), default is LX, LY, LZ
+        shape_fcn; % (U, V), default is LX, LY, LZ, output SX, SY, SZ
+        class_fcn; % (U, V), default is CX, CY, CZV.*CZU, output CX, CY, CZ
     end
 
     properties
@@ -26,11 +35,11 @@ classdef SurfaceCST < SurfaceBSpline
         deform_fcn_Y=[]; % (U)
         deform_fcn_Z=[]; % (U,V)
 
-        % rotation parameter
+        % rotate parameter
         rotate_matrix=[];
 
-        % translation parameter
-        translation=[];
+        % translate parameter
+        translate=[];
     end
 
     properties
@@ -103,39 +112,46 @@ classdef SurfaceCST < SurfaceBSpline
             % class function
             if isnumeric(C_par_X)
                 self.C_par_X=C_par_X;
-                self.class_fcn_X=@(V) defcnClass(V,C_par_X(1),C_par_X(2));
+                self.class_fcn_X=@(V) baseFcnClass(V,C_par_X(1),C_par_X(2));
             else
                 self.C_par_X=[];
                 self.class_fcn_X=C_par_X;
             end
             if isnumeric(C_par_Y)
                 self.C_par_Y=C_par_Y;
-                self.class_fcn_Y=@(U) defcnClass(U,C_par_Y(1),C_par_Y(2));
+                self.class_fcn_Y=@(U) baseFcnClass(U,C_par_Y(1),C_par_Y(2));
             else
                 self.C_par_Y=[];
                 self.class_fcn_Y=C_par_Y;
             end
             if isnumeric(C_par_ZV)
                 self.C_par_X=C_par_ZV;
-                self.class_fcn_ZV=@(U,V) defcnClass(V,C_par_ZV(1),C_par_ZV(2));
+                self.class_fcn_ZV=@(U,V) baseFcnClass(V,C_par_ZV(1),C_par_ZV(2));
             else
                 self.C_par_ZV=[];
                 self.class_fcn_ZV=C_par_ZV;
             end
             if isnumeric(C_par_ZU)
                 self.C_par_ZU=C_par_X;
-                self.class_fcn_ZU=@(U,V) defcnClass(U,C_par_ZU(1),C_par_ZU(2));
+                self.class_fcn_ZU=@(U,V) baseFcnClass(U,C_par_ZU(1),C_par_ZU(2));
             else
                 self.C_par_ZU=[];
                 self.class_fcn_ZU=C_par_ZU;
             end
 
             self.shape_fcn=@(U,V) defcnShape(U,V,LX,LY,LZ);
+            self.class_fcn=@(U,V) defcnClass(U,V,self);
 
             function [X,Y,Z]=defcnShape(U,V,LX,LY,LZ)
                 X=U*LX;Y=V*LY;Z=ones(size(U))*LZ;
             end
+
+            function [X,Y,Z]=defcnClass(U,V,self)
+                [X,Y,ZV,ZU]=self.calClass(U,V);
+                Z=ZV.*ZU;
+            end
         end
+    
     end
 
     % fit shape
@@ -219,21 +235,21 @@ classdef SurfaceCST < SurfaceBSpline
             if isempty(U),U=linspace(0,1,u_node_num);end;U=U(:);
             if isempty(u_knot_multi),u_knot_multi=[u_degree+1,ones(1,u_ctrl_num-u_degree-1),u_degree+1];end
             if isempty(u_knot_list),u_knot_list=interp1(linspace(0,1,u_node_num),U,linspace(0,1,u_ctrl_num-u_degree+1));end
-            u_list=getKnotVec(u_knot_multi,u_knot_list);
+            u_list=baseKnotVec(u_knot_multi,u_knot_list);
 
             % default value
             if isempty(v_degree),v_degree=v_ctrl_num-1;end
             if isempty(V),V=linspace(0,1,v_node_num);end;V=V(:);
             if isempty(v_knot_multi),v_knot_multi=[v_degree+1,ones(1,v_ctrl_num-v_degree-1),v_degree+1];end
             if isempty(v_knot_list),v_knot_list=interp1(linspace(0,1,v_node_num),V,linspace(0,1,v_ctrl_num-v_degree+1));end
-            v_list=getKnotVec(v_knot_multi,v_knot_list);
+            v_list=baseKnotVec(v_knot_multi,v_knot_list);
 
             if FLAG_FIT
                 % process symmetry
-                U_class=U;V_class=V;
-                if self.sym_y,V_class=(V_class/2)+0.5;end
-                if self.sym_x,U_class=(U_class/2)+0.5;end
-    
+                [U_matrix,V_matrix]=meshgrid(U,V);
+                [CX,CY,CZV,CZU]=self.calClass(U_matrix,V_matrix);
+                [node_X,node_Y,node_Z]=self.axisGlobalToLocal(node_X,node_Y,node_Z,U_matrix,V_matrix);
+
                 % base on node point list inverse calculate control point list
                 matrix_v=zeros(v_node_num,v_ctrl_num);
                 for node_idx=1:v_node_num
@@ -243,9 +259,9 @@ classdef SurfaceCST < SurfaceBSpline
                     end
                 end
     
-                matrix_v_class_X=matrix_v.*self.class_fcn_X(V_class);
+                matrix_v_class_X=matrix_v.*CX(:,1);
                 matrix_v_class_Y=matrix_v;
-                matrix_v_class_ZV=matrix_v.*self.class_fcn_ZV(U_class,V_class);
+                matrix_v_class_ZV=matrix_v.*CZV(:,1);
     
                 matrix_u=zeros(u_ctrl_num,u_node_num);
                 for node_idx=1:u_node_num
@@ -256,30 +272,8 @@ classdef SurfaceCST < SurfaceBSpline
                 end
     
                 matrix_u_class_X=matrix_u;
-                matrix_u_class_Y=matrix_u.*self.class_fcn_Y(U_class');
-                matrix_u_class_ZU=matrix_u.*self.class_fcn_ZU(U_class',V_class');
-    
-                % undone translation surface
-                if ~isempty(self.translation)
-                    node_X=node_X-self.translation(1);
-                    node_Y=node_Y-self.translation(2);
-                    node_Z=node_Z-self.translation(3);
-                end
-    
-                % undone rotation surface
-                if ~isempty(self.rotate_matrix)
-                    matrix=self.rotate_matrix';
-                    X_old=node_X;Y_old=node_Y;Z_old=Z;
-                    node_X=matrix(1,1)*X_old+matrix(1,2)*Y_old+matrix(1,3)*Z_old;
-                    node_Y=matrix(2,1)*X_old+matrix(2,2)*Y_old+matrix(2,3)*Z_old;
-                    node_Z=matrix(3,1)*X_old+matrix(3,2)*Y_old+matrix(3,3)*Z_old;
-                end
-    
-                % undone deform surface
-                [U_Mat,V_Mat]=meshgrid(U,V);
-                if ~isempty(self.deform_fcn_Y),node_Y=node_Y-self.deform_fcn_Y(U_Mat);end
-                if ~isempty(self.deform_fcn_X),node_X=node_X-self.deform_fcn_X(V_Mat);end
-                if ~isempty(self.deform_fcn_Z),node_Z=node_Z-self.deform_fcn_Z(U_Mat,V_Mat);end
+                matrix_u_class_Y=matrix_u.*CY(1,:);
+                matrix_u_class_ZU=matrix_u.*CZU(1,:);
  
                 ctrl_X=matrix_v_class_X\node_X/matrix_u_class_X;
                 ctrl_Y=matrix_v_class_Y\node_Y/matrix_u_class_Y;
@@ -292,11 +286,9 @@ classdef SurfaceCST < SurfaceBSpline
                 self.fit_data.V=V;
                 self.fit_data.matrix_u=matrix_u;
                 self.fit_data.matrix_v=matrix_v;
-            elseif ~isempty(ctrl_X) && ~isempty(ctrl_Y) && ~isempty(ctrl_Z)
+            else
                 % generate B spline surface by control point
                 self.fit_data=[];
-            else
-                error('SurfaceCST.addShapeBSpline: error input, lack control point or node point');
             end
 
             % main properties
@@ -317,60 +309,11 @@ classdef SurfaceCST < SurfaceBSpline
             % shape function
             self.u_list=u_list;
             self.v_list=v_list;
-            self.shape_fcn=@(U,V) self.calPointShape(U,V);
+
+            % use upper class BSpline calculate
+            self.shape_fcn=@(U,V) self.calBSpline(U,V);
         end
-
-        function [X,Y,Z]=calPointShape(self,U,V)
-            % according u_x to calculate point
-            % u_x_list is u_x_number x 1 matrix
-            % point_list is point_number x dimension matrix
-            %
-            [rank_num,colume_num]=size(U);
-            if any(size(V) ~= [rank_num,colume_num])
-                error('SurfaceBSpline.calPoint: size of U_x do not equal to size of V_x');
-            end
-
-            X=zeros(rank_num,colume_num);
-            Y=zeros(rank_num,colume_num);
-            Z=zeros(rank_num,colume_num);
-
-            N_u_list=zeros(self.u_degree+1,1);
-            N_v_list=zeros(1,self.v_degree+1);
-            for rank_idx=1:rank_num
-                for colume_idx=1:colume_num
-                    % local index of u_x in u_list, v_list
-                    u_x=U(rank_idx,colume_idx);
-                    v_x=V(rank_idx,colume_idx);
-
-                    % [index_end_v,index_end_u]=getIndex(); % y, x
-
-                    idx_end_u=self.u_ctrl_num; % is equal to the section index
-                    while idx_end_u > self.u_degree+1 && u_x < self.u_list(idx_end_u)
-                        idx_end_u=idx_end_u-1;
-                    end
-                    idx_end_v=self.v_ctrl_num; % is equal to the section index
-                    while idx_end_v > self.v_degree+1 && v_x < self.v_list(idx_end_v)
-                        idx_end_v=idx_end_v-1;
-                    end
-
-                    idx_start_u=idx_end_u-self.u_degree;
-                    idx_start_v=idx_end_v-self.v_degree;
-
-                    % calculate base function
-                    for N_idx=1:self.u_degree+1
-                        N_u_list(N_idx)=baseFcnN(self.u_list,u_x,N_idx+idx_start_u-1,self.u_degree);
-                    end
-
-                    for N_idx=1:self.v_degree+1
-                        N_v_list(N_idx)=baseFcnN(self.v_list,v_x,N_idx+idx_start_v-1,self.v_degree);
-                    end
-
-                    X(rank_idx,colume_idx)=N_v_list*self.ctrl_X(idx_start_v:idx_end_v,idx_start_u:idx_end_u)*N_u_list;
-                    Y(rank_idx,colume_idx)=N_v_list*self.ctrl_Y(idx_start_v:idx_end_v,idx_start_u:idx_end_u)*N_u_list;
-                    Z(rank_idx,colume_idx)=N_v_list*self.ctrl_Z(idx_start_v:idx_end_v,idx_start_u:idx_end_u)*N_u_list;
-                end
-            end
-        end
+    
     end
 
     % deform, rotate, translate
@@ -387,8 +330,8 @@ classdef SurfaceCST < SurfaceBSpline
         end
 
         function addRotate(self,ang_x,ang_y,ang_z)
-            % base on angle to rotation surface
-            % rotation order:
+            % base on angle to rotate surface
+            % rotate order:
             % y, z, x
             %
             % input:
@@ -396,7 +339,7 @@ classdef SurfaceCST < SurfaceBSpline
             %
             matrix=eye(3);
 
-            % process rotation
+            % process rotate
             if ang_y ~= 0
                 cRY=cos(ang_y/180*pi);sRY=sin(ang_y/180*pi);
                 matrix=[
@@ -425,9 +368,67 @@ classdef SurfaceCST < SurfaceBSpline
         end
 
         function addTranslate(self,tran_x,tran_y,tran_z)
-            % base on angle to rotation surface
+            % base on angle to rotate surface
             %
-            self.translation=[tran_x,tran_y,tran_z];
+            self.translate=[tran_x,tran_y,tran_z];
+        end
+
+        function [X,Y,Z]=axisLocalToGlobal(self,X,Y,Z,U,V)
+            % deform surface
+            if ~isempty(self.deform_fcn_X)
+                X=X+self.deform_fcn_X(V);
+            end
+            if ~isempty(self.deform_fcn_Y)
+                Y=Y+self.deform_fcn_Y(U);
+            end
+            if ~isempty(self.deform_fcn_Z)
+                Z=Z+self.deform_fcn_Z(U,V);
+            end
+
+            % rotate surface
+            if ~isempty(self.rotate_matrix)
+                matrix=self.rotate_matrix;
+                X_old=X;Y_old=Y;Z_old=Z;
+                X=matrix(1,1)*X_old+matrix(1,2)*Y_old+matrix(1,3)*Z_old;
+                Y=matrix(2,1)*X_old+matrix(2,2)*Y_old+matrix(2,3)*Z_old;
+                Z=matrix(3,1)*X_old+matrix(3,2)*Y_old+matrix(3,3)*Z_old;
+            end
+
+            % translate surface
+            if ~isempty(self.translate)
+                X=X+self.translate(1);
+                Y=Y+self.translate(2);
+                Z=Z+self.translate(3);
+            end
+        end
+
+        function [X,Y,Z]=axisGlobalToLocal(self,X,Y,Z,U,V)
+            % re-translate surface
+            if ~isempty(self.translate)
+                X=X-self.translate(1);
+                Y=Y-self.translate(2);
+                Z=Z-self.translate(3);
+            end
+
+            % re-rotate surface
+            if ~isempty(self.rotate_matrix)
+                matrix=self.rotate_matrix';
+                X_old=X;Y_old=Y;Z_old=Z;
+                X=matrix(1,1)*X_old+matrix(1,2)*Y_old+matrix(1,3)*Z_old;
+                Y=matrix(2,1)*X_old+matrix(2,2)*Y_old+matrix(2,3)*Z_old;
+                Z=matrix(3,1)*X_old+matrix(3,2)*Y_old+matrix(3,3)*Z_old;
+            end
+
+            % re-deform surface
+            if ~isempty(self.deform_fcn_X)
+                X=X-self.deform_fcn_X(V);
+            end
+            if ~isempty(self.deform_fcn_Y)
+                Y=Y-self.deform_fcn_Y(U);
+            end
+            if ~isempty(self.deform_fcn_Z)
+                Z=Z-self.deform_fcn_Z(U,V);
+            end
         end
 
     end
@@ -443,43 +444,24 @@ classdef SurfaceCST < SurfaceBSpline
             %
 
             % calculate origin surface
-            [X,Y,Z]=self.shape_fcn(U,V);
+            [SX,SY,SZ]=self.shape_fcn(U,V);
+            [CX,CY,CZ]=self.class_fcn(U,V);
+            X=CX.*SX;Y=CY.*SY;Z=CZ.*SZ;
+            [X,Y,Z]=self.axisLocalToGlobal(X,Y,Z,U,V);
+        end
 
+        function [X,Y,ZV,ZU]=calClass(self,U,V)
             % calculate class
             U_class=U;V_class=V;
             if self.sym_y,V_class=(V_class/2)+0.5;end
             if self.sym_x,U_class=(U_class/2)+0.5;end
-            X=X.*self.class_fcn_X(V_class);
-            Y=Y.*self.class_fcn_Y(U_class);
-            Z=Z.*self.class_fcn_ZV(U_class,V_class).*self.class_fcn_ZU(U_class,V_class);
 
-            % deform surface
-            if ~isempty(self.deform_fcn_X)
-                X=X+self.deform_fcn_X(V);
-            end
-            if ~isempty(self.deform_fcn_Y)
-                Y=Y+self.deform_fcn_Y(U);
-            end
-            if ~isempty(self.deform_fcn_Z)
-                Z=Z+self.deform_fcn_Z(U,V);
-            end
-
-            % rotation surface
-            if ~isempty(self.rotate_matrix)
-                matrix=self.rotate_matrix;
-                X_old=X;Y_old=Y;Z_old=Z;
-                X=matrix(1,1)*X_old+matrix(1,2)*Y_old+matrix(1,3)*Z_old;
-                Y=matrix(2,1)*X_old+matrix(2,2)*Y_old+matrix(2,3)*Z_old;
-                Z=matrix(3,1)*X_old+matrix(3,2)*Y_old+matrix(3,3)*Z_old;
-            end
-
-            % translation surface
-            if ~isempty(self.translation)
-                X=X+self.translation(1);
-                Y=Y+self.translation(2);
-                Z=Z+self.translation(3);
-            end
+            X=self.class_fcn_X(V_class);
+            Y=self.class_fcn_Y(U_class);
+            ZV=self.class_fcn_ZV(U_class,V_class);
+            ZU=self.class_fcn_ZU(U_class,V_class);
         end
+
     end
 
     % calculate coord
@@ -489,14 +471,14 @@ classdef SurfaceCST < SurfaceBSpline
             %
             XO=X;YO=Y;ZO=Z;geo_torl=100*eps;
 
-            % undone translation surface
-            if ~isempty(self.translation)
-                X=X-self.translation(1);
-                Y=Y-self.translation(2);
-                Z=Z-self.translation(3);
+            % undone translate surface
+            if ~isempty(self.translate)
+                X=X-self.translate(1);
+                Y=Y-self.translate(2);
+                Z=Z-self.translate(3);
             end
 
-            % undone rotation surface
+            % undone rotate surface
             if ~isempty(self.rotate_matrix)
                 matrix=self.rotate_matrix';
                 X_old=X;Y_old=Y;Z_old=Z;
@@ -565,16 +547,13 @@ classdef SurfaceCST < SurfaceBSpline
 
             % plot surface
             surface(axe_hdl,X,Y,Z,surface_option);
-            if ~isempty(self.node_X) && ~isempty(self.node_Y) && ~isempty(self.node_Z)
-                [U,V]=meshgrid(self.u_list(self.u_degree+1:self.u_ctrl_num+1),self.v_list(self.v_degree+1:self.v_ctrl_num+1));
-                [X,Y,Z]=calPointPure(self.node_X,self.node_Y,self.node_Z,U,V);
-                surface(axe_hdl,X,Y,Z,node_option);
-            end
             if ~isempty(self.ctrl_X) && ~isempty(self.ctrl_Y) && ~isempty(self.ctrl_Z)
                 u_list=interp1(linspace(0,1,self.u_ctrl_num-self.u_degree+1),self.u_list(self.u_degree+1:self.u_ctrl_num+1),linspace(0,1,self.u_ctrl_num));
                 v_list=interp1(linspace(0,1,self.v_ctrl_num-self.v_degree+1),self.v_list(self.v_degree+1:self.v_ctrl_num+1),linspace(0,1,self.v_ctrl_num));
                 [U,V]=meshgrid(u_list,v_list);
-                [X,Y,Z]=calPointPure(self.ctrl_X,self.ctrl_Y,self.ctrl_Z,U,V);
+                [CX,CY,CZV,CZU]=self.calClass(U,V);
+                X=CX.*self.ctrl_X;Y=CY.*self.ctrl_Y;Z=CZV.*CZU.*self.ctrl_Z;
+                [X,Y,Z]=self.axisLocalToGlobal(X,Y,Z,U,V);
                 surface(axe_hdl,X,Y,Z,control_option);
             end
             view(3);
@@ -591,44 +570,6 @@ classdef SurfaceCST < SurfaceBSpline
             % xlim([center(1)-range,center(1)+range]);
             % ylim([center(2)-range,center(2)+range]);
             % zlim([center(3)-range,center(3)+range]);
-
-            function [X,Y,Z]=calPointPure(PX,PY,PZ,U,V)
-                % calculate class
-                U_class=U;V_class=V;
-                if self.sym_y,V_class=(V_class/2)+0.5;end
-                if self.sym_x,U_class=(U_class/2)+0.5;end
-                
-                X=PX.*self.class_fcn_X(V_class);
-                Y=PY.*self.class_fcn_Y(U_class);
-                Z=PZ.*self.class_fcn_ZV(U_class,V_class).*self.class_fcn_ZU(U_class,V_class);
-
-                % deform surface
-                if ~isempty(self.deform_fcn_X)
-                    X=X+self.deform_fcn_X(V);
-                end
-                if ~isempty(self.deform_fcn_Y)
-                    Y=Y+self.deform_fcn_Y(U);
-                end
-                if ~isempty(self.deform_fcn_Z)
-                    Z=Z+self.deform_fcn_Z(U,V);
-                end
-
-                % rotation surface
-                if ~isempty(self.rotate_matrix)
-                    matrix=self.rotate_matrix;
-                    X_old=X;Y_old=Y;Z_old=Z;
-                    X=matrix(1,1)*X_old+matrix(1,2)*Y_old+matrix(1,3)*Z_old;
-                    Y=matrix(2,1)*X_old+matrix(2,2)*Y_old+matrix(2,3)*Z_old;
-                    Z=matrix(3,1)*X_old+matrix(3,2)*Y_old+matrix(3,3)*Z_old;
-                end
-
-                % translation surface
-                if ~isempty(self.translation)
-                    X=X+self.translation(1);
-                    Y=Y+self.translation(2);
-                    Z=Z+self.translation(3);
-                end
-            end
         end
 
         function surface_BSpline=getSurfaceBSpline(self,u_param,v_param)
@@ -665,62 +606,4 @@ classdef SurfaceCST < SurfaceBSpline
             [step_str,object_index,ADVANCED_FACE]=surf_BSpline.getStep(object_index);
         end
     end
-end
-
-%% common function
-
-function C=defcnClass(U,N1,N2)
-% default class function of X, Y
-%
-NP=calNormPar(N1,N2);
-C=U.^N1.*(1-U).^N2/NP;
-end
-
-function nomlz_par=calNormPar(N1,N2)
-% calculate normailize class function parameter by N1, N2
-%
-nomlz_par=(N1./(N1+N2)).^N1.*(N2./(N1+N2)).^N2;
-nomlz_par((N1 == 0) & (N2 == 0))=1;
-end
-
-function knot_vec=getKnotVec(knot_multi,knot_list)
-% base on knot_multi and knot_list to create knot vector
-%
-knot_vec=zeros(1,sum(knot_multi));
-start_idx=1;end_idx=knot_multi(1);
-for n_idx=1:length(knot_list)
-    knot_vec(start_idx:end_idx)=knot_list(n_idx);
-    start_idx=start_idx+knot_multi(n_idx);
-    end_idx=end_idx+knot_multi(n_idx);
-end
-end
-
-function N=baseFcnN(u_list,u_x,i,k)
-% base function of BSpline curve
-%
-if k == 0
-    if ((u_list(i) <= u_x) && (u_x <= u_list(i+1)))
-        if any(u_list == u_x) && u_x ~= u_list(1) && u_x ~= u_list(end)
-            N=0.5;
-        else
-            N=1;
-        end
-    else
-        N=0;
-    end
-else
-    if u_list(i+k) == u_list(i)
-        A=0;
-    else
-        A=(u_x-u_list(i))/(u_list(i+k)-u_list(i));
-    end
-
-    if u_list(i+k+1) == u_list(i+1)
-        B=0;
-    else
-        B=(u_list(i+k+1)-u_x)/(u_list(i+k+1)-u_list(i+1));
-    end
-
-    N=A*baseFcnN(u_list,u_x,i,k-1)+B*baseFcnN(u_list,u_x,i+1,k-1);
-end
 end
