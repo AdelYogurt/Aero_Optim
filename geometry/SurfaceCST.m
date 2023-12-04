@@ -226,23 +226,29 @@ classdef SurfaceCST < SurfaceBSpline
                 end
             end
 
-            if u_ctrl_num < (u_degree+1) || v_ctrl_num < (v_degree+1)
-                error('SurfaceCST.addShapeBSpline: ctrl_num less than degree+1');
-            end
-
             % default value
             if isempty(u_degree),u_degree=u_ctrl_num-1;end
-            if isempty(U),U=linspace(0,1,u_node_num);end;U=U(:);
+            if isempty(U),U=linspace(0,1,u_node_num);end;U=U(:)';
             if isempty(u_knot_multi),u_knot_multi=[u_degree+1,ones(1,u_ctrl_num-u_degree-1),u_degree+1];end
             if isempty(u_knot_list),u_knot_list=interp1(linspace(0,1,u_node_num),U,linspace(0,1,u_ctrl_num-u_degree+1));end
             u_list=baseKnotVec(u_knot_multi,u_knot_list);
+            if u_node_num > 5, du_coord=1/(u_node_num-3);u_coord=[0,du_coord/2,linspace(du_coord,1-du_coord,u_node_num-4),1-du_coord/2,1];
+            else, u_coord=linspace(0,1,u_node_num);end
+            U=interp1(linspace(0,1,u_ctrl_num-u_degree+1),u_knot_list,u_coord);
 
             % default value
             if isempty(v_degree),v_degree=v_ctrl_num-1;end
-            if isempty(V),V=linspace(0,1,v_node_num);end;V=V(:);
+            if isempty(V),V=linspace(0,1,v_node_num);end;V=V(:)';
             if isempty(v_knot_multi),v_knot_multi=[v_degree+1,ones(1,v_ctrl_num-v_degree-1),v_degree+1];end
             if isempty(v_knot_list),v_knot_list=interp1(linspace(0,1,v_node_num),V,linspace(0,1,v_ctrl_num-v_degree+1));end
             v_list=baseKnotVec(v_knot_multi,v_knot_list);
+            if v_node_num > 5, dv_coord=1/(v_node_num-3);v_coord=[0,dv_coord/2,linspace(dv_coord,1-dv_coord,v_node_num-4),1-dv_coord/2,1];
+            else, v_coord=linspace(0,1,v_node_num);end
+            V=interp1(linspace(0,1,v_ctrl_num-v_degree+1),v_knot_list,v_coord);
+
+            if u_ctrl_num < (u_degree+1) || v_ctrl_num < (v_degree+1)
+                error('SurfaceCST.addShapeBSpline: ctrl_num less than degree+1');
+            end
 
             if FLAG_FIT
                 % process symmetry
@@ -533,7 +539,7 @@ classdef SurfaceCST < SurfaceBSpline
 
             % default draw option
             if isempty(surface_option)
-                surface_option=struct('LineStyle','none');
+                surface_option=struct();
             end
             if isempty(node_option)
                 node_option=struct('Marker','o','MarkerEdgeColor','b','LineStyle','none','FaceAlpha',0);
@@ -593,16 +599,16 @@ classdef SurfaceCST < SurfaceBSpline
             if ~isempty(v_param) && length(v_param) > 1 && v_param(1,1) > v_param(2,1)
                 v_param=flipud(v_param);
             end
-            [X,Y,Z,u_param,v_param]=calSurface(self,u_param,v_param);
+            [X,Y,Z,U,V]=calSurface(self,u_param,v_param);
 
-            u_degree=min(size(u_param,2)-1,3);v_degree=min(size(v_param,1)-1,3);
-            surface_BSpline=SurfaceBSpline(self.name,X,Y,Z,true,u_degree,v_degree);
+            u_degree=min(size(U,2)-1,3);v_degree=min(size(V,1)-1,3);
+            surface_BSpline=SurfaceBSpline(self.name,X,Y,Z,true,u_degree,v_degree,[],[],[],[],[],[],U(1,:)',V(:,1));
         end
 
         function [step_str,object_index,ADVANCED_FACE]=getStep(self,object_index)
             % interface of BSpline surface getStep function
             %
-            surf_BSpline=self.getSurfaceBSpline(1e-2);
+            surf_BSpline=self.getSurfaceBSpline(1e-3);
             [step_str,object_index,ADVANCED_FACE]=surf_BSpline.getStep(object_index);
         end
     end

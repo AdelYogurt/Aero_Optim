@@ -121,7 +121,6 @@ classdef CurveCST2D < CurveBSpline
                 if length(node_Y) ~= node_num
                     error('CurveCST2D.addShapeBSpline: size of node_X, node_Y do not equal');
                 end
-
                 if isempty(ctrl_num),ctrl_num=node_num;end
                 if ctrl_num > node_num
                     error('CurveCST2D.addShapeBSpline: ctrl_num can not more than node_num')
@@ -136,16 +135,19 @@ classdef CurveCST2D < CurveBSpline
                 end
             end
 
-            if ctrl_num < (degree+1)
-                error('CurveCST2D.addShapeBSpline: ctrl_num less than degree+1');
-            end
-
             % default value
             if isempty(degree),degree=ctrl_num-1;end
-            if isempty(U),U=linspace(0,1,node_num);end;U=U(:);
+            if isempty(U),U=linspace(0,1,node_num);end;U=U(:)';
             if isempty(knot_multi),knot_multi=[degree+1,ones(1,ctrl_num-degree-1),degree+1];end
             if isempty(knot_list),knot_list=interp1(linspace(0,1,node_num),U,linspace(0,1,ctrl_num-degree+1));end
             u_list=baseKnotVec(knot_multi,knot_list);
+            if node_num > 5, du_coord=1/(node_num-3);u_coord=[0,du_coord/2,linspace(du_coord,1-du_coord,node_num-4),1-du_coord/2,1];
+            else, u_coord=linspace(0,1,node_num);end
+            U=interp1(linspace(0,1,ctrl_num-degree+1),knot_list,u_coord);
+
+            if ctrl_num < (degree+1)
+                error('CurveCST2D.addShapeBSpline: ctrl_num less than degree+1');
+            end
 
             if FLAG_FIT
                 % process symmetry

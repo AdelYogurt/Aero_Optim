@@ -106,11 +106,11 @@ classdef SurfaceBSpline < handle
                         error('SurfaceBSpline: size of node_X, node_Y, node_Z do not equal');
                     end
 
-                    if isempty(u_ctrl_num),u_ctrl_num=min(u_node_num,10);end
+                    if isempty(u_ctrl_num),u_ctrl_num=u_node_num;end
                     if u_ctrl_num > u_node_num
                         error('SurfaceBSpline: u_control number more than u_node number')
                     end
-                    if isempty(v_ctrl_num),v_ctrl_num=min(v_node_num,10);end
+                    if isempty(v_ctrl_num),v_ctrl_num=v_node_num;end
                     if v_ctrl_num > v_node_num
                         error('SurfaceBSpline: v_control number more than v_node number')
                     end
@@ -127,23 +127,29 @@ classdef SurfaceBSpline < handle
                     end
                 end
 
-                if u_ctrl_num < (u_degree+1) || v_ctrl_num < (v_degree+1)
-                    error('SurfaceBSpline: ctrl_num less than degree+1');
-                end
-
                 % default value
                 if isempty(u_degree),u_degree=u_ctrl_num-1;end
-                if isempty(U),U=linspace(0,1,u_node_num);end;U=U(:);
+                if isempty(U),U=linspace(0,1,u_node_num);end;U=U(:)';
                 if isempty(u_knot_multi),u_knot_multi=[u_degree+1,ones(1,u_ctrl_num-u_degree-1),u_degree+1];end
-                if isempty(u_knot_list),u_knot_list=interp1(linspace(0,1,u_node_num),U,linspace(0,1,u_ctrl_num-u_degree+1));end
+                if isempty(u_knot_list),u_knot_list=interp1(linspace(0,1,length(U)),U,linspace(0,1,u_ctrl_num-u_degree+1));end
                 u_list=baseKnotVec(u_knot_multi,u_knot_list);
+                if u_node_num > 5, du_coord=1/(u_node_num-3);u_coord=[0,du_coord/2,linspace(du_coord,1-du_coord,u_node_num-4),1-du_coord/2,1];
+                else, u_coord=linspace(0,1,u_node_num);end
+                U=interp1(linspace(0,1,u_ctrl_num-u_degree+1),u_knot_list,u_coord);
 
                 % default value
                 if isempty(v_degree),v_degree=v_ctrl_num-1;end
-                if isempty(V),V=linspace(0,1,v_node_num);end;V=V(:);
+                if isempty(V),V=linspace(0,1,v_node_num);end;V=V(:)';
                 if isempty(v_knot_multi),v_knot_multi=[v_degree+1,ones(1,v_ctrl_num-v_degree-1),v_degree+1];end
-                if isempty(v_knot_list),v_knot_list=interp1(linspace(0,1,v_node_num),V,linspace(0,1,v_ctrl_num-v_degree+1));end
+                if isempty(v_knot_list),v_knot_list=interp1(linspace(0,1,length(V)),V,linspace(0,1,v_ctrl_num-v_degree+1));end
                 v_list=baseKnotVec(v_knot_multi,v_knot_list);
+                if v_node_num > 5, dv_coord=1/(v_node_num-3);v_coord=[0,dv_coord/2,linspace(dv_coord,1-dv_coord,v_node_num-4),1-dv_coord/2,1];
+                else, v_coord=linspace(0,1,v_node_num);end
+                V=interp1(linspace(0,1,v_ctrl_num-v_degree+1),v_knot_list,v_coord);
+
+                if u_ctrl_num < (u_degree+1) || v_ctrl_num < (v_degree+1)
+                    error('SurfaceBSpline: ctrl_num less than degree+1');
+                end
 
                 if FLAG_FIT
                     % base on node point list inverse calculate control point list
@@ -526,15 +532,15 @@ classdef SurfaceBSpline < handle
             ylabel('y');
             zlabel('z');
 
-            %             axis equal
-            %             x_range=xlim();
-            %             y_range=ylim();
-            %             z_range=zlim();
-            %             center=[mean(x_range),mean(y_range),mean(z_range)];
-            %             range=max([x_range(2)-x_range(1),y_range(2)-y_range(1),z_range(2)-z_range(1)])/2;
-            %             xlim([center(1)-range,center(1)+range]);
-            %             ylim([center(2)-range,center(2)+range]);
-            %             zlim([center(3)-range,center(3)+range]);
+            % axis equal
+            % x_range=xlim();
+            % y_range=ylim();
+            % z_range=zlim();
+            % center=[mean(x_range),mean(y_range),mean(z_range)];
+            % range=max([x_range(2)-x_range(1),y_range(2)-y_range(1),z_range(2)-z_range(1)])/2;
+            % xlim([center(1)-range,center(1)+range]);
+            % ylim([center(2)-range,center(2)+range]);
+            % zlim([center(3)-range,center(3)+range]);
         end
 
         function [step_str,object_index,ADVANCED_FACE]=getStep(self,object_index)

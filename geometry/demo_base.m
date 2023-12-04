@@ -4,7 +4,7 @@ close all hidden;
 
 %% BSpline curve
 
-% degree=3;point_num=5;
+% degree=3;point_num=10;
 % point_X=rand(point_num,1);point_Y=rand(point_num,1);point_Z=rand(point_num,1);
 % axe_hdl=axes(figure());
 % scatter3(axe_hdl,point_X,point_Y,point_Z,'Marker','*','MarkerEdgeColor',[0.9290 0.6940 0.1250]);
@@ -61,7 +61,7 @@ close all hidden;
 
 %% BSpline surface
 
-% u_degree=3;v_degree=3;point_num=4;
+% u_degree=3;v_degree=3;point_num=10;
 % [point_X,point_Y]=meshgrid(linspace(0,1,point_num),linspace(0,1,point_num));point_Z=rands(point_num,point_num)*0.1+0.5;
 % axe_hdl=axes(figure());
 % surface(axe_hdl,point_X,point_Y,point_Z,'Marker','*','MarkerEdgeColor','r','LineStyle','none','FaceAlpha',0);
@@ -104,25 +104,25 @@ close all hidden;
 
 %% mapping generate surface
 
-axe_hdl=axes(figure());
-axis equal;view(3);
-
-line_u0=[0,0,0.5;0,1,2;0,0,0]';
-line_u1=[0,0.5,1;0,1,2.5;2.5,2,2]';
-line_v0=[0,0,0;0,1,0;0,1,2.5]';
-line_v1=[0.5,0.5,1;2,1.5,2.5;0,1,2]';
-curve_u0=CurveBSpline('',[0,0,0.5],[0,1,2],[0,0,0]);
-curve_u1=CurveBSpline('',[0,0.5,1],[0,1,2.5],[2.5,2,2]);
-curve_0v=CurveBSpline('',[0,0,0],[0,1,0],[0,1,2.5]);
-curve_1v=CurveBSpline('',[0.5,0.5,1],[2,1.5,2.5],[0,1,2]);
-curve_u0.drawCurve(axe_hdl);
-curve_1v.drawCurve(axe_hdl);
-curve_u1.drawCurve(axe_hdl);
-curve_0v.drawCurve(axe_hdl);
-
-[point_X,point_Y,point_Z]=geomMapGrid(line_u0,line_u1,line_v0,line_v1);
-surf=SurfaceBSpline('',point_X,point_Y,point_Z);
-surf.drawSurface(axe_hdl,[],[],struct('LineStyle','none','FaceAlpha',0.5));
+% axe_hdl=axes(figure());
+% axis equal;view(3);
+% 
+% line_u0=[0,0,0.5;0,1,2;0,0,0]';
+% line_u1=[0,0.5,1;0,1,2.5;2.5,2,2]';
+% line_v0=[0,0,0;0,1,0;0,1,2.5]';
+% line_v1=[0.5,0.5,1;2,1.5,2.5;0,1,2]';
+% curve_u0=CurveBSpline('',[0,0,0.5],[0,1,2],[0,0,0]);
+% curve_u1=CurveBSpline('',[0,0.5,1],[0,1,2.5],[2.5,2,2]);
+% curve_0v=CurveBSpline('',[0,0,0],[0,1,0],[0,1,2.5]);
+% curve_1v=CurveBSpline('',[0.5,0.5,1],[2,1.5,2.5],[0,1,2]);
+% curve_u0.drawCurve(axe_hdl);
+% curve_1v.drawCurve(axe_hdl);
+% curve_u1.drawCurve(axe_hdl);
+% curve_0v.drawCurve(axe_hdl);
+% 
+% [point_X,point_Y,point_Z]=geomMapGrid(line_u0,line_u1,line_v0,line_v1);
+% surf=SurfaceBSpline('',point_X,point_Y,point_Z);
+% surf.drawSurface(axe_hdl,[],[],struct('LineStyle','none','FaceAlpha',0.5));
 
 %% Fit 3D wing
 
