@@ -57,7 +57,10 @@ classdef SurfaceCoons < SurfaceBSpline
             self.curve_0v=curve_0v;
             self.curve_1v=curve_1v;
         end
+    end
 
+    % calculate point
+    methods
         function [X,Y,Z]=calPoint(self,U,V)
             [rank_num,colume_num]=size(U);
             X=zeros(rank_num,colume_num);
@@ -107,6 +110,51 @@ classdef SurfaceCoons < SurfaceBSpline
                         z1v,z10,z11]*blend_v;
                 end
             end
+        end
+    end
+
+    % calculate coord
+    methods
+        function [U,V,X,Y,Z]=calCoord(self,X,Y,Z)
+            % base on X, Y, Z calculate local coordinate in surface
+            %
+            XO=X;YO=Y;ZO=Z;geo_torl=100*eps;
+
+            % base on range of node point to preliminary project to U, V
+            node_1=self.point_00';
+            node_2=self.point_10';
+            node_3=self.point_01';
+            node_4=self.point_11';
+            node_c=(node_1+node_2+node_3+node_4)/4;
+            vector_z=cross(node_4-node_1,node_3-node_2);vector_z=vector_z/norm(vector_z);
+            vector_x=(node_2+node_4)/2-node_c;vector_x=vector_x/norm(vector_x);
+            vector_y=cross(vector_z,vector_x);
+            proj_matrix=[vector_x,vector_y,vector_z]';
+            proj_base=node_c;
+            proj_node_1=proj_matrix*(node_1-proj_base);
+            proj_node_2=proj_matrix*(node_2-proj_base);
+            proj_node_3=proj_matrix*(node_3-proj_base);
+            proj_node_4=proj_matrix*(node_4-proj_base);
+            proj_point=proj_matrix*([X,Y,Z]'-proj_base);
+            proj_node=[proj_node_1,proj_node_2,proj_node_3,proj_node_4];
+
+            % project to 2D
+            proj_point=proj_point(1:2,:);
+            proj_node=proj_node(1:2,:);
+            
+            % re-deform of uv
+            vector_e1=(proj_node(:,2)-proj_node(:,3))/2;
+            vector_e1=vector_e1/norm(vector_e1)*max(norm(proj_node(:,2)),norm(proj_node(:,3)));
+            vector_e2=(proj_node(:,4)-proj_node(:,1))/2;
+            vector_e2=vector_e2/norm(vector_e2)*max(norm(proj_node(:,4)),norm(proj_node(:,1)));
+            sqrt2_2=sqrt(2)/2;
+            tran_matrix=[sqrt2_2,sqrt2_2;-sqrt2_2,sqrt2_2]/[vector_e1,vector_e2];
+            proj_point=tran_matrix*proj_point;
+
+            U=(proj_point(1,:)/2+0.5)';V=(proj_point(2,:)/2+0.5)';
+
+            % use project function to adjust parameter
+            [X,Y,Z,U,V]=self.calProject(XO,YO,ZO,U,V,geo_torl);
         end
     end
 end
