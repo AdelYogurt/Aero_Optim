@@ -30,7 +30,7 @@ classdef CurveBSpline < handle
         node_num;
     end
 
-    % define function
+    % define curve
     methods
         function self=CurveBSpline(name,point_X,point_Y,point_Z,FLAG_FIT,...
                 degree,knot_multi,knot_list,ctrl_num,U)
@@ -100,7 +100,7 @@ classdef CurveBSpline < handle
                 u_list=baseKnotVec(knot_multi,knot_list);
                 if node_num > 5, du_coord=1/(node_num-3);u_coord=[0,du_coord/2,linspace(du_coord,1-du_coord,node_num-4),1-du_coord/2,1];
                 else, u_coord=linspace(0,1,node_num);end
-                U=interp1(linspace(0,1,ctrl_num-degree+1),knot_list,u_coord);
+                U=interp1(linspace(0,1,length(knot_list)),knot_list,u_coord);
 
                 if ctrl_num < (degree+1)
                     error('CurveBSpline: ctrl_num less than degree+1');
@@ -142,7 +142,7 @@ classdef CurveBSpline < handle
         end
     end
 
-    % control function
+    % control curve
     methods
         function self=reverse(self)
             % revese direction of curve
@@ -159,9 +159,9 @@ classdef CurveBSpline < handle
         end
     end
 
-    % calculate point function
+    % calculate point
     methods
-        function varargout=calCurve(self,u_param)
+        function [X,Y,Z,U]=calCurve(self,u_param)
             % generate curve matrix by u_x_list or point_number
             %
             if nargin < 2 || isempty(u_param)
@@ -198,11 +198,9 @@ classdef CurveBSpline < handle
                 end
 
                 if self.dimension == 2
-                    [X,Y]=self.calPoint(U);
-                    varargout={X,Y,U};
+                    [X,Y]=self.calPoint(U);Z=[];
                 else
                     [X,Y,Z]=self.calPoint(U);
-                    varargout={X,Y,Z,U};
                 end
             end
 
@@ -250,7 +248,49 @@ classdef CurveBSpline < handle
         end
     end
 
-    % visualizate function
+    % calculate coord
+    methods
+        function [U,X,Y,Z]=calCoord(self,X,Y,Z)
+
+        end
+
+        function [X,Y,Z,U]=calPorject(self,XO,YO,ZO,U,geo_torl)
+            % adjust u by Jacobian transformation
+            % also can project point to surface
+            %
+            if nargin < 6,geo_torl=double(eps('single'));end
+        end
+
+        function [dX_dU,dY_dU,dZ_dU]=calGradient(self,U)
+            % use differ to calculate gradient
+            %
+            [X,Y,Z]=self.calPoint(U);
+            step=100*eps;
+
+            [X_UF,Y_UF,Z_UF]=self.calPoint(U+step);
+            [X_UB,Y_UB,Z_UB]=self.calPoint(U-step);
+            Bool_U=(U+step) > 1;
+            Bool_D=(U-step) < 0;
+            Bool_C=~any([Bool_U,Bool_D],2);
+            dX_dU=X;dY_dU=Y;dZ_dU=Z; % allocate memory
+            dX_dU(Bool_C)=(X_UF(Bool_C)-X_UB(Bool_C))/2/step;
+            dX_dU(Bool_U)=(X(Bool_U)-X_UB(Bool_U))/2/step;
+            dX_dU(Bool_D)=(X_UF(Bool_D)-X(Bool_D))/step;
+            dX_dU=real(dX_dU);
+            dY_dU(Bool_C)=(Y_UF(Bool_C)-Y_UB(Bool_C))/2/step;
+            dY_dU(Bool_U)=(Y(Bool_U)-Y_UB(Bool_U))/2/step;
+            dY_dU(Bool_D)=(Y_UF(Bool_D)-Y(Bool_D))/step;
+            dY_dU=real(dY_dU);
+            if ~isempty(Z)
+                dZ_dU(Bool_C)=(Z_UF(Bool_C)-Z_UB(Bool_C))/2/step;
+                dZ_dU(Bool_U)=(Z(Bool_U)-Z_UB(Bool_U))/2/step;
+                dZ_dU(Bool_D)=(Z_UF(Bool_D)-Z(Bool_D))/step;
+                dZ_dU=real(dZ_dU);
+            end
+        end
+    end
+
+    % visualizate curve
     methods
         function drawCurve(self,axe_hdl,u_param,line_option,ctrl_option,node_option)
             % draw curve on figure handle

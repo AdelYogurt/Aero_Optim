@@ -135,7 +135,7 @@ classdef SurfaceBSpline < handle
                 u_list=baseKnotVec(u_knot_multi,u_knot_list);
                 if u_node_num > 5, du_coord=1/(u_node_num-3);u_coord=[0,du_coord/2,linspace(du_coord,1-du_coord,u_node_num-4),1-du_coord/2,1];
                 else, u_coord=linspace(0,1,u_node_num);end
-                U=interp1(linspace(0,1,u_ctrl_num-u_degree+1),u_knot_list,u_coord);
+                U=interp1(linspace(0,1,length(u_knot_list)),u_knot_list,u_coord);
 
                 % default value
                 if isempty(v_degree),v_degree=v_ctrl_num-1;end
@@ -145,7 +145,7 @@ classdef SurfaceBSpline < handle
                 v_list=baseKnotVec(v_knot_multi,v_knot_list);
                 if v_node_num > 5, dv_coord=1/(v_node_num-3);v_coord=[0,dv_coord/2,linspace(dv_coord,1-dv_coord,v_node_num-4),1-dv_coord/2,1];
                 else, v_coord=linspace(0,1,v_node_num);end
-                V=interp1(linspace(0,1,v_ctrl_num-v_degree+1),v_knot_list,v_coord);
+                V=interp1(linspace(0,1,length(v_knot_list)),v_knot_list,v_coord);
 
                 if u_ctrl_num < (u_degree+1) || v_ctrl_num < (v_degree+1)
                     error('SurfaceBSpline: ctrl_num less than degree+1');
@@ -412,7 +412,7 @@ classdef SurfaceBSpline < handle
             dX=XO-X;dY=YO-Y;dZ=ZO-Z;
             boolean=(abs(dX)+abs(dY)+abs(dZ)) > geo_torl;
             while any(any(boolean)) && iter < iter_max
-                [dX_dU,dY_dU,dZ_dU,dX_dV,dY_dV,dZ_dV]=self.calGradient(U(boolean),V(boolean),X(boolean),Y(boolean),Z(boolean));
+                [dX_dU,dY_dU,dZ_dU,dX_dV,dY_dV,dZ_dV]=self.calGradient(U(boolean),V(boolean));
 
                 RU_RU=dX_dU.^2+dY_dU.^2+dZ_dU.^2;
                 RV_RV=dX_dV.^2+dY_dV.^2+dZ_dV.^2;
@@ -439,12 +439,10 @@ classdef SurfaceBSpline < handle
             end
         end
 
-        function [dX_dU,dY_dU,dZ_dU,dX_dV,dY_dV,dZ_dV]=calGradient(self,U,V,X,Y,Z)
-            % use differ ot calculate gradient
+        function [dX_dU,dY_dU,dZ_dU,dX_dV,dY_dV,dZ_dV]=calGradient(self,U,V)
+            % use differ to calculate gradient
             %
-            if nargin < 5
-                [X,Y,Z]=self.calPoint(U,V);
-            end
+            [X,Y,Z]=self.calPoint(U,V);
             step=100*eps;
 
             [X_UF,Y_UF,Z_UF]=self.calPoint(U+step,V);
@@ -454,15 +452,17 @@ classdef SurfaceBSpline < handle
             Bool_C=~any([Bool_U,Bool_D],2);
             dX_dU=X;dY_dU=Y;dZ_dU=Z; % allocate memory
             dX_dU(Bool_C)=(X_UF(Bool_C)-X_UB(Bool_C))/2/step;
-            dY_dU(Bool_C)=(Y_UF(Bool_C)-Y_UB(Bool_C))/2/step;
-            dZ_dU(Bool_C)=(Z_UF(Bool_C)-Z_UB(Bool_C))/2/step;
             dX_dU(Bool_U)=(X(Bool_U)-X_UB(Bool_U))/2/step;
-            dY_dU(Bool_U)=(Y(Bool_U)-Y_UB(Bool_U))/2/step;
-            dZ_dU(Bool_U)=(Z(Bool_U)-Z_UB(Bool_U))/2/step;
             dX_dU(Bool_D)=(X_UF(Bool_D)-X(Bool_D))/step;
+            dX_dU=real(dX_dU);
+            dY_dU(Bool_C)=(Y_UF(Bool_C)-Y_UB(Bool_C))/2/step;
+            dY_dU(Bool_U)=(Y(Bool_U)-Y_UB(Bool_U))/2/step;
             dY_dU(Bool_D)=(Y_UF(Bool_D)-Y(Bool_D))/step;
+            dY_dU=real(dY_dU);
+            dZ_dU(Bool_C)=(Z_UF(Bool_C)-Z_UB(Bool_C))/2/step;
+            dZ_dU(Bool_U)=(Z(Bool_U)-Z_UB(Bool_U))/2/step;
             dZ_dU(Bool_D)=(Z_UF(Bool_D)-Z(Bool_D))/step;
-            dX_dU=real(dX_dU);dY_dU=real(dY_dU);dZ_dU=real(dZ_dU);
+            dZ_dU=real(dZ_dU);
 
             [X_VF,Y_VF,Z_VF]=self.calPoint(U,V+step);
             [X_VB,Y_VB,Z_VB]=self.calPoint(U,V-step);
@@ -471,19 +471,21 @@ classdef SurfaceBSpline < handle
             Bool_C=~any([Bool_U,Bool_D],2);
             dX_dV=X;dY_dV=Y;dZ_dV=Z; % allocate memory
             dX_dV(Bool_C)=(X_VF(Bool_C)-X_VB(Bool_C))/2/step;
-            dY_dV(Bool_C)=(Y_VF(Bool_C)-Y_VB(Bool_C))/2/step;
-            dZ_dV(Bool_C)=(Z_VF(Bool_C)-Z_VB(Bool_C))/2/step;
             dX_dV(Bool_U)=(X(Bool_U)-X_VB(Bool_U))/2/step;
-            dY_dV(Bool_U)=(Y(Bool_U)-Y_VB(Bool_U))/2/step;
-            dZ_dV(Bool_U)=(Z(Bool_U)-Z_VB(Bool_U))/2/step;
             dX_dV(Bool_D)=(X_VF(Bool_D)-X(Bool_D))/step;
+            dX_dV=real(dX_dV);
+            dY_dV(Bool_C)=(Y_VF(Bool_C)-Y_VB(Bool_C))/2/step;
+            dY_dV(Bool_U)=(Y(Bool_U)-Y_VB(Bool_U))/2/step;
             dY_dV(Bool_D)=(Y_VF(Bool_D)-Y(Bool_D))/step;
+            dY_dV=real(dY_dV);
+            dZ_dV(Bool_C)=(Z_VF(Bool_C)-Z_VB(Bool_C))/2/step;
+            dZ_dV(Bool_U)=(Z(Bool_U)-Z_VB(Bool_U))/2/step;
             dZ_dV(Bool_D)=(Z_VF(Bool_D)-Z(Bool_D))/step;
-            dX_dV=real(dX_dV);dY_dV=real(dY_dV);dZ_dV=real(dZ_dV);
+            dZ_dV=real(dZ_dV);
         end
     end
 
-    % visualizate function
+    % visualizate surface
     methods
         function drawSurface(self,axe_hdl,U,V,surface_option,control_option,node_option)
             % draw surface on axes handle

@@ -37,14 +37,13 @@ classdef CurveCST2D < CurveBSpline
             % v, y=LY*C(u)*S(u)
             %
             % input:
-            % name, LX, LY, C_par_Y, symmetry
+            % name, C_par, sym, LX, LY
             %
             % notice:
             % if input N1, N2 == 0, or C_par is empty,...
             % class_fcn will equal to 1
             % class_fcn(U)
             %
-            self=self@CurveBSpline(name)
             if nargin < 5
                 LY=[];
                 if nargin < 4
@@ -57,6 +56,7 @@ classdef CurveCST2D < CurveBSpline
                     end
                 end
             end
+            self=self@CurveBSpline(name)
 
             if isempty(sym),self.sym=false;
             else,self.sym=sym; end
@@ -143,7 +143,7 @@ classdef CurveCST2D < CurveBSpline
             u_list=baseKnotVec(knot_multi,knot_list);
             if node_num > 5, du_coord=1/(node_num-3);u_coord=[0,du_coord/2,linspace(du_coord,1-du_coord,node_num-4),1-du_coord/2,1];
             else, u_coord=linspace(0,1,node_num);end
-            U=interp1(linspace(0,1,ctrl_num-degree+1),knot_list,u_coord);
+            U=interp1(linspace(0,1,length(knot_list)),knot_list,u_coord);
 
             if ctrl_num < (degree+1)
                 error('CurveCST2D.addShapeBSpline: ctrl_num less than degree+1');
@@ -346,6 +346,7 @@ classdef CurveCST2D < CurveBSpline
             [CX,CY]=self.class_fcn(U);
             X=CX.*SX;Y=CY.*SY;
             [X,Y]=self.axisLocalToGlobal(X,Y,U);
+            Z=[];
         end
 
         function [Y]=calClass(self,U)

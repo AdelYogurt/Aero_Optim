@@ -234,7 +234,7 @@ classdef SurfaceCST < SurfaceBSpline
             u_list=baseKnotVec(u_knot_multi,u_knot_list);
             if u_node_num > 5, du_coord=1/(u_node_num-3);u_coord=[0,du_coord/2,linspace(du_coord,1-du_coord,u_node_num-4),1-du_coord/2,1];
             else, u_coord=linspace(0,1,u_node_num);end
-            U=interp1(linspace(0,1,u_ctrl_num-u_degree+1),u_knot_list,u_coord);
+            U=interp1(linspace(0,1,length(u_knot_list)),u_knot_list,u_coord);
 
             % default value
             if isempty(v_degree),v_degree=v_ctrl_num-1;end
@@ -244,7 +244,7 @@ classdef SurfaceCST < SurfaceBSpline
             v_list=baseKnotVec(v_knot_multi,v_knot_list);
             if v_node_num > 5, dv_coord=1/(v_node_num-3);v_coord=[0,dv_coord/2,linspace(dv_coord,1-dv_coord,v_node_num-4),1-dv_coord/2,1];
             else, v_coord=linspace(0,1,v_node_num);end
-            V=interp1(linspace(0,1,v_ctrl_num-v_degree+1),v_knot_list,v_coord);
+            V=interp1(linspace(0,1,length(v_knot_list)),v_knot_list,v_coord);
 
             if u_ctrl_num < (u_degree+1) || v_ctrl_num < (v_degree+1)
                 error('SurfaceCST.addShapeBSpline: ctrl_num less than degree+1');
