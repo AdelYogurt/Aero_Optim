@@ -24,6 +24,19 @@ close all hidden;
 % curve.drawCurve(axe_hdl);
 % axis equal;
 
+%% BCST2D curve
+
+% LX=1;LY=0.5;C_par_Y=[1,1];sym=true;
+% degree=3;ctrl_num=5;
+% ctrl_X=linspace(0,1,ctrl_num);ctrl_Y=rand(ctrl_num,1)*0.5;
+% axe_hdl=axes(figure());
+% curve=CurveBCST2D('',C_par_Y,sym,LX,LY);
+% curve.addShapeBSpline(ctrl_X,ctrl_Y,[],degree);
+% curve.drawCurve(axe_hdl);
+% curve.addBlunt(1,0.01,-0.1);
+% curve.drawCurve(axe_hdl);
+% axis equal;
+
 %% fit airfoil with CST2D
 
 % airfoil_data=importdata('airfoil\NACA0012.txt');
@@ -90,7 +103,7 @@ close all hidden;
 % 
 % axe_hdl=axes(figure());
 % axis equal;view(3);
-%
+% 
 % curve_u0.drawCurve(axe_hdl);
 % curve_1v.drawCurve(axe_hdl);
 % curve_u1.drawCurve(axe_hdl);
