@@ -8,15 +8,15 @@ end
 
 switch dimension
     case 2
-        curve_name_list=fieldnames(mesh_point);
+        edge_name_list=fieldnames(mesh_point);
 
         Idx_origin=[];X_origin=[];Y_origin=[];
-        for curve_idx=1:length(curve_name_list)
-            curve_name=curve_name_list{curve_idx};
+        for edge_idx=1:length(edge_name_list)
+            edge_name=edge_name_list{edge_idx};
 
-            Idx_origin=[Idx_origin;mesh_point.(curve_name).index];
-            X_origin=[X_origin;mesh_point.(curve_name).X];
-            Y_origin=[Y_origin;mesh_point.(curve_name).Y];
+            Idx_origin=[Idx_origin;mesh_point.(edge_name).index];
+            X_origin=[X_origin;mesh_point.(edge_name).X];
+            Y_origin=[Y_origin;mesh_point.(edge_name).Y];
         end
 
         [Idx,~,Map]=unique(Idx_origin);
@@ -35,16 +35,16 @@ switch dimension
         end
         fclose(point_file);
     case 3
-        surf_name_list=fieldnames(mesh_point);
+        face_name_list=fieldnames(mesh_point);
 
         Idx_origin=[];X_origin=[];Y_origin=[];Z_origin=[];
-        for surf_idx=1:length(surf_name_list)
-            surf_name=surf_name_list{surf_idx};
+        for face_idx=1:length(face_name_list)
+            face_name=face_name_list{face_idx};
 
-            Idx_origin=[Idx_origin;mesh_point.(surf_name).index];
-            X_origin=[X_origin;mesh_point.(surf_name).X];
-            Y_origin=[Y_origin;mesh_point.(surf_name).Y];
-            Z_origin=[Z_origin;mesh_point.(surf_name).Z];
+            Idx_origin=[Idx_origin;mesh_point.(face_name).index];
+            X_origin=[X_origin;mesh_point.(face_name).X];
+            Y_origin=[Y_origin;mesh_point.(face_name).Y];
+            Z_origin=[Z_origin;mesh_point.(face_name).Z];
         end
 
         [Idx,~,Map]=unique(Idx_origin);

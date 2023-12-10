@@ -7,15 +7,15 @@ end
 
 switch dimension
     case 1
-        curve_name_list=fieldnames(coord_data);
+        edge_name_list=fieldnames(coord_data);
 
-        for curve_idx=1:length(curve_name_list)
-            curve_name=curve_name_list{curve_idx};
-            index=coord_data.(curve_name).index;
-            U=coord_data.(curve_name).U;
+        for edge_idx=1:length(edge_name_list)
+            edge_name=edge_name_list{edge_idx};
+            index=coord_data.(edge_name).index;
+            U=coord_data.(edge_name).U;
             
             % write coord
-            coord_file=fopen(fullfile(coor_filedir,[curve_name,'_local_coord.txt']),'w');
+            coord_file=fopen(fullfile(coor_filedir,[edge_name,'_local_coord.txt']),'w');
             for point_index=1:length(index)
                 fprintf(coord_file,'%d %.12f\n',index(point_index),U(point_index));
             end
@@ -23,16 +23,16 @@ switch dimension
         end
 
     case 2
-        surface_name_list=fieldnames(coord_data);
+        face_name_list=fieldnames(coord_data);
 
-        for surf_idx=1:length(surface_name_list)
-            surf_name=surface_name_list{surf_idx};
-            index=coord_data.(surf_name).index;
-            U=coord_data.(surf_name).U;
-            V=coord_data.(surf_name).V;
+        for face_idx=1:length(face_name_list)
+            face_name=face_name_list{face_idx};
+            index=coord_data.(face_name).index;
+            U=coord_data.(face_name).U;
+            V=coord_data.(face_name).V;
 
             % write coord
-            coord_file=fopen(fullfile(coor_filedir,[surf_name,'_local_coord.txt']),'w');
+            coord_file=fopen(fullfile(coor_filedir,[face_name,'_local_coord.txt']),'w');
             for point_index=1:length(index)
                 fprintf(coord_file,'%d %.12f %.12f\n',index(point_index),U(point_index),V(point_index));
             end

@@ -15,8 +15,8 @@ classdef AirfoilGeom < handle
             % while degree equal to control point number -1,...
             % BSpline will be the same as Bezier curve
             %
-            airfoil_low=CurveCST2D('AIRFOIL_LOW',1,-1,self.class_par_Y);
-            airfoil_up=CurveCST2D('AIRFOIL_UP',1,1,self.class_par_Y);
+            airfoil_low=EdgeCST2D('AIRFOIL_LOW',1,-1,self.class_par_Y);
+            airfoil_up=EdgeCST2D('AIRFOIL_UP',1,1,self.class_par_Y);
 
             airfoil_low.addShapeBSpline(control_point_low(:,1),control_point_low(:,2));
             airfoil_up.addShapeBSpline(control_point_up(:,1),control_point_up(:,2));
@@ -24,7 +24,7 @@ classdef AirfoilGeom < handle
             self.curve_list={airfoil_low,airfoil_up};
         end
 
-        function [curve,curve_idx]=getCurve(self,curve_name)
+        function [curve,curve_idx]=getEdge(self,curve_name)
             % load curve from curve_list base on input curve name
             %
             for curve_idx=1:length(self.curve_list)
@@ -49,7 +49,7 @@ classdef AirfoilGeom < handle
             for curve_idx=1:length(curve_name_list)
                 % get curve
                 curve_name=curve_name_list{curve_idx};
-                curve=self.getCurve(curve_name);
+                curve=self.getEdge(curve_name);
                 point_idx=curve_index_list.(curve_name);
 
                 % calculate coordinate
@@ -70,7 +70,7 @@ classdef AirfoilGeom < handle
             for curve_idx=1:length(curve_name_list)
                 % get curve
                 curve_name=curve_name_list{curve_idx};
-                curve=self.getCurve(curve_name);
+                curve=self.getEdge(curve_name);
                 point_idx=airfoil_coord.(curve_name).index;
                 U=airfoil_coord.(curve_name).U;
 
@@ -87,7 +87,7 @@ classdef AirfoilGeom < handle
 
     % visualization function
     methods
-        function curve_total=calCurveMatrix(self,U_par)
+        function curve_total=calEdgeMatrix(self,U_par)
             % obtain curve line
             %
             if nargin < 1
@@ -96,14 +96,14 @@ classdef AirfoilGeom < handle
 
             curve_total=cell(length(self.curve_list),1);
             for curve_idx=1:length(self.curve_list)
-                [curve.X,curve.Y]=self.curve_list{curve_idx}.calCurve(U_par);
+                [curve.X,curve.Y]=self.curve_list{curve_idx}.calEdge(U_par);
                 curve.name=self.curve_list{curve_idx}.name;
                 curve_total{curve_idx}=curve;
             end
 
         end
 
-        function drawCurve(self,axe_hdl,U_par,draw_option)
+        function drawEdge(self,axe_hdl,U_par,draw_option)
             % draw curve on figure handle
             %
             if nargin < 4
@@ -115,7 +115,7 @@ classdef AirfoilGeom < handle
                     end
                 end
             end
-            curve_total=calCurveMatrix(self,U_par);
+            curve_total=calEdgeMatrix(self,U_par);
 
             if isempty(axe_hdl),axe_hdl=axes(figure());end
             
