@@ -1,4 +1,4 @@
-classdef WaveriderCone < Body
+classdef WaveriderCone < Shell
     % generate a cone guide waverider by streamline trace
     %
 
@@ -25,7 +25,7 @@ classdef WaveriderCone < Body
                 lead_edge_fcn,R_0,L_total,W_total)
             % lead_edge_fcn is YOZ plane function
             %
-            self=self@Body(name);
+            self=self@Shell(name);
 
             self.beta=beta;
             self.lead_edge_fcn=lead_edge_fcn;
@@ -52,7 +52,7 @@ classdef WaveriderCone < Body
 
             % check base on beta can get delta or not
             beta_0=aerodynamicShockWave(gama,Ma_in,[],0);
-            if beta < beta_0,error('getConeGuidedWaverider: beta is too small');end
+            if beta < beta_0,error('WaveriderCone: beta is too small');end
 
             % notice: the characteristic of cone shock flow is the physical
             % quantity is the same on the same radial line, so we only need
@@ -75,7 +75,7 @@ classdef WaveriderCone < Body
 
         end
 
-        function surf_total=calSurfaceMatrix(self,U_num,V_par,W_num)
+        function surf_total=calFaceMatrix(self,U_num,V_par,W_num)
             % calculate surface matrix
             %
             sin_beta=sin(self.beta);
@@ -272,14 +272,14 @@ classdef WaveriderCone < Body
             % write surface
             ADVANCED_FACE_index_list=zeros(1,length(self.surface_list));
 
-            surf_total=calSurfaceMatrix(self,U_num,V_num,W_num);
+            surf_total=calFaceMatrix(self,U_num,V_num,W_num);
             surf_num=length(surf_total);
 
             for surf_idx=1:surf_num
                 surf=surf_total{surf_idx};
                 surf_name=surf.name;
                 u_degree=min(size(surf.X,2)-1,3);v_degree=min(size(surf.X,1)-1,3);
-                surf=SurfaceBSpline(surf_name,surf.X,surf.Y,surf.Z,true,u_degree,v_degree);
+                surf=FaceBSpline(surf_name,surf.X,surf.Y,surf.Z,true,u_degree,v_degree);
                 [step_str,object_index,ADVANCED_FACE_index_list(surf_idx)]=surf.getStep(object_index);
                 fprintf(step_file,step_str);
                 fprintf(step_file,'\n');
@@ -311,12 +311,12 @@ classdef WaveriderCone < Body
 
         end
 
-        function drawBody(self,axes_handle,U_num,V_par,W_num)
-            % show all surface of body
+        function drawShell(self,axes_handle,U_num,V_par,W_num)
+            % show all surface of shell
             %
             if isempty(axes_handle),axes_handle=axes(figure());end
 
-            surf_total=self.calSurfaceMatrix(U_num,V_par,W_num);
+            surf_total=self.calFaceMatrix(U_num,V_par,W_num);
 
             for surf_index=1:length(surf_total)
                 surf=surf_total{surf_index};

@@ -50,58 +50,60 @@ for body_idx=1:length(Idx_body)
         case 'SHELL_BASED_SURFACE_MODEL'
             str_body=Data{idx_body,2};
             str_list=split(str_body,',');
-            body_name=str_list{1};
+            shell_name=str_list{1};
             str_shell_list=join(str_list(2:end),',');
             Idx_shell=str2double(strsplit(strrep(str_shell_list{1}(2:end-1),'#',''),','));
+            face_list=[];
+            for shell_idx=1:length(Idx_shell)
+                idx_shell=Idx_shell(shell_idx);
+                % CLOSED/OPEN SHELL
+                str_shell=Data{idx_shell,2};
+                str_list=split(str_shell,',');str_shell=join(str_list(2:end),',');
+                Idx_face=str2double(strsplit(strrep(str_shell{1}(2:end-1),'#',''),','));
+
+                face_shell=cell(1,length(Idx_face));
+                for face_idx=1:length(Idx_face)
+                    idx_face=Idx_face(face_idx);
+
+                    str_face=Data{idx_face,2};
+                    str_list=split(str_face,',');
+                    str_list=[str_list(1),join(str_list(2:end-2),','),str_list(end-1),str_list(end)];
+
+                    % read surface and create BSpline surface
+                    idx_surf=str2double(str_list{3}(2:end));
+                    surf_type=Data{idx_surf,1};
+                    switch surf_type
+                        case 'B_SPLINE_SURFACE_WITH_KNOTS'
+                            surf=getFaceBSpline(Data,idx_face,idx_surf);
+                        case 'PLANE'
+                            surf=getPLANE(Data,idx_face,idx_surf);
+                        otherwise
+                            continue;
+                            % error('readGeomStep: unknown surface type');
+                    end
+                    face_shell{face_idx}=surf;
+                end
+                face_list=[face_list,face_shell];
+            end
+
+            body=Shell(shell_name,face_list);
+
         case 'MANIFOLD_SOLID_BREP'
             str_body=Data{idx_body,2};
             str_list=split(str_body,',');
-            body_name=str_list{1};
-            Idx_shell=str2double(str_list{2}(2:end));
+            solid_name=str_list{1};
+            Idx_solid=str2double(str_list{2}(2:end));
+
+            body=Solid(solid_name);
         otherwise
             error('readGeomStep: unknown body type');
     end
-
-    surf_list=[];
-    for shell_idx=1:length(Idx_shell)
-        idx_shell=Idx_shell(shell_idx);
-        % CLOSED/OPEN SHELL
-        str_shell=Data{idx_shell,2};
-        str_list=split(str_shell,',');str_shell=join(str_list(2:end),',');
-        Idx_face=str2double(strsplit(strrep(str_shell{1}(2:end-1),'#',''),','));
-
-        surf_shell=cell(1,length(Idx_face));
-        for face_idx=1:length(Idx_face)
-            idx_face=Idx_face(face_idx);
-
-            str_face=Data{idx_face,2};
-            str_list=split(str_face,',');
-            str_list=[str_list(1),join(str_list(2:end-2),','),str_list(end-1),str_list(end)];
-
-            % read surface and create BSpline surface
-            idx_surf=str2double(str_list{3}(2:end));
-            surf_type=Data{idx_surf,1};
-            switch surf_type
-                case 'B_SPLINE_SURFACE_WITH_KNOTS'
-                    surf=getSurfaceBSpline(Data,idx_face,idx_surf);
-                case 'PLANE'
-                    surf=getPLANE(Data,idx_face,idx_surf);
-                otherwise
-                    continue;
-                    % error('readGeomStep: unknown surface type');
-            end
-            surf_shell{face_idx}=surf;
-        end
-        surf_list=[surf_list,surf_shell];
-    end
-
-    body=Body(body_name,surf_list);
     body_list{body_idx}=body;
 end
 
 end
 
-function surf=getSurfaceBSpline(Data,idx_face,idx_surf)
+function surf=getFaceBSpline(Data,idx_face,idx_surf)
 % generate BSpline surface by BSpline surface string data
 %
 
@@ -169,7 +171,7 @@ for u_idx=1:u_ctrl_num
     end
 end
 
-surf=SurfaceBSpline(name,ctrl_X,ctrl_Y,ctrl_Z,...
+surf=FaceBSpline(name,ctrl_X,ctrl_Y,ctrl_Z,...
     [],u_degree,v_degree,...
     u_knot_multi,v_knot_multi,u_knot_list,v_knot_list);
 
@@ -191,7 +193,7 @@ str_bound=join(str_list(2:end-2),',');str_bound=strrep(str_bound{1}(2:end-1),'#'
 Idx_bound=str2double(strsplit(str_bound,','));
 
 % BOUND
-curve_list=getBound(Data,Idx_bound);
+edge_list=getBound(Data,Idx_bound);
 
 str_surf=Data{surf_idx,2};
 % main properties
@@ -202,73 +204,60 @@ idx_axis=str2double(str_surf(2:end));
 % axis
 str_axis=Data{idx_axis,2};
 
-% process curve_list
-if length(curve_list) > 4
-%     error('getPLANE: curve of bound more than 4, cannot generate BSpline surface');
-surf=[];
-return;
+% process edge_list
+if length(edge_list) > 4
+    surf=[];
+    return;
 end
-switch length(curve_list)
+switch length(edge_list)
     case 2
-        curve_1=curve_list{1};
-        curve_3=curve_list{2};
-        v_num=max(curve_1.ctrl_num,curve_3.ctrl_num);
-        v_degree=min(curve_1.degree,curve_3.degree);
+        edge_1=edge_list{1};
+        edge_3=edge_list{2};
+        v_degree=max(edge_1.degree,edge_3.degree);
         u_degree=1;
 
-        [control_1,curve_1]=increaseDegree(curve_1,v_num,v_degree);
-        [control_3,curve_3]=increaseDegree(curve_3,v_num,v_degree);
+        edge_1.changeDegree(v_degree);control_1=[edge_1.ctrl_X,edge_1.ctrl_Y,edge_1.ctrl_Z];
+        edge_3.changeDegree(v_degree);control_3=[edge_3.ctrl_X,edge_3.ctrl_Y,edge_3.ctrl_Z];
 
         control_2=repmat(control_1(end,:),2,1);
         control_4=repmat(control_1(1,:),2,1);
     case 3
-        curve_1=curve_list{1};
-        curve_2=curve_list{2};
-        curve_3=curve_list{3};
-        u_num=max(curve_2.ctrl_num);
-        v_num=max(curve_1.ctrl_num,curve_3.ctrl_num);
-        u_degree=min(curve_2.degree);
-        v_degree=max(curve_1.degree,curve_3.degree);
+        edge_1=edge_list{1};
+        edge_2=edge_list{2};
+        edge_3=edge_list{3};
+        u_degree=max(edge_2.degree);
+        v_degree=max(edge_1.degree,edge_3.degree);
 
-        [control_1,curve_1]=increaseDegree(curve_1,v_num,v_degree);
-        control_2=curve_2.ctrl_list;
-        [control_3,curve_3]=increaseDegree(curve_3,v_num,v_degree);
+        edge_1.changeDegree(v_degree);control_1=[edge_1.ctrl_X,edge_1.ctrl_Y,edge_1.ctrl_Z];
+        edge_2.changeDegree(u_degree);control_2=[edge_2.ctrl_X,edge_2.ctrl_Y,edge_2.ctrl_Z];
+        edge_3.changeDegree(v_degree);control_3=[edge_3.ctrl_X,edge_3.ctrl_Y,edge_3.ctrl_Z];
 
         control_4=repmat(control_1(1,:),u_num,1);
     case 4
-        curve_1=curve_list{1};
-        curve_2=curve_list{2};
-        curve_3=curve_list{3};
-        curve_4=curve_list{4};
-        u_num=max(curve_2.ctrl_num,curve_4.ctrl_num);
-        v_num=max(curve_1.ctrl_num,curve_3.ctrl_num);
-        u_degree=min(curve_2.degree,curve_4.degree);
-        v_degree=max(curve_1.degree,curve_3.degree);
+        edge_1=edge_list{1};
+        edge_2=edge_list{2};
+        edge_3=edge_list{3};
+        edge_4=edge_list{4};
+        u_degree=max(edge_2.degree,edge_4.degree);
+        v_degree=max(edge_1.degree,edge_3.degree);
 
-        [control_1,curve_1]=increaseDegree(curve_1,v_num,v_degree);
-        [control_2,curve_2]=increaseDegree(curve_2,u_num,u_degree);
-        [control_3,curve_3]=increaseDegree(curve_3,v_num,v_degree);
-        [control_4,curve_4]=increaseDegree(curve_4,u_num,u_degree);
+        edge_1.changeDegree(v_degree);control_1=[edge_1.ctrl_X,edge_1.ctrl_Y,edge_1.ctrl_Z];
+        edge_2.changeDegree(u_degree);control_2=[edge_2.ctrl_X,edge_2.ctrl_Y,edge_2.ctrl_Z];
+        edge_3.changeDegree(v_degree);control_3=[edge_3.ctrl_X,edge_3.ctrl_Y,edge_3.ctrl_Z];
+        edge_4.changeDegree(u_degree);control_4=[edge_4.ctrl_X,edge_4.ctrl_Y,edge_4.ctrl_Z];
 end
 
 [ctrl_X,ctrl_Y,ctrl_Z]=geomMapGrid(control_2,control_3,control_4,control_1);
 
 % process bound with axis
-surf=SurfaceBSpline(name,ctrl_X,ctrl_Y,ctrl_Z,[],u_degree,v_degree);
-
-    function [ctrl_list,curve]=increaseDegree(curve,control_num,degree)
-        % increase degree of ctrl_list by connect center point
-        [node_X,node_X,node_Z]=curve.calPoint(linspace(0,1,control_num));
-        curve=CurveBSpline(curve.name,node_X,node_X,node_Z,true,degree);
-        ctrl_list=[curve.ctrl_X,curve.ctrl_Y,curve.ctrl_Z];
-    end
+surf=FaceBSpline(name,ctrl_X,ctrl_Y,ctrl_Z,[],u_degree,v_degree);
 end
 
-function curve_list=getBound(Data,Idx_bound)
+function edge_list=getBound(Data,Idx_bound)
 % get bound around face
 %
 
-curve_list=[];
+edge_list=[];
 % load bound
 for bound_idx=1:length(Idx_bound)
     idx_bound=Idx_bound(bound_idx);
@@ -287,7 +276,7 @@ for bound_idx=1:length(Idx_bound)
     name=str_loop(1:idx-1);str_loop(1:idx)=[];
     Idx_edge=str2double(strsplit(strrep(str_loop(2:end-1),'#',''),','));
 
-    loop_curve_list=cell(1,length(Idx_edge));
+    loop_edge_list=cell(1,length(Idx_edge));
     % ORIENTED_EDGE
     for edge_idx=1:length(Idx_edge)
         idx_edge=Idx_edge(edge_idx);
@@ -313,66 +302,66 @@ for bound_idx=1:length(Idx_bound)
         idx=find(str_edge == ',',1);
         idx_vertex_end=str2double(str_edge(2:idx-1));str_edge(1:idx)=[];
         idx=find(str_edge == ',',1);
-        idx_curve=str2double(str_edge(2:idx-1));str_edge(1:idx)=[];
+        idx_edge=str2double(str_edge(2:idx-1));str_edge(1:idx)=[];
         same_sense=str_edge;
 
         % CURVE
-        curve_type=Data{idx_curve,1};
-        switch curve_type
+        edge_type=Data{idx_edge,1};
+        switch edge_type
             case 'B_SPLINE_CURVE_WITH_KNOTS'
-                curve=getCurveBSpline(Data,idx_vertex_start,idx_vertex_end,idx_curve);
+                edge=getEdgeBSpline(Data,idx_vertex_start,idx_vertex_end,idx_edge);
             case 'LINE'
-                curve=getLINE(Data,idx_vertex_start,idx_vertex_end,idx_curve);
+                edge=getLINE(Data,idx_vertex_start,idx_vertex_end,idx_edge);
             otherwise
-                error('getBound: unknown curve type');
+                error('getBound: unknown edge type');
         end
 
         % process orientation
         if contains(orientation,'F')
             % reverse
-            curve.reverse();
+            edge.reverse();
         end
 
-        loop_curve_list{edge_idx}=curve;
+        loop_edge_list{edge_idx}=edge;
     end
-    curve_list=[curve_list,loop_curve_list];
+    edge_list=[edge_list,loop_edge_list];
 end
 end
 
-function curve=getCurveBSpline(Data,idx_vertex_start,idx_vertex_end,idx_curve)
-% generate BSpline curve by BSpline curve string data
+function edge=getEdgeBSpline(Data,idx_vertex_start,idx_vertex_end,idx_edge)
+% generate BSpline edge by BSpline edge string data
 %
 
-str_curve=Data{idx_curve,2};
+str_edge=Data{idx_edge,2};
 
 % main properties
-idx=find(str_curve == ',',1);
-name=str_curve(1:idx-1);str_curve(1:idx)=[];
-idx=find(str_curve == ',',1);
-degree=str2double(str_curve(1:idx-1));str_curve(1:idx)=[];
+idx=find(str_edge == ',',1);
+name=str_edge(1:idx-1);str_edge(1:idx)=[];
+idx=find(str_edge == ',',1);
+degree=str2double(str_edge(1:idx-1));str_edge(1:idx)=[];
 
 % read control point matrix
-idx=find(str_curve == ')',1);
-Idx_control=str2double(strsplit(strrep(str_curve(2:idx-1),'#',''),','));str_curve(1:idx+1)=[];
+idx=find(str_edge == ')',1);
+Idx_control=str2double(strsplit(strrep(str_edge(2:idx-1),'#',''),','));str_edge(1:idx+1)=[];
 
 % properties
-idx=find(str_curve == ',',1);
-curve_form=(str_curve(1:idx-1));str_curve(1:idx)=[];
-idx=find(str_curve == ',',1);
-closed_curve=(str_curve(1:idx-1));str_curve(1:idx)=[];
-idx=find(str_curve == ',',1);
-self_intersect=(str_curve(1:idx-1));str_curve(1:idx)=[];
+idx=find(str_edge == ',',1);
+edge_form=(str_edge(1:idx-1));str_edge(1:idx)=[];
+idx=find(str_edge == ',',1);
+closed_edge=(str_edge(1:idx-1));str_edge(1:idx)=[];
+idx=find(str_edge == ',',1);
+self_intersect=(str_edge(1:idx-1));str_edge(1:idx)=[];
 
 % knot_multi
-idx=find(str_curve == ')',1);
-knot_multi=str2double(split(str_curve(2:idx-1),',',2));str_curve(1:idx+1)=[];
+idx=find(str_edge == ')',1);
+knot_multi=str2double(split(str_edge(2:idx-1),',',2));str_edge(1:idx+1)=[];
 
 % knot_list
-idx=find(str_curve == ')',1);
-knot_list=str2double(split(str_curve(2:idx-1),',',2));str_curve(1:idx+1)=[];
+idx=find(str_edge == ')',1);
+knot_list=str2double(split(str_edge(2:idx-1),',',2));str_edge(1:idx+1)=[];
 
 % knot_spec
-knot_spec=str_curve;
+knot_spec=str_edge;
 
 % load control point data
 ctrl_list=zeros(length(Idx_control),3);
@@ -399,29 +388,29 @@ if norm(point_start-ctrl_list(1,:)) > 100*eps &&...
     knot_list=1-fliplr(knot_list);
 end
 
-curve=CurveBSpline(name,ctrl_list(:,1),ctrl_list(:,2),ctrl_list(:,3),[],degree,...
+edge=EdgeBSpline(name,ctrl_list(:,1),ctrl_list(:,2),ctrl_list(:,3),[],degree,...
     knot_multi,knot_list);
 
-curve.curve_form=curve_form;
-curve.closed_curve=closed_curve;
-curve.self_intersect=self_intersect;
-curve.knot_spec=knot_spec;
+edge.edge_form=edge_form;
+edge.closed_edge=closed_edge;
+edge.self_intersect=self_intersect;
+edge.knot_spec=knot_spec;
 end
 
-function curve=getLINE(Data,idx_vertex_start,idx_vertex_end,idx_curve)
-% generate BSpline curve by line string data
+function edge=getLINE(Data,idx_vertex_start,idx_vertex_end,idx_edge)
+% generate BSpline edge by line string data
 %
 
-str_curve=Data{idx_curve,2};
+str_edge=Data{idx_edge,2};
 
 % name
-idx=find(str_curve == ',',1);
-name=str_curve(1:idx-1);str_curve(1:idx)=[];
+idx=find(str_edge == ',',1);
+name=str_edge(1:idx-1);str_edge(1:idx)=[];
 
 % properties
-idx=find(str_curve == ',',1);
-idx_point=str2double(str_curve(2:idx-1));str_curve(1:idx)=[];
-idx_vertor=str2double(str_curve(2:end));
+idx=find(str_edge == ',',1);
+idx_point=str2double(str_edge(2:idx-1));str_edge(1:idx)=[];
+idx_vertor=str2double(str_edge(2:end));
 
 % point start
 point_start=getPoint(Data,idx_point);
@@ -447,7 +436,7 @@ idx_point_end=str2double(str_vertex(2:end));
 point_end=getPoint(Data,idx_point_end);
 
 point=[point_start;point_end];
-curve=CurveBSpline(name,point(:,1),point(:,2),point(:,3));
+edge=EdgeBSpline(name,point(:,1),point(:,2),point(:,3));
 
 end
 

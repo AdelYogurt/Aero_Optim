@@ -1,4 +1,4 @@
-classdef CurveBSpline < handle
+classdef EdgeBSpline < handle
     % B-spline curve
     % define reference to step standard
     %
@@ -32,7 +32,7 @@ classdef CurveBSpline < handle
 
     % define curve
     methods
-        function self=CurveBSpline(name,point_X,point_Y,point_Z,FLAG_FIT,...
+        function self=EdgeBSpline(name,point_X,point_Y,point_Z,FLAG_FIT,...
                 degree,knot_multi,knot_list,ctrl_num,U)
             % generate BSpline curve by defining control point of fitting point
             %
@@ -42,7 +42,7 @@ classdef CurveBSpline < handle
             % ctrl_num(optional), U(optional)
             %
             % output:
-            % CurveBSpline
+            % EdgeBSpline
             %
             % notice:
             % if input degree is empty, degree default is ctrl_num-1,...
@@ -76,11 +76,11 @@ classdef CurveBSpline < handle
                     node_X=point_X(:);node_Y=point_Y(:);node_Z=point_Z(:);
                     node_num=length(node_X);
                     if length(node_Y) ~= node_num || length(node_Z) ~= node_num
-                        error('CurveBSpline: size of node_X, node_Y, node_Z do not equal');
+                        error('EdgeBSpline: size of node_X, node_Y, node_Z do not equal');
                     end
                     if isempty(ctrl_num),ctrl_num=node_num;end
                     if ctrl_num > node_num
-                        error('CurveBSpline: ctrl_num more than node_num')
+                        error('EdgeBSpline: ctrl_num more than node_num')
                     end
                 else
                     ctrl_X=point_X(:);ctrl_Y=point_Y(:);ctrl_Z=point_Z(:);
@@ -88,7 +88,7 @@ classdef CurveBSpline < handle
                     if isempty(degree),degree=ctrl_num-1;end
                     node_num=ctrl_num-degree+1;
                     if length(ctrl_Y) ~= ctrl_num || length(ctrl_Z) ~= ctrl_num
-                        error('CurveBSpline: size of ctrl_X, ctrl_Y, ctrl_Z do not equal');
+                        error('EdgeBSpline: size of ctrl_X, ctrl_Y, ctrl_Z do not equal');
                     end
                 end
 
@@ -103,7 +103,11 @@ classdef CurveBSpline < handle
                 U=interp1(linspace(0,1,length(knot_list)),knot_list,u_coord);
 
                 if ctrl_num < (degree+1)
-                    error('CurveBSpline: ctrl_num less than degree+1');
+                    error('EdgeBSpline: ctrl_num less than degree+1');
+                end
+
+                if length(u_list) ~= ctrl_num+degree+1
+                    error('EdgeBSpline: number of knot num do not equal to ctrl_num+degree');
                 end
 
                 if FLAG_FIT
@@ -144,7 +148,7 @@ classdef CurveBSpline < handle
 
     % control curve
     methods
-        function self=reverse(self)
+        function reverse(self)
             % revese direction of curve
             %
             self.ctrl_X=flipud(self.ctrl_X);
@@ -157,11 +161,61 @@ classdef CurveBSpline < handle
             self.node_Y=flipud(self.node_Y);
             self.node_Z=flipud(self.node_Z);
         end
+
+        function changeDegree(self,degree_target)
+            if degree_target > self.degree
+                degree_old=self.degree;
+                ctrl_old=[self.ctrl_X,self.ctrl_Y,self.ctrl_Z];
+                ctrl_num_old=self.ctrl_num;
+                u_list_old=self.u_list;
+                knot_multi_old=self.knot_multi;
+
+                for degree_temp=self.degree+1:degree_target
+                    % add repeat node
+                    degree_new=degree_old+1;
+                    ctrl_num_new=ctrl_num_old+1;
+                    knot_multi_new=knot_multi_old+1;
+                    u_list_new=baseKnotVec(knot_multi_new,self.knot_list);
+
+                    % calculate new ctrl
+                    matrix=zeros(ctrl_num_new,ctrl_num_old);
+                    for j=1:ctrl_num_new
+                        for i=1:ctrl_num_old
+                            matrix(j,i)=baseFcnL(u_list_old,u_list_new,i,j,degree_old);
+                        end
+                    end
+                    matrix=1/degree_new*matrix;
+                    ctrl_new=matrix*ctrl_old;
+
+                    % sort old curve data
+                    degree_old=degree_new;
+                    ctrl_num_old=ctrl_num_new;
+                    knot_multi_old=knot_multi_new;
+                    u_list_old=u_list_new;
+                    ctrl_old=ctrl_new;
+                end
+
+                self.degree=degree_new;
+
+                self.ctrl_X=ctrl_new(:,1);
+                self.ctrl_Y=ctrl_new(:,2);
+                self.ctrl_Z=ctrl_new(:,3);
+                self.ctrl_num=ctrl_num_new;
+
+                self.knot_multi=knot_multi_new;
+
+                self.u_list=u_list_new;
+                self.node_num=self.ctrl_num-self.degree+1;
+                [self.node_X,self.node_Y,self.node_Z]=self.calPoint(u_list_new(degree_new+1:ctrl_num_new+1));
+            elseif degree_target < self.degree
+
+            end
+        end
     end
 
     % calculate point
     methods
-        function [X,Y,Z,U]=calCurve(self,u_param)
+        function [X,Y,Z,U]=calEdge(self,u_param)
             % generate curve matrix by u_x_list or point_number
             %
             if nargin < 2 || isempty(u_param)
@@ -169,20 +223,12 @@ classdef CurveBSpline < handle
             end
 
             if length(u_param) == 1 && u_param ~= fix(u_param) 
-                value_torl=u_param;max_level=50;
+                value_torl=u_param;min_level=5;max_level=50;
                 low_bou=0;up_bou=1;
-                if self.dimension == 2
-                    [U,data_list,~]=meshAdapt1D(@(x) coordFcn2D(self,x),low_bou,up_bou,value_torl,max_level,2);
-                    X=data_list(:,1);
-                    Y=data_list(:,2);
-                    varargout={X,Y,U};
-                else
-                    [U,data_list,~]=meshAdapt1D(@(x) coordFcn(self,x),low_bou,up_bou,value_torl,max_level,3);
-                    X=data_list(:,1);
-                    Y=data_list(:,2);
-                    Z=data_list(:,3);
-                    varargout={X,Y,Z,U};
-                end
+                [U,data_list,~]=meshAdapt1D(@(x) coordFcn(self,x),low_bou,up_bou,value_torl,min_level,max_level,3);
+                X=data_list(:,1);
+                Y=data_list(:,2);
+                Z=data_list(:,3);
             else
                 if length(u_param) == 1
                     U=[];
@@ -271,7 +317,8 @@ classdef CurveBSpline < handle
             [X_UB,Y_UB,Z_UB]=self.calPoint(U-step);
             Bool_U=(U+step) > 1;
             Bool_D=(U-step) < 0;
-            Bool_C=~any([Bool_U,Bool_D],2);
+            Bool(:,:,1)=Bool_U;Bool(:,:,2)=Bool_D;
+            Bool_C=~any(Bool,3);
             dX_dU=X;dY_dU=Y;dZ_dU=Z; % allocate memory
             dX_dU(Bool_C)=(X_UF(Bool_C)-X_UB(Bool_C))/2/step;
             dX_dU(Bool_U)=(X(Bool_U)-X_UB(Bool_U))/2/step;
@@ -292,7 +339,7 @@ classdef CurveBSpline < handle
 
     % visualizate curve
     methods
-        function drawCurve(self,axe_hdl,u_param,line_option,ctrl_option,node_option)
+        function drawEdge(self,axe_hdl,u_param,line_option,ctrl_option,node_option)
             % draw curve on figure handle
             %
             if nargin < 6
@@ -326,7 +373,7 @@ classdef CurveBSpline < handle
 
             % calculate point on curve
             if self.dimension == 2
-                [X,Y]=self.calCurve(u_param);
+                [X,Y]=self.calEdge(u_param);
 
                 % plot line
                 line(axe_hdl,X,Y,line_option);
@@ -337,7 +384,7 @@ classdef CurveBSpline < handle
                     line(axe_hdl,self.ctrl_X,self.ctrl_Y,ctrl_option);
                 end
             else
-                [X,Y,Z]=self.calCurve(u_param);
+                [X,Y,Z]=self.calEdge(u_param);
 
                 % plot line
                 line(axe_hdl,X,Y,Z,line_option);
@@ -353,15 +400,15 @@ classdef CurveBSpline < handle
             xlabel('x');
             ylabel('y');
 
-%             axis equal
-%             x_range=xlim();
-%             y_range=ylim();
-%             z_range=zlim();
-%             center=[mean(x_range),mean(y_range),mean(z_range)];
-%             range=max([x_range(2)-x_range(1),y_range(2)-y_range(1),z_range(2)-z_range(1)])/2;
-%             xlim([center(1)-range,center(1)+range]);
-%             ylim([center(2)-range,center(2)+range]);
-%             zlim([center(3)-range,center(3)+range]);
+            % axis equal
+            % x_range=xlim();
+            % y_range=ylim();
+            % z_range=zlim();
+            % center=[mean(x_range),mean(y_range),mean(z_range)];
+            % range=max([x_range(2)-x_range(1),y_range(2)-y_range(1),z_range(2)-z_range(1)])/2;
+            % xlim([center(1)-range,center(1)+range]);
+            % ylim([center(2)-range,center(2)+range]);
+            % zlim([center(3)-range,center(3)+range]);
         end
 
         function [step_str,object_index]=getStep(self,object_index)
@@ -411,14 +458,12 @@ end
 
 %% common function
 
-function [x_list,fval_list,node_list]=meshAdapt1D(fcn,low_bou,up_bou,torl,max_level,fval_num)
+function [x_list,fval_list,node_list]=meshAdapt1D(fcn,low_bou,up_bou,torl,min_level,max_level,fval_num)
 % Binary-tree
 % adapt capture function value
 % ensure error of linear interplation will less than torl
 %
-if nargin < 6
-    fval_num=1;
-end
+if nargin < 7,fval_num=1;end
 
 % node_list which is a matrix store all node
 % a node is a array, contain level, index_1, index_2, index_c, node_index_1, node_index_2
@@ -488,7 +533,7 @@ fval_list=[data_list(1,2:end);fval_list;data_list(2,2:end)];
                 node([5,6])=node_new_idx;
                 node_num=node_num+2;
 
-                if any(abs(fval_c-fval_c_pred) > torl)
+                if any(abs(fval_c-fval_c_pred) > torl) || node(1) <= min_level
                     % add to stack
                     stack=[stack,node_new_idx];
                     node_list(node_idx,:)=node;
@@ -526,4 +571,64 @@ fval_list=[data_list(1,2:end);fval_list;data_list(2,2:end)];
             node_idx=node_list(node_idx,6);
         end
     end
+end
+
+function L=baseFcnL(u_list,u_new_list,i,j,k)
+% base function of increase degree
+%
+if k == 0
+    if ((u_list(i) <= u_new_list(j)) && (u_new_list(j) <= u_list(i+1)))
+        if any(u_list == u_new_list(j)) && u_new_list(j) ~= u_list(1) && u_new_list(j) ~= u_list(end)
+            L=0.5;
+        else
+            L=1;
+        end
+    else
+        L=0;
+    end
+else
+    if u_list(i+k) == u_list(i)
+        A=0;
+    else
+        A=(u_new_list(j+k+1)-u_list(i))/(u_list(i+k)-u_list(i));
+    end
+
+    if u_list(i+k+1) == u_list(i+1)
+        B=0;
+    else
+        B=(u_list(i+k+1)-u_new_list(j+k+1))/(u_list(i+k+1)-u_list(i+1));
+    end
+
+    L=A*baseFcnL(u_list,u_new_list,i,j,k-1)+B*baseFcnL(u_list,u_new_list,i+1,j,k-1)+baseFcna(u_list,u_new_list,i,j,k);
+end
+end
+
+function a=baseFcna(u_list,u_new_list,i,j,k)
+% discrete base function of BSpline curve
+%
+if k == 0
+    if ((u_list(i) <= u_new_list(j)) && (u_new_list(j) < u_list(i+1)))
+        if any(u_list == u_new_list(j)) && u_new_list(j) ~= u_list(1) && u_new_list(j) ~= u_list(end)
+            a=0.5;
+        else
+            a=1;
+        end
+    else
+        a=0;
+    end
+else
+    if u_list(i+k) == u_list(i)
+        A=0;
+    else
+        A=(u_new_list(j+k)-u_list(i))/(u_list(i+k)-u_list(i));
+    end
+
+    if u_list(i+k+1) == u_list(i+1)
+        B=0;
+    else
+        B=(u_list(i+k+1)-u_new_list(j+k))/(u_list(i+k+1)-u_list(i+1));
+    end
+
+    a=A*baseFcna(u_list,u_new_list,i,j,k-1)+B*baseFcna(u_list,u_new_list,i+1,j,k-1);
+end
 end

@@ -1,4 +1,4 @@
-classdef CurveCST2D < CurveBSpline
+classdef EdgeCST2D < EdgeBSpline
     % CST curve
     %
     properties
@@ -30,7 +30,7 @@ classdef CurveCST2D < CurveBSpline
 
     % define curve
     methods
-        function self=CurveCST2D(name,C_par,sym,LX,LY)
+        function self=EdgeCST2D(name,C_par,sym,LX,LY)
             % generate 2D CST line by LX, LY, C_par
             %
             % u, x=LX*S(u)
@@ -56,7 +56,7 @@ classdef CurveCST2D < CurveBSpline
                     end
                 end
             end
-            self=self@CurveBSpline(name)
+            self=self@EdgeBSpline(name)
 
             if isempty(sym),self.sym=false;
             else,self.sym=sym; end
@@ -119,11 +119,11 @@ classdef CurveCST2D < CurveBSpline
                 node_X=point_X(:);node_Y=point_Y(:);
                 node_num=length(node_X);
                 if length(node_Y) ~= node_num
-                    error('CurveCST2D.addShapeBSpline: size of node_X, node_Y do not equal');
+                    error('EdgeCST2D.addShapeBSpline: size of node_X, node_Y do not equal');
                 end
                 if isempty(ctrl_num),ctrl_num=node_num;end
                 if ctrl_num > node_num
-                    error('CurveCST2D.addShapeBSpline: ctrl_num can not more than node_num')
+                    error('EdgeCST2D.addShapeBSpline: ctrl_num can not more than node_num')
                 end
             else
                 ctrl_X=point_X(:);ctrl_Y=point_Y(:);
@@ -131,7 +131,7 @@ classdef CurveCST2D < CurveBSpline
                 if isempty(degree),degree=ctrl_num-1;end
                 node_num=ctrl_num-degree+1;
                 if length(ctrl_Y) ~= ctrl_num
-                    error('CurveCST2D.addShapeBSpline: size of ctrl_X, ctrl_Y do not equal');
+                    error('EdgeCST2D.addShapeBSpline: size of ctrl_X, ctrl_Y do not equal');
                 end
             end
 
@@ -146,7 +146,11 @@ classdef CurveCST2D < CurveBSpline
             U=interp1(linspace(0,1,length(knot_list)),knot_list,u_coord);
 
             if ctrl_num < (degree+1)
-                error('CurveCST2D.addShapeBSpline: ctrl_num less than degree+1');
+                error('EdgeCST2D.addShapeBSpline: ctrl_num less than degree+1');
+            end
+
+            if length(u_list) ~= ctrl_num+degree+1
+                error('EdgeBSpline: number of knot num do not equal to ctrl_num+degree');
             end
 
             if FLAG_FIT
@@ -221,7 +225,7 @@ classdef CurveCST2D < CurveBSpline
             end
 
             if isempty(self.C_par)
-                error('CurveCST2D.optimClass: input C_par is handle, cannot optimize coefficient of class function');
+                error('EdgeCST2D.optimClass: input C_par is handle, cannot optimize coefficient of class function');
             end
             
             C_par_low_bou=[0,0];
@@ -385,7 +389,7 @@ classdef CurveCST2D < CurveBSpline
 
     % visualizate function
     methods
-        function drawCurve(self,axe_hdl,u_param,line_option,ctrl_option,node_option)
+        function drawEdge(self,axe_hdl,u_param,line_option,ctrl_option,node_option)
             % draw curve on figure handle
             %
             if nargin < 6
@@ -419,7 +423,7 @@ classdef CurveCST2D < CurveBSpline
 
             % calculate point on curve
             if self.dimension == 2
-                [X,Y]=self.calCurve(u_param);
+                [X,Y]=self.calEdge(u_param);
 
                 % plot line
                 line(axe_hdl,X,Y,line_option);

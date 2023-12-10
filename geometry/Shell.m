@@ -1,5 +1,5 @@
-classdef Body < handle
-    % body
+classdef Shell < handle
+    % shell
     %
     properties
         name;
@@ -8,7 +8,7 @@ classdef Body < handle
 
     % define function
     methods
-        function self=Body(name,surface_list)
+        function self=Shell(name,surface_list)
             if nargin < 2
                 surface_list={};
             end
@@ -20,7 +20,7 @@ classdef Body < handle
 
     % control function
     methods
-        function [surf,surf_idx]=getSurface(self,surf_name)
+        function [surf,surf_idx]=getFace(self,surf_name)
             % load surface from surface_list base on input surface name
             %
             for surf_idx=1:length(self.surface_list)
@@ -37,9 +37,9 @@ classdef Body < handle
 
     % visualizate function
     methods
-        function drawBody(self,axes_handle,u_param,v_param)
-            % draw all surface of body
-            % wrapper of drawSurface
+        function drawShell(self,axes_handle,u_param,v_param)
+            % draw all surface of shell
+            % wrapper of drawFace
             %
             if nargin < 4
                 v_param=[];
@@ -56,7 +56,7 @@ classdef Body < handle
             for surf_idx=1:surf_num
                 surf=self.surface_list{surf_idx};
                 if ~isempty(surf)
-                    surf.drawSurface(axes_handle,u_param,v_param);
+                    surf.drawFace(axes_handle,u_param,v_param);
                 end
             end
             

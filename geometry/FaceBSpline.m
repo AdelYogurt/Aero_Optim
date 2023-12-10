@@ -1,4 +1,4 @@
-classdef SurfaceBSpline < handle
+classdef FaceBSpline < handle
     % B-spline surface
     % define reference to step standard
     %
@@ -38,7 +38,7 @@ classdef SurfaceBSpline < handle
 
     % define surface
     methods
-        function self=SurfaceBSpline(name,point_X,point_Y,point_Z,FLAG_FIT,...
+        function self=FaceBSpline(name,point_X,point_Y,point_Z,FLAG_FIT,...
                 u_degree,v_degree,u_knot_multi,v_knot_multi,u_knot_list,v_knot_list,...
                 u_ctrl_num,v_ctrl_num,U,V)
             % generate BSpline surface by defining control point of fitting point
@@ -52,7 +52,7 @@ classdef SurfaceBSpline < handle
             % U(optional), V(optional)
             %
             % output:
-            % SurfaceBSpline
+            % FaceBSpline
             %
             % notice:
             % colume of X, Y, Z is LaWGS format
@@ -103,16 +103,16 @@ classdef SurfaceBSpline < handle
                     [v_node_num,u_node_num]=size(node_X);
                     if any(size(node_Y) ~= [v_node_num,u_node_num]) ||...
                             any(size(node_Z) ~= [v_node_num,u_node_num])
-                        error('SurfaceBSpline: size of node_X, node_Y, node_Z do not equal');
+                        error('FaceBSpline: size of node_X, node_Y, node_Z do not equal');
                     end
 
                     if isempty(u_ctrl_num),u_ctrl_num=u_node_num;end
                     if u_ctrl_num > u_node_num
-                        error('SurfaceBSpline: u_control number more than u_node number')
+                        error('FaceBSpline: u_control number more than u_node number')
                     end
                     if isempty(v_ctrl_num),v_ctrl_num=v_node_num;end
                     if v_ctrl_num > v_node_num
-                        error('SurfaceBSpline: v_control number more than v_node number')
+                        error('FaceBSpline: v_control number more than v_node number')
                     end
                 else
                     ctrl_X=point_X;ctrl_Y=point_Y;ctrl_Z=point_Z;
@@ -123,7 +123,7 @@ classdef SurfaceBSpline < handle
                     v_node_num=v_ctrl_num-v_degree+1;
                     if any(size(ctrl_Y) ~= [v_ctrl_num,u_ctrl_num]) ||...
                             any(size(ctrl_Z) ~= [v_ctrl_num,u_ctrl_num])
-                        error('SurfaceBSpline: size of ctrl_X, ctrl_Y, ctrl_Z do not equal');
+                        error('FaceBSpline: size of ctrl_X, ctrl_Y, ctrl_Z do not equal');
                     end
                 end
 
@@ -148,7 +148,11 @@ classdef SurfaceBSpline < handle
                 V=interp1(linspace(0,1,length(v_knot_list)),v_knot_list,v_coord);
 
                 if u_ctrl_num < (u_degree+1) || v_ctrl_num < (v_degree+1)
-                    error('SurfaceBSpline: ctrl_num less than degree+1');
+                    error('FaceBSpline: ctrl_num less than degree+1');
+                end
+
+                if length(u_list) ~= u_ctrl_num+u_degree+1 || length(v_list) ~= v_ctrl_num+v_degree+1
+                    error('EdgeBSpline: number of knot num do not equal to ctrl_num+degree');
                 end
 
                 if FLAG_FIT
@@ -215,7 +219,7 @@ classdef SurfaceBSpline < handle
 
     % calculate point
     methods
-        function [X,Y,Z,U,V]=calSurface(self,u_param,v_param)
+        function [X,Y,Z,U,V]=calFace(self,u_param,v_param)
             % generate surface matrix
             %
             % default
@@ -244,13 +248,12 @@ classdef SurfaceBSpline < handle
             if isempty(u_param),u_param=1e-3;end
             if length(u_param) == 1 && u_param ~= fix(u_param)
                 % input is torlance
-                value_torl=u_param;
-                max_level=50;
+                value_torl=u_param;min_level=5;max_level=50;
 
                 % adapt capture U, V
                 low_bou=[0,0];
                 up_bou=[1,1];
-                [U,V,data_list,~]=meshAdapt2DUV(@(x) coordFcn(self,x),low_bou,up_bou,value_torl,max_level,3);
+                [U,V,data_list,~]=meshAdapt2DUV(@(x) coordFcn(self,x),low_bou,up_bou,value_torl,min_level,max_level,3);
                 X=data_list(:,:,1);
                 Y=data_list(:,:,2);
                 Z=data_list(:,:,3);
@@ -303,7 +306,7 @@ classdef SurfaceBSpline < handle
             %
             [rank_num,colume_num]=size(U);
             if any(size(V) ~= [rank_num,colume_num])
-                error('SurfaceBSpline.calPoint: size of U_x do not equal to size of V_x');
+                error('FaceBSpline.calPoint: size of U_x do not equal to size of V_x');
             end
 
             [X,Y,Z]=self.calBSpline(U,V);
@@ -449,7 +452,8 @@ classdef SurfaceBSpline < handle
             [X_UB,Y_UB,Z_UB]=self.calPoint(U-step,V);
             Bool_U=(U+step) > 1;
             Bool_D=(U-step) < 0;
-            Bool_C=~any([Bool_U,Bool_D],2);
+            Bool(:,:,1)=Bool_U;Bool(:,:,2)=Bool_D;
+            Bool_C=~any(Bool,3);
             dX_dU=X;dY_dU=Y;dZ_dU=Z; % allocate memory
             dX_dU(Bool_C)=(X_UF(Bool_C)-X_UB(Bool_C))/2/step;
             dX_dU(Bool_U)=(X(Bool_U)-X_UB(Bool_U))/2/step;
@@ -468,7 +472,8 @@ classdef SurfaceBSpline < handle
             [X_VB,Y_VB,Z_VB]=self.calPoint(U,V-step);
             Bool_U=(V+step) > 1;
             Bool_D=(V-step) < 0;
-            Bool_C=~any([Bool_U,Bool_D],2);
+            Bool(:,:,1)=Bool_U;Bool(:,:,2)=Bool_D;
+            Bool_C=~any(Bool,3);
             dX_dV=X;dY_dV=Y;dZ_dV=Z; % allocate memory
             dX_dV(Bool_C)=(X_VF(Bool_C)-X_VB(Bool_C))/2/step;
             dX_dV(Bool_U)=(X(Bool_U)-X_VB(Bool_U))/2/step;
@@ -487,7 +492,7 @@ classdef SurfaceBSpline < handle
 
     % visualizate surface
     methods
-        function drawSurface(self,axe_hdl,U,V,surface_option,control_option,node_option)
+        function drawFace(self,axe_hdl,U,V,surface_option,control_option,node_option)
             % draw surface on axes handle
             %
             if nargin < 7
@@ -523,7 +528,7 @@ classdef SurfaceBSpline < handle
             end
 
             % calculate point on surface
-            [X,Y,Z]=calSurface(self,U,V);
+            [X,Y,Z]=calFace(self,U,V);
 
             % plot surface
             surface(axe_hdl,X,Y,Z,surface_option);
@@ -633,24 +638,24 @@ classdef SurfaceBSpline < handle
 
             % generate B_SPLINE_SURFACE_WITH_KNOTS
             B_SPLINE_SURFACE_WITH_KNOTS=object_index;
-            str_surface=[num2str(object_index,'#%d ='),' B_SPLINE_SURFACE_WITH_KNOTS',...
+            str_surf=[num2str(object_index,'#%d ='),' B_SPLINE_SURFACE_WITH_KNOTS',...
                 ' ( ',...
                 '''',out_name,'''',', ',...
                 num2str(self.u_degree,'%d'),', ',num2str(self.v_degree,'%d'),', \n'];
-            str_surface=[str_surface,'('];
+            str_surf=[str_surf,'('];
             for u_bias=0:v_num:v_num*(u_num-2)
-                str_surface=[str_surface,'( ',...
+                str_surf=[str_surf,'( ',...
                     num2str((v_num+u_bias) +CARTESIAN_POINT-1,'#%d'),...
                     num2str((((v_num-1):-1:1)+u_bias) +CARTESIAN_POINT-1,', #%d'),...
                     ' ),\n'];
             end
             u_bias=v_num*(u_num-1);
-            str_surface=[str_surface,'( ',...
+            str_surf=[str_surf,'( ',...
                 num2str((v_num+u_bias) +CARTESIAN_POINT-1,'#%d'),...
                 num2str((((v_num-1):-1:1)+u_bias) +CARTESIAN_POINT-1,', #%d'),...
                 ' )'];
-            str_surface=[str_surface,'),\n'];
-            str_surface=[str_surface,'.UNSPECIFIED.',', ','.F.',', ','.F.',', ','.F.',',\n',...
+            str_surf=[str_surf,'),\n'];
+            str_surf=[str_surf,'.UNSPECIFIED.',', ','.F.',', ','.F.',', ','.F.',',\n',...
                 '( ',num2str(self.u_knot_multi(1),'%d'),num2str(self.u_knot_multi(2:end),', %d'),' ),\n',...
                 '( ',num2str(self.v_knot_multi(1),'%d'),num2str(self.v_knot_multi(2:end),', %d'),' ),\n',...
                 '( ',num2str(self.u_knot_list(1),'%.16f'),num2str(self.u_knot_list(2:end),', %.16f'),' ),\n',...
@@ -673,10 +678,10 @@ classdef SurfaceBSpline < handle
             % generate all
             step_str=[str_control,'\n',str_curve,'\n',str_vertex,'\n',...
                 str_edge,'\n',str_oriented,'\n',str_loop,'\n',str_outer,'\n',...
-                str_surface,'\n',str_face,'\n'];
+                str_surf,'\n',str_face,'\n'];
 
-            function str_curve=stepCurve(point_index,degree,knot_multi,knot_list)
-                str_curve=[num2str(object_index,'#%d ='),' B_SPLINE_CURVE_WITH_KNOTS',...
+            function str_edge=stepEdge(point_index,degree,knot_multi,knot_list)
+                str_edge=[num2str(object_index,'#%d ='),' B_SPLINE_CURVE_WITH_KNOTS',...
                     ' ( ',...
                     '''NONE''',', ',...
                     num2str(degree,'%d'),', \n',...
@@ -698,13 +703,13 @@ classdef SurfaceBSpline < handle
                 object_index=object_index+1;
             end
 
-            function str_edge=stepEdge(start_vertex,end_vertex,curve_index)
+            function str_edge=stepCurve(start_vertex,end_vertex,edge_index)
                 str_edge=[num2str(object_index,'#%d ='),' EDGE_CURVE',...
                     ' ( ',...
                     '''NONE''',', ',...
                     num2str(start_vertex,'#%d'),', ',...
                     num2str(end_vertex,'#%d'),', ',...
-                    num2str(curve_index,'#%d'),', ',...
+                    num2str(edge_index,'#%d'),', ',...
                     '.T.',...
                     ' ) ;\n'];
                 object_index=object_index+1;
@@ -726,14 +731,12 @@ end
 
 %% common function
 
-function [U,V,Fval,node_list]=meshAdapt2DUV(fcn,low_bou,up_bou,torl,max_level,fval_num)
+function [U,V,Fval,node_list]=meshAdapt2DUV(fcn,low_bou,up_bou,torl,min_level,max_level,fval_num)
 % 2D Omni-Tree
 % adapt capture 2 dimemsion function value
 % ensure error of linear interplation will less than torl
 %
-if nargin < 6
-    fval_num=1;
-end
+if nargin < 7,fval_num=1;end
 
 % node_list which is a matrix store all node
 % a node is a array, contain:
@@ -830,12 +833,12 @@ end
                 end
 
                 % check center place
-                if ~add_u_flag && ~add_v_flag && any(abs(fval_c-fval_pred_c) > torl)
+                if any(abs(fval_c-fval_pred_c) > torl)
                     add_u_flag=true(1);
                     add_v_flag=true(1);
                 end
 
-                if add_u_flag && add_v_flag
+                if (add_u_flag && add_v_flag) || node(1) < min_level
                     % add 5 data into data_list
                     data_new_idx=data_num+(1:5);
                     if data_num+5 > size(data_list,1)

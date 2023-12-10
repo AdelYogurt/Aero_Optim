@@ -23,10 +23,10 @@ close all hidden;
 % U_num=21;
 % V_num=21;
 % W_num=21;
-% waverider.drawBody([],U_num,[],W_num);axis equal;
+% waverider.drawShell([],U_num,[],W_num);axis equal;
 % waverider.writeStepOpenShell('waverider_cone.step',U_num,[],W_num);
 % 
-% surf_total=waverider.calSurfaceMatrix(U_num,[],W_num);
+% surf_total=waverider.calFaceMatrix(U_num,[],W_num);
 % surf_total=waverider.reverseUV(surf_total);
 % X_up=surf_total{2}.X;Y_up=surf_total{2}.Y;Z_up=surf_total{2}.Z;
 % X_low=surf_total{1}.X;Y_low=surf_total{1}.Y;Z_low=surf_total{1}.Z;
@@ -47,8 +47,8 @@ close all hidden;
 % 
 % u_degree=2;v_degree=3;u_ctrl_num=3;v_ctrl_num=4;
 % C_par_X=[0,0];C_par_Y=[par_T,0];C_par_ZV=[0.5,0.5];C_par_ZU=[1,0];sym_x=false;sym_y=true;
-% surf_up=SurfaceCST('',C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y);
-% surf_low=SurfaceCST('',C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y);
+% surf_up=FaceCST('',C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y);
+% surf_low=FaceCST('',C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y);
 % 
 % surf_up.addDeform([],[],deform_Z)
 % surf_low.addDeform([],[],deform_Z)
@@ -60,6 +60,6 @@ close all hidden;
 % surf_low.addShapeBSpline(X_low,Y_low,Z_low,true,u_degree,v_degree,[],[],[],[],u_ctrl_num,v_ctrl_num,U,V);
 % 
 % axe_hdl=axes(figure());
-% surf_up.drawSurface(axe_hdl,100,10);
-% surf_low.drawSurface(axe_hdl,100,10);
+% surf_up.drawFace(axe_hdl,100,10);
+% surf_low.drawFace(axe_hdl,100,10);
 % axis equal

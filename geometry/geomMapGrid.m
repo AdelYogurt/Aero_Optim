@@ -99,7 +99,7 @@ function line_list=correctLine(line_list,geom_torl)
 %
 line_num=length(line_list);
 
-% start from first inde
+% start from first line
 for line_idx=1:line_num-1
     line_curr=line_list{line_idx};
     line_next=line_list{line_idx+1};
@@ -107,9 +107,9 @@ for line_idx=1:line_num-1
         % load remain line all vertex
         vertex_list=zeros((line_num-line_idx)*2,size(line_curr,2));
         for remain_idx=line_idx+1:line_num
-            line_remain=line_list{remain_idx};
-            vertex_list(2*(remain_idx-line_idx)-1,:)=line_remain(1,:);
-            vertex_list(2*(remain_idx-line_idx),:)=line_remain(end,:);
+            line_rema=line_list{remain_idx};
+            vertex_list(2*(remain_idx-line_idx)-1,:)=line_rema(1,:);
+            vertex_list(2*(remain_idx-line_idx),:)=line_rema(end,:);
         end
 
         % search next connect point

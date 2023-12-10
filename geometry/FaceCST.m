@@ -1,4 +1,4 @@
-classdef SurfaceCST < SurfaceBSpline
+classdef FaceCST < FaceBSpline
     % CST surface
     %
     % notice:
@@ -48,7 +48,7 @@ classdef SurfaceCST < SurfaceBSpline
 
     % define surface
     methods
-        function self=SurfaceCST(name,C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y,LX,LY,LZ)
+        function self=FaceCST(name,C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y,LX,LY,LZ)
             % generate 3D CST surface by LX, LY, LZ, C_par_X, C_par_Y, C_par_ZU, C_par_ZV
             %
             % u, x=LX*C(v)*S(v)
@@ -66,7 +66,7 @@ classdef SurfaceCST < SurfaceBSpline
             % class_fcn_ZU(U,V)(mainly control U direction)
             % class_fcn_ZV(U,V)(mainly control V direction)
             %
-            self=self@SurfaceBSpline(name);
+            self=self@FaceBSpline(name);
             if nargin < 10
                 LZ=[];
                 if nargin < 9
@@ -202,16 +202,16 @@ classdef SurfaceCST < SurfaceBSpline
                 [v_node_num,u_node_num]=size(node_X);
                 if any(size(node_Y) ~= [v_node_num,u_node_num]) ||...
                         any(size(node_Z) ~= [v_node_num,u_node_num])
-                    error('SurfaceCST.addShapeBSpline: size of node_X, node_Y, node_Z do not equal');
+                    error('FaceCST.addShapeBSpline: size of node_X, node_Y, node_Z do not equal');
                 end
 
                 if isempty(u_ctrl_num),u_ctrl_num=u_node_num;end
                 if u_ctrl_num > u_node_num
-                    error('SurfaceCST.addShapeBSpline: u_control number more than u_node number')
+                    error('FaceCST.addShapeBSpline: u_control number more than u_node number')
                 end
                 if isempty(v_ctrl_num),v_ctrl_num=v_node_num;end
                 if v_ctrl_num > v_node_num
-                    error('SurfaceCST.addShapeBSpline: v_control number more than v_node number')
+                    error('FaceCST.addShapeBSpline: v_control number more than v_node number')
                 end
             else
                 ctrl_X=point_X;ctrl_Y=point_Y;ctrl_Z=point_Z;
@@ -222,7 +222,7 @@ classdef SurfaceCST < SurfaceBSpline
                 v_node_num=v_ctrl_num-v_degree+1;
                 if any(size(ctrl_Y) ~= [v_ctrl_num,u_ctrl_num]) ||...
                         any(size(ctrl_Z) ~= [v_ctrl_num,u_ctrl_num])
-                    error('SurfaceCST.addShapeBSpline: size of ctrl_X, ctrl_Y, ctrl_Z do not equal');
+                    error('FaceCST.addShapeBSpline: size of ctrl_X, ctrl_Y, ctrl_Z do not equal');
                 end
             end
 
@@ -247,7 +247,11 @@ classdef SurfaceCST < SurfaceBSpline
             V=interp1(linspace(0,1,length(v_knot_list)),v_knot_list,v_coord);
 
             if u_ctrl_num < (u_degree+1) || v_ctrl_num < (v_degree+1)
-                error('SurfaceCST.addShapeBSpline: ctrl_num less than degree+1');
+                error('FaceCST.addShapeBSpline: ctrl_num less than degree+1');
+            end
+
+            if length(u_list) ~= u_ctrl_num+u_degree+1 || length(v_list) ~= v_ctrl_num+v_degree+1
+                error('EdgeBSpline: number of knot num do not equal to ctrl_num+degree');
             end
 
             if FLAG_FIT
@@ -513,7 +517,7 @@ classdef SurfaceCST < SurfaceBSpline
 
     % visualizate function
     methods
-        function drawSurface(self,axe_hdl,U,V,surface_option,control_option,node_option)
+        function drawFace(self,axe_hdl,U,V,surface_option,control_option,node_option)
             % draw surface on axes handle
             %
             if nargin < 7
@@ -549,7 +553,7 @@ classdef SurfaceCST < SurfaceBSpline
             end
 
             % calculate point on surface
-            [X,Y,Z]=calSurface(self,U,V);
+            [X,Y,Z]=calFace(self,U,V);
 
             % plot surface
             surface(axe_hdl,X,Y,Z,surface_option);
@@ -578,7 +582,7 @@ classdef SurfaceCST < SurfaceBSpline
             % zlim([center(3)-range,center(3)+range]);
         end
 
-        function surface_BSpline=getSurfaceBSpline(self,u_param,v_param)
+        function surface_BSpline=getFaceBSpline(self,u_param,v_param)
             % convert CST surface into BSpline surface
             %
             % input:
@@ -599,16 +603,16 @@ classdef SurfaceCST < SurfaceBSpline
             if ~isempty(v_param) && length(v_param) > 1 && v_param(1,1) > v_param(2,1)
                 v_param=flipud(v_param);
             end
-            [X,Y,Z,U,V]=calSurface(self,u_param,v_param);
+            [X,Y,Z,U,V]=calFace(self,u_param,v_param);
 
             u_degree=min(size(U,2)-1,3);v_degree=min(size(V,1)-1,3);
-            surface_BSpline=SurfaceBSpline(self.name,X,Y,Z,true,u_degree,v_degree,[],[],[],[],[],[],U(1,:)',V(:,1));
+            surface_BSpline=FaceBSpline(self.name,X,Y,Z,true,u_degree,v_degree,[],[],[],[],[],[],U(1,:)',V(:,1));
         end
 
         function [step_str,object_index,ADVANCED_FACE]=getStep(self,object_index)
             % interface of BSpline surface getStep function
             %
-            surf_BSpline=self.getSurfaceBSpline(1e-3);
+            surf_BSpline=self.getFaceBSpline(1e-3);
             [step_str,object_index,ADVANCED_FACE]=surf_BSpline.getStep(object_index);
         end
     end

@@ -1,4 +1,4 @@
-classdef SurfaceCoons < SurfaceBSpline
+classdef FaceCoons < FaceBSpline
     % Coons surface
     %
     properties
@@ -7,55 +7,55 @@ classdef SurfaceCoons < SurfaceBSpline
         point_01;
         point_11;
 
-        curve_u0;
-        curve_u1;
-        curve_0v;
-        curve_1v;
+        edge_u0;
+        edge_u1;
+        edge_0v;
+        edge_1v;
     end
     methods
-        function self=SurfaceCoons(name,curve_u0,curve_u1,curve_0v,curve_1v)
+        function self=FaceCoons(name,edge_u0,edge_u1,edge_0v,edge_1v)
             % generate Coons surface
             %
-            self=self@SurfaceBSpline(name);
+            self=self@FaceBSpline(name);
 
             geom_torl=100*eps;
             % get vertex
-            [x0,y0,z0]=curve_u0(0);
-            [x1,y1,z1]=curve_0v(0);
+            [x0,y0,z0]=edge_u0(0);
+            [x1,y1,z1]=edge_0v(0);
             if norm([x0,y0,z0]-[x1,y1,z1]) > geom_torl
-                error('SurfaceCoons: curve do not connect');
+                error('FaceCoons: edge do not connect');
             else
                 self.point_00=([x0,y0,z0]+[x1,y1,z1])/2;
             end
 
-            [x0,y0,z0]=curve_u0(1);
-            [x1,y1,z1]=curve_1v(0);
+            [x0,y0,z0]=edge_u0(1);
+            [x1,y1,z1]=edge_1v(0);
             if norm([x0,y0,z0]-[x1,y1,z1]) > geom_torl
-                error('SurfaceCoons: curve do not connect');
+                error('FaceCoons: edge do not connect');
             else
                 self.point_10=([x0,y0,z0]+[x1,y1,z1])/2;
             end
 
-            [x0,y0,z0]=curve_u1(0);
-            [x1,y1,z1]=curve_0v(1);
+            [x0,y0,z0]=edge_u1(0);
+            [x1,y1,z1]=edge_0v(1);
             if norm([x0,y0,z0]-[x1,y1,z1]) > geom_torl
-                error('SurfaceCoons: curve do not connect');
+                error('FaceCoons: edge do not connect');
             else
                 self.point_01=([x0,y0,z0]+[x1,y1,z1])/2;
             end
 
-            [x0,y0,z0]=curve_u1(1);
-            [x1,y1,z1]=curve_1v(1);
+            [x0,y0,z0]=edge_u1(1);
+            [x1,y1,z1]=edge_1v(1);
             if norm([x0,y0,z0]-[x1,y1,z1]) > geom_torl
-                error('SurfaceCoons: curve do not connect');
+                error('FaceCoons: edge do not connect');
             else
                 self.point_11=([x0,y0,z0]+[x1,y1,z1])/2;
             end
 
-            self.curve_u0=curve_u0;
-            self.curve_u1=curve_u1;
-            self.curve_0v=curve_0v;
-            self.curve_1v=curve_1v;
+            self.edge_u0=edge_u0;
+            self.edge_u1=edge_u1;
+            self.edge_0v=edge_0v;
+            self.edge_1v=edge_1v;
         end
     end
 
@@ -88,10 +88,10 @@ classdef SurfaceCoons < SurfaceBSpline
                     u_x=U(rank_idx,colume_idx);
                     v_x=V(rank_idx,colume_idx);
 
-                    [xu0,yu0,zu0]=self.curve_u0(u_x);
-                    [xu1,yu1,zu1]=self.curve_u1(u_x);
-                    [x0v,y0v,z0v]=self.curve_0v(v_x);
-                    [x1v,y1v,z1v]=self.curve_1v(v_x);
+                    [xu0,yu0,zu0]=self.edge_u0(u_x);
+                    [xu1,yu1,zu1]=self.edge_u1(u_x);
+                    [x0v,y0v,z0v]=self.edge_0v(v_x);
+                    [x1v,y1v,z1v]=self.edge_1v(v_x);
 
                     blend_u=[-1,1-u_x,u_x];
                     blend_v=[-1;1-v_x;v_x];
