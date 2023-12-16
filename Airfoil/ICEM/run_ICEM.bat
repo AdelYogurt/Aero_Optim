@@ -1,1 +1,0 @@
-"D:\Program_Files\ANSYS Inc\v222\icemcfd\win64_amd\bin\icemcfd.bat" -script "D:\Object_Workspace\CFD\ICEM\Cylinder\G8.rpl"
