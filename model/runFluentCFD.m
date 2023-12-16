@@ -1,10 +1,10 @@
 function [fluent_out,fluent_info]=runFluentCFD...
     (mesh_filestr,jou_filestr,partitions,fluent_dir,dimension,out_filename,...
-    dir_temp,run_description)
+    dir_temp,run_desc)
 % interface of fluent CFD
 %
 if nargin < 8
-    run_description=[];
+    run_desc=[];
     if nargin < 7
         dir_temp=[];
     end
@@ -21,17 +21,21 @@ if isempty(dir_temp)
     end
 end
 procid=feature('getpid');
-dir_work=fullfile(dir_temp,[run_description,'_',num2str(procid)]);
+if ~isempty(run_desc)
+    dir_work=fullfile(dir_temp,run_desc);
+else
+    dir_work=fullfile(dir_temp,['PID_',num2str(procid)]);
+end
 
 % create dir work
 safeMakeDirs(dir_work);
 
 % process mesh file
-[mesh_filename,mesh_filedir,mesh_filestr]=safeSplitFileStr(mesh_filestr);
+[mesh_filename,mesh_filedir,~]=safeSplitFileStr(mesh_filestr);
 safeCopyDirs(mesh_filename,mesh_filedir,dir_work);
 
 % process jou file
-[jou_filename,jou_filedir,jou_filestr]=safeSplitFileStr(jou_filestr);
+[jou_filename,jou_filedir,~]=safeSplitFileStr(jou_filestr);
 safeCopyDirs(jou_filename,jou_filedir,dir_work);
 
 % build command
