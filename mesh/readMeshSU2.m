@@ -41,13 +41,11 @@ if isempty(scale)
 end
 
 while ~feof(mesh_file)
+    string=strsplit(fgetl(mesh_file),{char(9),char(32),'='});
 
-    % string=strsplit(fgetl(mesh_file),{char(9),char(32)});
-    string=strsplit(fgetl(mesh_file));
-
-    if strcmp(string{1},'NDIME=')
+    if strcmp(string{1},'NDIME')
         dimension=str2double(string{2});
-    elseif strcmp(string{1},'NPOIN=')
+    elseif strcmp(string{1},'NPOIN')
         % read node data
         point_number=str2double(string{2});
 
@@ -58,7 +56,7 @@ while ~feof(mesh_file)
         if scale ~= 1
             point_list=point_list*scale;
         end
-    elseif strcmp(string{1},'NELEM=')
+    elseif strcmp(string{1},'NELEM')
         % read volume element number
         element_number=str2double(string{2});
         if READ_VOLUME && ~ONLY_MARKER
@@ -71,7 +69,7 @@ while ~feof(mesh_file)
         else
             textscan(mesh_file,'%d');
         end
-    elseif strcmp(string{1},'NMARK=')
+    elseif strcmp(string{1},'NMARK')
         % read marker data
         marker_number=str2double(string{2});
         marker_name_list=cell(marker_number,1);
@@ -82,7 +80,7 @@ while ~feof(mesh_file)
             marker_name_list{marker_index}=marker_name;
 
             % read marker element number
-            marker_element_number_string=strsplit(fgetl(mesh_file));
+            marker_element_number_string=strsplit(fgetl(mesh_file),{char(9),char(32),'='});
             marker_element_number=str2double(marker_element_number_string{2});
 
             % read marker element
