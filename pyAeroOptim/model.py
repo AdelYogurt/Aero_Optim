@@ -297,7 +297,7 @@ def runSU2CFD(cfg_param, partitions: int, dir_temp=os.path.join(os.getcwd(), 'SU
         out_logger.logger.info("end run SU2 CFD")
 
     # obtain result
-    history_filestr = config['CONV_FILENAME']+".csv"
+    history_filestr = os.path.join(dir_work,config['CONV_FILENAME']+".csv")
     if os.path.isfile(history_filestr):
         SU2_history = readSU2CSV(os.path.join(dir_work, history_filestr))
         type_list = list(SU2_history.keys())
@@ -308,7 +308,7 @@ def runSU2CFD(cfg_param, partitions: int, dir_temp=os.path.join(os.getcwd(), 'SU
         SU2_history = None
         SU2_data = None
 
-    surface_filestr = config['SURFACE_FILENAME']+".csv"
+    surface_filestr = os.path.join(dir_work,config['SURFACE_FILENAME']+".csv")
     if os.path.isfile(surface_filestr):
         SU2_surface = readSU2CSV(os.path.join(dir_work, surface_filestr))
     else:
@@ -565,9 +565,9 @@ if __name__ == "__main__":
     sys.path.append(os.environ['SU2_RUN'])
     import SU2
     
-    # config = SU2.io.Config('Airfoil/SU2/NACA0012.cfg')
-    # config['MESH_FILENAME'] = 'Airfoil/SU2/NACA0012.cgns'
-    # SU2_data, SU2_history, SU2_surface, SU2_CFD_info = runSU2CFD(config, 1)
+    config = SU2.io.Config('Airfoil/SU2/NACA0012.cfg')
+    config['MESH_FILENAME'] = 'Airfoil/SU2/NACA0012.cgns'
+    SU2_data, SU2_history, SU2_surface, SU2_CFD_info = runSU2CFD(config, 1)
     
     config = SU2.io.Config('Airfoil/SU2/NACA0012_deform.cfg')
     config['MESH_FILENAME'] = 'Airfoil/SU2/NACA0012.cgns'
