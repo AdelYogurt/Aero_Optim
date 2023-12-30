@@ -56,7 +56,7 @@ close all hidden;
 % airfoil_data=importdata('airfoil\Clark_Y.txt');
 % airfoil_up=airfoil_data(1:61,:);airfoil_low=airfoil_data(62:end,:);
 % 
-% LX=1;LY=1;C_par=[0.8,1];sym=false;
+% LX=1;LY=1;C_par=[0.5,1];sym=false;
 % Degree=4;pole_num=5;
 % 
 % crv_up=EdgeCST2D('',C_par,sym,LX,LY);

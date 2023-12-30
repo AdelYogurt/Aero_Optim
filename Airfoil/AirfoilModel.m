@@ -9,7 +9,7 @@ classdef AirfoilModel < handle
         REMOVE_TEMP=false(1);
 
         % info parameter
-        run_description=[];
+        run_desc=[];
         out_logger=[];
     end
 
@@ -23,7 +23,7 @@ classdef AirfoilModel < handle
     % main function
     methods
         function self=AirfoilModel(partitions,geom_param,mesh_param,CFD_param,...
-                dir_temp,REMOVE_TEMP,run_description,out_logger)
+                dir_temp,REMOVE_TEMP,run_desc,out_logger)
             % airfoil model setup function
             %
             % notice:
@@ -32,12 +32,12 @@ classdef AirfoilModel < handle
             %
             % input:
             % partitions, geometry_varargin, mesh_varargin, CFD_varargin
-            % dir_temp,REMOVE_TEMP,run_description,out_logger
+            % dir_temp,REMOVE_TEMP,run_desc,out_logger
             %
             if nargin < 8
                 out_logger=[];
                 if nargin < 7
-                    run_description=[];
+                    run_desc=[];
                     if nargin < 6
                         REMOVE_TEMP=[];
                         if nargin < 5
@@ -51,7 +51,7 @@ classdef AirfoilModel < handle
             self.partitions=partitions;
             if ~isempty(dir_temp), self.out_logger=dir_temp;end
             if ~isempty(REMOVE_TEMP), self.REMOVE_TEMP=REMOVE_TEMP;end
-            if ~isempty(run_description), self.run_description=run_description;end
+            if ~isempty(run_desc), self.run_desc=run_desc;end
             if ~isempty(out_logger), self.out_logger=out_logger;end
 
             % geomertry module setup
@@ -120,16 +120,29 @@ classdef AirfoilModel < handle
             % step 2: mesh module
             % run SU2_DEF deform mesh
             writePoint(geo_out.mesh_point,self.mesh_param.dat_filestr,2)
+            if isa(self.mesh_param.SU2_DEF_param,'SU2Config')
+                config=self.mesh_param.SU2_DEF_param;
+            else
+                config=SU2Config(self.mesh_param.SU2_DEF_param);
+            end
+            config.setParameter('MESH_FILENAME',self.mesh_param.initial_mesh_filestr);
+            config.setParameter('DV_FILENAME',self.mesh_param.dat_filestr);
+            config.setParameter('MESH_OUT_FILENAME',self.mesh_param.mesh_filestr);
             [mesh_out.mesh_filestr,mesh_out.SU2_DEF_info]=runSU2DEF...
-                (self.mesh_param.initial_mesh_filestr,self.mesh_param.SU2_DEF_param,self.mesh_param.dat_filestr,self.partitions,...
-                self.mesh_param.mesh_filestr,self.dir_temp,self.run_description,self.REMOVE_TEMP,self.out_logger);
+                (config,self.partitions,self.dir_temp,self.run_desc,self.REMOVE_TEMP,self.out_logger);
 
             % step 3: CFD module
             if strcmp(self.CFD_param.solver,'SU2_CFD')
                 % run SU2_CFD to get result
-                [CFD_out.SU2_history,CFD_out.SU2_surface,CFD_out.SU2_CFD_info]=runSU2CFD...
-                    (mesh_out.mesh_filestr,self.CFD_param.SU2_CFD_param,self.partitions,...
-                    self.CFD_param.restart_filestr,self.dir_temp,self.run_description,self.REMOVE_TEMP,self.out_logger);
+                if isa(self.CFD_param.SU2_CFD_param,'SU2Config')
+                    config=self.CFD_param.SU2_CFD_param;
+                else
+                    config=SU2Config(self.CFD_param.SU2_DEF_param);
+                end
+                config.setParameter('MESH_FILENAME',mesh_out.mesh_filestr);
+                config.setParameter('RESTART_FILENAME',self.CFD_param.restart_filestr);
+                [CFD_out.SU2_data,CFD_out.SU2_history,CFD_out.SU2_surface,CFD_out.SU2_CFD_info]=runSU2CFD...
+                    (config,self.partitions,self.dir_temp,self.run_desc,self.REMOVE_TEMP,self.out_logger);
             elseif strcmp(self.CFD_param.solver,'Fluent')
                 % convert SU2 to cgns
                 mesh_data=readMeshSU2(mesh_out.mesh_filestr);
@@ -139,21 +152,27 @@ classdef AirfoilModel < handle
                     mesh_data=rmfield(mesh_data,airfoil_mesh_filename);
                 end
                 mesh_filestr=fullfile(airfoil_mesh_dir,[airfoil_mesh_filename,'.cgns']);
-                writeMeshCGNS(mesh_filestr,mesh_data)
+                writeMeshCGNS(mesh_data,mesh_filestr)
 
-                % step 3: CAE part
                 % run fluent to get result
                 [CFD_out.fluent_out,CFD_out.fluent_info]=runFluentCFD...
                     (mesh_filestr,self.CFD_param.fluent_jou_filestr,self.partitions,self.CFD_param.fluent_dir,self.CFD_param.solver_dimension,self.CFD_param.out_filename,...
-                    self.dir_temp,self.run_description);
+                    self.dir_temp,self.run_desc);
             end
         end
 
-        function drawGeo(self,geo_in)
+        function drawGeo(self,geo_in,fig_hdl,draw_option)
             % draw specific geometry
             %
+            if nargin < 4
+                draw_option=struct();
+                if nargin < 3
+                    fig_hdl=[];
+                end
+            end
+
             geo_out=self.geoModule(geo_in);
-            displayMesh(geo_out.mesh_point)
+            displayMesh(geo_out.mesh_point,[],fig_hdl,draw_option)
         end
 
         function geo_out=geoModule(self,geo_in)
@@ -161,7 +180,7 @@ classdef AirfoilModel < handle
             %
             if strcmp(self.geom_param.solver,'CST')
                 % rebulid surface mesh point
-                airfoil=AirfoilGeom(geo_in.low,geo_in.up);
+                airfoil=AirfoilGeom(geo_in.C_par_low,geo_in.Poles_low,geo_in.C_par_up,geo_in.Poles_up);
                 geo_out.mesh_point=airfoil.calMeshPoint(self.geom_param.mesh_coord);
             elseif strcmp(self.geom_param.solver,'FFD')
 

@@ -15,9 +15,9 @@ close all hidden;
 %% define problem
 
 % basical parameter
-if ispc(),partitions=4;
+if ispc(),partitions=1;
 else,partitions=128;end
-run_description=[];
+run_desc=[];
 out_logger=[];
 
 % geometry module
@@ -47,13 +47,14 @@ CFD_param.out_filename='fluent_history.out';
 % CFD_param.solver='SU2_CFD';
 % CFD_param.SU2_CFD_param='SU2/airfoil.cfg';
 
-% model=AirfoilModel(partitions,geom_param,mesh_param,CFD_param,[],[],run_description,out_logger);
+% model=AirfoilModel(partitions,geom_param,mesh_param,CFD_param,[],[],run_desc,out_logger);
 % geo_in.up=[linspace(0,1,5)',rand(5,1)*0.1];
-% geo_in.low=[linspace(0,1,5)',rand(5,1)*0.1];
+% geo_in.low=[linspace(0,1,5)',-rand(5,1)*0.1];
 % [geo_out,mesh_out,CFD_out]=model.solveAirfoil(geo_in);
 
-problem=AirfoilProblem(partitions,geom_param,mesh_param,CFD_param,[],[],run_description,out_logger);
+problem=AirfoilProblem(partitions,geom_param,mesh_param,CFD_param,[],[],run_desc,out_logger);
 x=(problem.low_bou+problem.up_bou)/2;
+problem.drawX(x)
 [obj,con,coneq]=problem.objcon_fcn(x);
 
 %% define optimize
@@ -72,7 +73,7 @@ x=(problem.low_bou+problem.up_bou)/2;
 % repeat_num=10;
 % data_list=cell(1,repeat_num);
 % parfor par_idx=1:repeat_num
-%     run_description=num2str(par_idx);
+%     run_desc=num2str(par_idx);
 % 
 %     % mesh module
 %     mesh_param=struct();
@@ -82,7 +83,7 @@ x=(problem.low_bou+problem.up_bou)/2;
 %     mesh_param.dat_filestr=['geom/',num2str(par_idx),'/NACA0012_deform.dat'];
 %     mesh_param.mesh_filestr=['geom/',num2str(par_idx),'/airfoil.su2'];
 % 
-%     problem=AirfoilProblem(partitions,geom_param,mesh_param,CFD_param,[],[],run_description,out_logger);
+%     problem=AirfoilProblem(partitions,geom_param,mesh_param,CFD_param,[],[],run_desc,out_logger);
 % 
 %     x=rand(1,problem.vari_num).*(problem.up_bou-problem.low_bou)+problem.low_bou;
 %     [obj,con,coneq]=problem.objcon_fcn(x);

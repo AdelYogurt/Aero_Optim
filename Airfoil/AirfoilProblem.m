@@ -17,7 +17,7 @@ classdef AirfoilProblem < AirfoilModel
     methods
         % problem setup function
         function self=AirfoilProblem(partitions,geom_param,mesh_param,CFD_param,...
-                dir_temp,REMOVE_TEMP,run_description,out_logger)
+                dir_temp,REMOVE_TEMP,run_desc,out_logger)
             % setup airfoil problem function
             %
             % notice:
@@ -26,12 +26,12 @@ classdef AirfoilProblem < AirfoilModel
             %
             % input:
             % partitions, geometry_varargin, mesh_varargin, CFD_varargin
-            % dir_temp,REMOVE_TEMP,run_description,out_logger
+            % dir_temp,REMOVE_TEMP,run_desc,out_logger
             %
             if nargin < 8
                 out_logger=[];
                 if nargin < 7
-                    run_description=[];
+                    run_desc=[];
                     if nargin < 6
                         REMOVE_TEMP=[];
                         if nargin < 5
@@ -41,7 +41,7 @@ classdef AirfoilProblem < AirfoilModel
                 end
             end
             self@AirfoilModel(partitions,geom_param,mesh_param,CFD_param,...
-                dir_temp,REMOVE_TEMP,run_description,out_logger);
+                dir_temp,REMOVE_TEMP,run_desc,out_logger);
 
             if strcmp(geom_param.solver,'CST')
                 self.low_bou=0.01*ones(1,self.vari_num);
@@ -109,21 +109,28 @@ classdef AirfoilProblem < AirfoilModel
             end
 
             geo_in=self.decode(x);
-            self.drawGeo(geo_in);
+            self.drawGeo(geo_in,fig_hdl,draw_option);
         end
 
         function geo_in=decode(self,x)
             % decode x into geo_in
             %
             if strcmp(self.geom_param.solver,'CST')
-                x_number=int64(length(x));
-                geo_in.low=[linspace(0,1,x_number/2);x(1:x_number/2)]';
-                geo_in.up=[linspace(0,1,x_number/2);x(x_number/2+1:end)]';
+                x_num=length(x);
+                geo_in.Poles_low=[linspace(0,1,x_num/2);-x(1:x_num/2)]';
+                geo_in.Poles_up=[linspace(0,1,x_num/2);x(x_num/2+1:end)]';
+
+                if ~isfield(self.geom_param,'C_par_low'), geo_in.C_par_low=[0.5,1];
+                else,geo_in.C_par_low=self.geom_param.C_par_low;end
+                if ~isfield(self.geom_param,'C_par_up'), geo_in.C_par_up=[0.5,1];
+                else,geo_in.C_par_up=self.geom_param.C_par_up;end
+
             elseif strcmp(self.geom_param.solver,'FFD')
 
             elseif strcmp(self.geom_param.solver,'HICKS_HENNE')
                 geo_in.SIZE=x;
             end
+            
         end
     end
 end
