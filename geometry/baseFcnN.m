@@ -3,7 +3,7 @@ function N=baseFcnN(u_list,u_x,i,k)
 %
 if k == 0
     if ((u_list(i) <= u_x) && (u_x <= u_list(i+1)))
-        if any(u_list == u_x) && u_x ~= u_list(1) && u_x ~= u_list(end)
+        if any(u_list == u_x) && u_x ~= u_list(1) && u_x ~= u_list(end) % avoid start and end knot repeat
             N=0.5;
         else
             N=1;

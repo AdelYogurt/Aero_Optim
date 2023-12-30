@@ -75,8 +75,8 @@ classdef WaveriderCone < Shell
 
         end
 
-        function surf_total=calFaceMatrix(self,U_num,V_par,W_num)
-            % calculate surface matrix
+        function srf_list=calShell(self,U_num,V_par,W_num)
+            % calculate all face point
             %
             sin_beta=sin(self.beta);
             cos_beta=cos(self.beta);
@@ -86,10 +86,11 @@ classdef WaveriderCone < Shell
                 if isempty(V_par)
                     V_par=1e-4*self.W_total;
                 end
+                min_level=4;
                 max_level=10;
                 lead_edge=@(y) lineLeadEdge(self.lead_edge_fcn,y,sin_beta,cos_beta);
 
-                [Y,F,~]=meshAdapt1D(lead_edge,0,self.W_total/2,V_par,max_level,3);
+                [Y,F,~]=GeomApp.meshAdapt1D(lead_edge,0,self.W_total/2,V_par,min_level,max_level,3);
                 V_num=length(Y);
 
                 X=F(:,1);Z=F(:,2);R=F(:,3);
@@ -179,7 +180,7 @@ classdef WaveriderCone < Shell
             surf_back.name='back';
             surf_back.element_type='wgs';
 
-            surf_total={surf_low,surf_up,surf_back};
+            srf_list={surf_low,surf_up,surf_back};
 
             function f=lineLeadEdge(lead_edge_fcn,fy,sin_beta,cos_beta)
                 fz=lead_edge_fcn(fy);
@@ -266,45 +267,45 @@ classdef WaveriderCone < Shell
 
             % write head
             step_file=fopen(step_filestr,'w');
-            object_index=1;
-            object_index=writeStepHead(self,step_file,object_index,step_filename);
+            obj_idx=1;
+            obj_idx=writeStepHead(self,step_file,obj_idx,step_filename);
 
             % write surface
-            ADVANCED_FACE_index_list=zeros(1,length(self.surface_list));
+            ADVANCED_FACE_index_list=zeros(1,length(self.face_list));
 
-            surf_total=calFaceMatrix(self,U_num,V_num,W_num);
+            surf_total=calShell(self,U_num,V_num,W_num);
             surf_num=length(surf_total);
 
             for surf_idx=1:surf_num
-                surf=surf_total{surf_idx};
-                surf_name=surf.name;
-                u_degree=min(size(surf.X,2)-1,3);v_degree=min(size(surf.X,1)-1,3);
-                surf=FaceBSpline(surf_name,surf.X,surf.Y,surf.Z,true,u_degree,v_degree);
-                [step_str,object_index,ADVANCED_FACE_index_list(surf_idx)]=surf.getStep(object_index);
+                fce=surf_total{surf_idx};
+                fce_name=fce.name;UDegree=min(size(fce.X,2)-1,3);VDegree=min(size(fce.X,1)-1,3);
+                Nodes=cat(3,fce.X,fce.Y,fce.Z);
+                fce=GeomApp.VertexToFace(fce_name,Nodes,UDegree,VDegree);
+                [step_str,obj_idx,ADVANCED_FACE_index_list(surf_idx)]=fce.getStep(obj_idx);
                 fprintf(step_file,step_str);
                 fprintf(step_file,'\n');
             end
 
             % generate OPEN_SHELL
-            OPEN_SHELL_index=object_index;
-            step_str=[num2str(object_index,'#%d'),' = OPEN_SHELL ',...
+            OPEN_SHELL_index=obj_idx;
+            step_str=[num2str(obj_idx,'#%d'),' = OPEN_SHELL ',...
                 '( ''NONE'', ',...
                 '( ',num2str(ADVANCED_FACE_index_list(1:end-1),'#%d, '),' ',num2str(ADVANCED_FACE_index_list(end),'#%d'),' )',...
-                ' );\n'];object_index=object_index+1;
+                ' );\n'];obj_idx=obj_idx+1;
             fprintf(step_file,step_str);
             fprintf(step_file,'\n');
 
             % write model
-            SHELL_BASED_SURFACE_MODEL_index=object_index;
-            step_str=[num2str(object_index,'#%d'),' = SHELL_BASED_SURFACE_MODEL ',...
+            SHELL_BASED_SURFACE_MODEL_index=obj_idx;
+            step_str=[num2str(obj_idx,'#%d'),' = SHELL_BASED_SURFACE_MODEL ',...
                 '( ''NONE'', ( ',...
                 num2str(OPEN_SHELL_index,'#%d'),' )',...
-                ' );\n'];object_index=object_index+1;
+                ' );\n'];obj_idx=obj_idx+1;
             fprintf(step_file,step_str);
             fprintf(step_file,'\n');
 
             % write end of step file
-            writeStepEnd(self,step_file,object_index,step_filename,SHELL_BASED_SURFACE_MODEL_index);
+            writeStepEnd(self,step_file,obj_idx,step_filename,SHELL_BASED_SURFACE_MODEL_index);
 
             fclose(step_file);
             clear('step_file');
@@ -316,7 +317,7 @@ classdef WaveriderCone < Shell
             %
             if isempty(axes_handle),axes_handle=axes(figure());end
 
-            surf_total=self.calFaceMatrix(U_num,V_par,W_num);
+            surf_total=self.calShell(U_num,V_par,W_num);
 
             for surf_index=1:length(surf_total)
                 surf=surf_total{surf_index};
@@ -539,120 +540,4 @@ for x_idx=1:length(X_pred)
     end
 end
 
-end
-
-function [x_list,fval_list,node_list]=meshAdapt1D(fcn,low_bou,up_bou,torl,max_level,fval_num)
-% Binary-tree
-% adapt capture function value
-% ensure error of linear interplation will less than torl
-%
-if nargin < 6
-    fval_num=1;
-end
-
-% node_list which is a matrix store all node
-% a node is a array, contain level, index_1, index_2, index_c, node_index_1, node_index_2
-% place:
-% 1-c-2
-% cell:
-% 1-2
-% if children node is empty, left_index or right_index will be zero
-list_add_num=50; % node_list will be extend only when node_list is not enough
-node_list=zeros(list_add_num,6,'int64');
-
-% data_list use to sort all float data include coodinate, function value
-data_list=zeros(list_add_num,fval_num+1);
-
-% add vertex of cell into data_list first
-data_list(1,:)=[low_bou,fcn(low_bou)];
-data_list(2,:)=[up_bou,fcn(up_bou)];
-
-% create base root
-node_list(1,:)=[0,1,2,0,0,0];
-
-node_num=createNodeTree(1,2); % create node tree from root
-node_list=node_list(1:node_num,:);
-[x_list,fval_list]=traversalInorder(1); % from small to large get list
-
-% add boundary info
-x_list=[data_list(1,1);x_list;data_list(2,1)];
-fval_list=[data_list(1,2:end);fval_list;data_list(2,2:end)];
-
-    function node_num=createNodeTree(root_idx,data_num)
-        % create node tree from root
-        %
-        stack=root_idx;
-        node_num=root_idx;
-
-        while ~isempty(stack)
-            % current node information
-            node_idx=stack(end);
-            node=node_list(node_idx,:);
-            stack=stack(1:end-1);
-
-            if node(1) < max_level
-                % judge if linear predict if accptable
-                % if not, create children cell
-                %
-                coord_c=(data_list(node(2),1)+data_list(node(3),1))/2;
-                fval_c=fcn(coord_c);
-                fval_c_pred=(data_list(node(2),2:end)+data_list(node(3),2:end))/2;
-                if any(abs(fval_c-fval_c_pred) > torl)
-                    % add 1 new data into data_list
-                    data_new_idx=data_num+1;
-                    if data_num+1 > size(data_list,1)
-                        data_list=[data_list;zeros(list_add_num,fval_num+1)];
-                    end
-                    data_list(data_new_idx,:)=[coord_c,fval_c];
-                    node(4)=data_new_idx;
-                    data_num=data_num+1;
-
-                    % add 2 new node to node_list
-                    node_new_idx=node_num+[1,2];
-                    if node_num+2 > size(node_list,1)
-                        node_list=[node_list;zeros(list_add_num,6)];
-                    end
-                    node_list(node_new_idx,:)=[
-                        node(1)+1,node(2),node(4),0,0,0;
-                        node(1)+1,node(4),node(3),0,0,0];
-                    node([5,6])=node_new_idx;
-                    node_num=node_num+2;
-
-                    % add to stack
-                    stack=[stack,node_new_idx];
-                    node_list(node_idx,:)=node;
-                end
-            end
-        end
-    end
-
-    function [x_list,fval_list]=traversalInorder(root_idx)
-        % inorder traversal node tree to obtain data
-        % inorder will make sure x_list is from small to large
-        %
-        stack=[];
-        x_list=[];
-        fval_list=[];
-        node_idx=root_idx;
-
-        while ~isempty(stack) || node_idx ~= 0
-            while node_idx ~= 0
-                stack=[stack,node_idx];
-
-                % node=node.left;
-                node_idx=node_list(node_idx,5);
-            end
-
-            node_idx=stack(end);
-            stack=stack(1:end-1);
-            data_idx=node_list(node_idx,4);
-            if data_idx ~= 0
-                x_list=[x_list;data_list(data_idx,1)];
-                fval_list=[fval_list;data_list(data_idx,2:end)];
-            end
-
-            % node=node.right;
-            node_idx=node_list(node_idx,6);
-        end
-    end
 end

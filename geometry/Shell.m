@@ -3,28 +3,42 @@ classdef Shell < handle
     %
     properties
         name;
-        surface_list; % cell, can be surface CST3D or surface BSpline
+        face_list; % cell, can be surface CST3D or surface BSpline
     end
 
-    % define function
+    % define Shell
     methods
-        function self=Shell(name,surface_list)
-            if nargin < 2
-                surface_list={};
-            end
+        function self=Shell(name,face_list)
+            if nargin < 2,face_list={};end
             self.name=name;
-            self.surface_list=surface_list;
+            self.face_list=face_list;
         end
 
-    end
-
-    % control function
-    methods
-        function [surf,surf_idx]=getFace(self,surf_name)
-            % load surface from surface_list base on input surface name
+        function fce_list=calShell(self,u_param,v_param)
+            % calculate all face point
             %
-            for surf_idx=1:length(self.surface_list)
-                surf=self.surface_list{surf_idx};
+            if nargin < 3
+                v_param=[];
+                if nargin < 2
+                    u_param=[];
+                end
+            end
+
+            fce_list=[];
+            fce_num=length(self.face_list);
+            for fce_idx=1:fce_num
+                fce=self.face_list{fce_idx};
+                if ~isempty(fce)
+                    fce_list=[fce_list,{fce.calFace(u_param,v_param)}];
+                end
+            end
+        end
+
+        function [surf,surf_idx]=getFace(self,surf_name)
+            % load surface from face_list base on input surface name
+            %
+            for surf_idx=1:length(self.face_list)
+                surf=self.face_list{surf_idx};
                 if strcmp(surf.name,surf_name)
                     return;
                 end
@@ -32,31 +46,37 @@ classdef Shell < handle
             surf=[];
             surf_idx=0;
         end
-
     end
 
     % visualizate function
     methods
-        function drawShell(self,axes_handle,u_param,v_param)
+        function drawShell(self,axe_hdl,u_param,v_param,crv_option,ctrl_option)
             % draw all surface of shell
             % wrapper of drawFace
             %
-            if nargin < 4
-                v_param=[];
-                if nargin < 3
-                    u_param=[];
-                    if nargin < 2
-                        axes_handle=[];
+            if nargin < 6
+                ctrl_option=[];
+                if nargin < 5
+                    crv_option=[];
+                    if nargin < 4
+                        v_param=[];
+                        if nargin < 3
+                            u_param=[];
+                            if nargin < 2
+                                axe_hdl=[];
+                            end
+                        end
                     end
                 end
             end
-            if isempty(axes_handle),axes_handle=axes(figure());end
 
-            surf_num=length(self.surface_list);
+            if isempty(axe_hdl),axe_hdl=axes(figure());end
+
+            surf_num=length(self.face_list);
             for surf_idx=1:surf_num
-                surf=self.surface_list{surf_idx};
+                surf=self.face_list{surf_idx};
                 if ~isempty(surf)
-                    surf.drawFace(axes_handle,u_param,v_param);
+                    surf.drawFace(axe_hdl,u_param,v_param,crv_option,ctrl_option);
                 end
             end
             
@@ -76,7 +96,7 @@ classdef Shell < handle
             % zlim([center(3)-range,center(3)+range]);
         end
 
-        function object_index=writeStepHead(self,step_file,object_index,step_filename)
+        function obj_idx=writeStepHead(~,step_file,obj_idx,step_filename)
             % wite head of step
             %
 
@@ -84,86 +104,86 @@ classdef Shell < handle
             fprintf(step_file,'\n');
             fprintf(step_file,'DATA;\n');
 
-            fprintf(step_file,'#%d = CARTESIAN_POINT ( ''NONE'',  ( 0.0, 0.0, 0.0 ) ) ;\n',object_index);object_index=object_index+1;
-            fprintf(step_file,'#%d = DIRECTION ( ''NONE'',  ( 0.0, 0.0, 1.0 ) ) ;\n',object_index);object_index=object_index+1;
-            fprintf(step_file,'#%d = DIRECTION ( ''NONE'',  ( 1.0, 0.0, 0.0 ) ) ;\n',object_index);object_index=object_index+1;
-            fprintf(step_file,'#%d = AXIS2_PLACEMENT_3D ( ''NONE'', #%d, #%d, #%d ) ;\n',object_index,1,2,3);object_index=object_index+1;
+            fprintf(step_file,'#%d = CARTESIAN_POINT ( ''NONE'',  ( 0.0, 0.0, 0.0 ) ) ;\n',obj_idx);obj_idx=obj_idx+1;
+            fprintf(step_file,'#%d = DIRECTION ( ''NONE'',  ( 0.0, 0.0, 1.0 ) ) ;\n',obj_idx);obj_idx=obj_idx+1;
+            fprintf(step_file,'#%d = DIRECTION ( ''NONE'',  ( 1.0, 0.0, 0.0 ) ) ;\n',obj_idx);obj_idx=obj_idx+1;
+            fprintf(step_file,'#%d = AXIS2_PLACEMENT_3D ( ''NONE'', #%d, #%d, #%d ) ;\n',obj_idx,1,2,3);obj_idx=obj_idx+1;
             fprintf(step_file,'\n');
-            fprintf(step_file,'#%d =( LENGTH_UNIT ( ) NAMED_UNIT ( * ) SI_UNIT ( $., .METRE. ) );\n',object_index);object_index=object_index+1;
-            fprintf(step_file,'#%d =( NAMED_UNIT ( * ) PLANE_ANGLE_UNIT ( ) SI_UNIT ( $, .RADIAN. ) );\n',object_index);object_index=object_index+1;
-            fprintf(step_file,'#%d =( NAMED_UNIT ( * ) SI_UNIT ( $, .STERADIAN. ) SOLID_ANGLE_UNIT ( ) );\n',object_index);object_index=object_index+1;
-            fprintf(step_file,'#%d = UNCERTAINTY_MEASURE_WITH_UNIT (LENGTH_MEASURE( 1.0E-05 ), #%d, ''distance_accuracy_value'', ''NONE'');\n',object_index,5);object_index=object_index+1;
-            fprintf(step_file,'#%d =( GEOMETRIC_REPRESENTATION_CONTEXT ( 3 ) GLOBAL_UNCERTAINTY_ASSIGNED_CONTEXT ( ( #%d ) ) GLOBAL_UNIT_ASSIGNED_CONTEXT ( ( #%d, #%d, #%d ) ) REPRESENTATION_CONTEXT ( ''NONE'', ''WORKASPACE'' ) );\n',object_index,8,5,6,7);object_index=object_index+1;
+            fprintf(step_file,'#%d =( LENGTH_UNIT ( ) NAMED_UNIT ( * ) SI_UNIT ( $., .METRE. ) );\n',obj_idx);obj_idx=obj_idx+1;
+            fprintf(step_file,'#%d =( NAMED_UNIT ( * ) PLANE_ANGLE_UNIT ( ) SI_UNIT ( $, .RADIAN. ) );\n',obj_idx);obj_idx=obj_idx+1;
+            fprintf(step_file,'#%d =( NAMED_UNIT ( * ) SI_UNIT ( $, .STERADIAN. ) SOLID_ANGLE_UNIT ( ) );\n',obj_idx);obj_idx=obj_idx+1;
+            fprintf(step_file,'#%d = UNCERTAINTY_MEASURE_WITH_UNIT (LENGTH_MEASURE( 1.0E-05 ), #%d, ''distance_accuracy_value'', ''NONE'');\n',obj_idx,5);obj_idx=obj_idx+1;
+            fprintf(step_file,'#%d =( GEOMETRIC_REPRESENTATION_CONTEXT ( 3 ) GLOBAL_UNCERTAINTY_ASSIGNED_CONTEXT ( ( #%d ) ) GLOBAL_UNIT_ASSIGNED_CONTEXT ( ( #%d, #%d, #%d ) ) REPRESENTATION_CONTEXT ( ''NONE'', ''WORKASPACE'' ) );\n',obj_idx,8,5,6,7);obj_idx=obj_idx+1;
             fprintf(step_file,'\n');
         end
 
         function writeStepOpenShell(self,step_filestr)
             % write surface into step file
             %
-            surf_num=length(self.surface_list);
+            surf_num=length(self.face_list);
             [~,step_filename,~]=fileparts(step_filestr);
 
             % write head
             step_file=fopen(step_filestr,'w');
-            object_index=1;
-            object_index=writeStepHead(self,step_file,object_index,step_filename);
+            obj_idx=1;
+            obj_idx=writeStepHead(self,step_file,obj_idx,step_filename);
 
             % write surface
             ADVANCED_FACE_list=zeros(1,surf_num);
             
             for surf_idx=1:surf_num
-                surf=self.surface_list{surf_idx};
+                surf=self.face_list{surf_idx};
 
-                [step_str,object_index,ADVANCED_FACE]=surf.getStep(object_index);
+                [step_str,obj_idx,ADVANCED_FACE]=surf.getStep(obj_idx);
                 fprintf(step_file,step_str);
 
                 ADVANCED_FACE_list(surf_idx)=ADVANCED_FACE;
             end
 
             % generate OPEN_SHELL
-            OPEN_SHELL=object_index;
-            step_str=[num2str(object_index,'#%d ='),' OPEN_SHELL',...
+            OPEN_SHELL=obj_idx;
+            step_str=[num2str(obj_idx,'#%d ='),' OPEN_SHELL',...
                 ' ( ',...
                 '''NONE''',', ',...
                 '( ',num2str(ADVANCED_FACE_list(1),'#%d'),num2str(ADVANCED_FACE_list(2:end),', #%d'),' )',...
-                ' ) ;\n'];object_index=object_index+1;
+                ' ) ;\n'];obj_idx=obj_idx+1;
             fprintf(step_file,step_str);
             fprintf(step_file,'\n');
 
             % write model
-            SHELL_BASED_SURFACE_MODEL=object_index;
-            step_str=[num2str(object_index,'#%d ='),' SHELL_BASED_SURFACE_MODEL',...
+            SHELL_BASED_SURFACE_MODEL=obj_idx;
+            step_str=[num2str(obj_idx,'#%d ='),' SHELL_BASED_SURFACE_MODEL',...
                 ' ( ',...
                 '''NONE''',', ',...
                 '( ',num2str(OPEN_SHELL,'#%d'),' )',...
-                ' ) ;\n'];object_index=object_index+1;
+                ' ) ;\n'];obj_idx=obj_idx+1;
             fprintf(step_file,step_str);
             fprintf(step_file,'\n');
 
             % write end of step file
-            writeStepEnd(self,step_file,object_index,step_filename,SHELL_BASED_SURFACE_MODEL);
+            writeStepEnd(self,step_file,obj_idx,step_filename,SHELL_BASED_SURFACE_MODEL);
 
             fclose(step_file);
             clear('step_file');
         end
 
-        function writeStepEnd(~,step_file,object_index,step_filename,model_index)
+        function obj_idx=writeStepEnd(~,step_file,obj_idx,step_filename,model_index)
             % write end of step file
             %
 
             % write product context 
-            fprintf(step_file,'#%d = APPLICATION_CONTEXT ( ''configuration controlled 3d designs of mechanical parts and assemblies'' ) ;\n',object_index);object_index=object_index+1;
-            fprintf(step_file,'#%d = MECHANICAL_CONTEXT ( ''NONE'', #%d, ''mechanical'' ) ;\n',object_index,object_index-1);object_index=object_index+1;
-            fprintf(step_file,'#%d = PRODUCT ( ''%s'', ''%s'', '''', ( #%d ) ) ;\n',object_index,step_filename,step_filename,object_index-1);object_index=object_index+1;
+            fprintf(step_file,'#%d = APPLICATION_CONTEXT ( ''configuration controlled 3d designs of mechanical parts and assemblies'' ) ;\n',obj_idx);obj_idx=obj_idx+1;
+            fprintf(step_file,'#%d = MECHANICAL_CONTEXT ( ''NONE'', #%d, ''mechanical'' ) ;\n',obj_idx,obj_idx-1);obj_idx=obj_idx+1;
+            fprintf(step_file,'#%d = PRODUCT ( ''%s'', ''%s'', '''', ( #%d ) ) ;\n',obj_idx,step_filename,step_filename,obj_idx-1);obj_idx=obj_idx+1;
             fprintf(step_file,'\n');
-            fprintf(step_file,'#%d = APPLICATION_CONTEXT ( ''configuration controlled 3d designs of mechanical parts and assemblies'' ) ;\n',object_index);object_index=object_index+1;
-            fprintf(step_file,'#%d = DESIGN_CONTEXT ( ''detailed design'', #%d, ''design'' ) ;\n',object_index,object_index-1);object_index=object_index+1;
-            fprintf(step_file,'#%d = PRODUCT_DEFINITION_FORMATION_WITH_SPECIFIED_SOURCE ( ''NONE'', '''', #%d, .NOT_KNOWN. ) ;\n',object_index,object_index-3);object_index=object_index+1;
-            fprintf(step_file,'#%d = PRODUCT_DEFINITION ( ''NONE'', '''', #%d, #%d ) ;\n',object_index,object_index-1,object_index-2);object_index=object_index+1;
+            fprintf(step_file,'#%d = APPLICATION_CONTEXT ( ''configuration controlled 3d designs of mechanical parts and assemblies'' ) ;\n',obj_idx);obj_idx=obj_idx+1;
+            fprintf(step_file,'#%d = DESIGN_CONTEXT ( ''detailed design'', #%d, ''design'' ) ;\n',obj_idx,obj_idx-1);obj_idx=obj_idx+1;
+            fprintf(step_file,'#%d = PRODUCT_DEFINITION_FORMATION_WITH_SPECIFIED_SOURCE ( ''NONE'', '''', #%d, .NOT_KNOWN. ) ;\n',obj_idx,obj_idx-3);obj_idx=obj_idx+1;
+            fprintf(step_file,'#%d = PRODUCT_DEFINITION ( ''NONE'', '''', #%d, #%d ) ;\n',obj_idx,obj_idx-1,obj_idx-2);obj_idx=obj_idx+1;
             fprintf(step_file,'\n');
-            fprintf(step_file,'#%d = PRODUCT_DEFINITION_SHAPE ( ''NONE'', ''NONE'',  #%d ) ;\n',object_index,object_index-1);object_index=object_index+1;
-            fprintf(step_file,'#%d = MANIFOLD_SURFACE_SHAPE_REPRESENTATION ( ''test'', ( #%d, #%d ), #%d ) ;\n',object_index,model_index,4,9);object_index=object_index+1;
-            fprintf(step_file,'#%d = SHAPE_DEFINITION_REPRESENTATION ( #%d, #%d ) ;\n',object_index,object_index-2,object_index-1);object_index=object_index+1;
+            fprintf(step_file,'#%d = PRODUCT_DEFINITION_SHAPE ( ''NONE'', ''NONE'',  #%d ) ;\n',obj_idx,obj_idx-1);obj_idx=obj_idx+1;
+            fprintf(step_file,'#%d = MANIFOLD_SURFACE_SHAPE_REPRESENTATION ( ''test'', ( #%d, #%d ), #%d ) ;\n',obj_idx,model_index,4,9);obj_idx=obj_idx+1;
+            fprintf(step_file,'#%d = SHAPE_DEFINITION_REPRESENTATION ( #%d, #%d ) ;\n',obj_idx,obj_idx-2,obj_idx-1);obj_idx=obj_idx+1;
 
             % write end
             fprintf(step_file,'\n');

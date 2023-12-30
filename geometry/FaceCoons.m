@@ -1,160 +1,138 @@
-classdef FaceCoons < FaceBSpline
+classdef FaceCoons < FaceNURBS
     % Coons surface
     %
     properties
-        point_00;
-        point_10;
-        point_01;
-        point_11;
+        vertex_00;
+        vertex_10;
+        vertex_01;
+        vertex_11;
 
         edge_u0;
         edge_u1;
         edge_0v;
         edge_1v;
     end
+
     methods
         function self=FaceCoons(name,edge_u0,edge_u1,edge_0v,edge_1v)
             % generate Coons surface
             %
-            self=self@FaceBSpline(name);
+            self=self@FaceNURBS(name);
 
             geom_torl=100*eps;
+
             % get vertex
-            [x0,y0,z0]=edge_u0(0);
-            [x1,y1,z1]=edge_0v(0);
-            if norm([x0,y0,z0]-[x1,y1,z1]) > geom_torl
+            vtx_0=edge_u0(0);
+            vtx_1=edge_0v(0);
+            if norm(vtx_0-vtx_1) > geom_torl
                 error('FaceCoons: edge do not connect');
             else
-                self.point_00=([x0,y0,z0]+[x1,y1,z1])/2;
+                self.vertex_00=(vtx_0+vtx_1)/2;
             end
 
-            [x0,y0,z0]=edge_u0(1);
-            [x1,y1,z1]=edge_1v(0);
-            if norm([x0,y0,z0]-[x1,y1,z1]) > geom_torl
+            vtx_0=edge_u0(1);
+            vtx_1=edge_1v(0);
+            if norm(vtx_0-vtx_1) > geom_torl
                 error('FaceCoons: edge do not connect');
             else
-                self.point_10=([x0,y0,z0]+[x1,y1,z1])/2;
+                self.vertex_10=(vtx_0+vtx_1)/2;
             end
 
-            [x0,y0,z0]=edge_u1(0);
-            [x1,y1,z1]=edge_0v(1);
-            if norm([x0,y0,z0]-[x1,y1,z1]) > geom_torl
+            vtx_0=edge_u1(0);
+            vtx_1=edge_0v(1);
+            if norm(vtx_0-vtx_1) > geom_torl
                 error('FaceCoons: edge do not connect');
             else
-                self.point_01=([x0,y0,z0]+[x1,y1,z1])/2;
+                self.vertex_01=(vtx_0+vtx_1)/2;
             end
 
-            [x0,y0,z0]=edge_u1(1);
-            [x1,y1,z1]=edge_1v(1);
-            if norm([x0,y0,z0]-[x1,y1,z1]) > geom_torl
+            vtx_0=edge_u1(1);
+            vtx_1=edge_1v(1);
+            if norm(vtx_0-vtx_1) > geom_torl
                 error('FaceCoons: edge do not connect');
             else
-                self.point_11=([x0,y0,z0]+[x1,y1,z1])/2;
+                self.vertex_11=(vtx_0+vtx_1)/2;
             end
 
             self.edge_u0=edge_u0;
             self.edge_u1=edge_u1;
             self.edge_0v=edge_0v;
             self.edge_1v=edge_1v;
+
+            % get dimension
+            self.dimension=length(vtx_0);
         end
     end
 
     % calculate point
     methods
-        function [X,Y,Z]=calPoint(self,U,V)
+        function Point=calPoint(self,U,V)
             [rank_num,colume_num]=size(U);
-            X=zeros(rank_num,colume_num);
-            Y=zeros(rank_num,colume_num);
-            Z=zeros(rank_num,colume_num);
+            Point=zeros(rank_num,colume_num,self.dimension);
 
-            x00=self.point_00(1);
-            y00=self.point_00(2);
-            z00=self.point_00(3);
+            zo_dim=zeros(1,1,self.dimension);
 
-            x10=self.point_10(1);
-            y10=self.point_10(2);
-            z10=self.point_10(3);
+            vtx_00=reshape(self.vertex_00,1,1,3);
+            vtx_10=reshape(self.vertex_10,1,1,3);
+            vtx_01=reshape(self.vertex_01,1,1,3);
+            vtx_11=reshape(self.vertex_11,1,1,3);
 
-            x01=self.point_01(1);
-            y01=self.point_01(2);
-            z01=self.point_01(3);
+            Pnt_u0=self.edge_u0(U);Pnt_u0=reshape(Pnt_u0,[rank_num,colume_num,self.dimension]);
+            Pnt_u1=self.edge_u1(U);Pnt_u1=reshape(Pnt_u1,[rank_num,colume_num,self.dimension]);
+            Pnt_0v=self.edge_0v(V);Pnt_0v=reshape(Pnt_0v,[rank_num,colume_num,self.dimension]);
+            Pnt_1v=self.edge_1v(V);Pnt_1v=reshape(Pnt_1v,[rank_num,colume_num,self.dimension]);
 
-            x11=self.point_11(1);
-            y11=self.point_11(2);
-            z11=self.point_11(3);
-
-            for rank_idx=1:rank_num
-                for colume_idx=1:colume_num
-                    u_x=U(rank_idx,colume_idx);
-                    v_x=V(rank_idx,colume_idx);
-
-                    [xu0,yu0,zu0]=self.edge_u0(u_x);
-                    [xu1,yu1,zu1]=self.edge_u1(u_x);
-                    [x0v,y0v,z0v]=self.edge_0v(v_x);
-                    [x1v,y1v,z1v]=self.edge_1v(v_x);
+            for rdx=1:rank_num
+                for cdx=1:colume_num
+                    u_x=U(rdx,cdx);
+                    v_x=V(rdx,cdx);
 
                     blend_u=[-1,1-u_x,u_x];
                     blend_v=[-1;1-v_x;v_x];
 
-                    X(rank_idx,colume_idx)=-blend_u*[
-                        0.0,xu0,xu1;
-                        x0v,x00,x01;
-                        x1v,x10,x11]*blend_v;
-                    Y(rank_idx,colume_idx)=-blend_u*[
-                        0.0,yu0,yu1;
-                        y0v,y00,y01;
-                        y1v,y10,y11]*blend_v;
-                    Z(rank_idx,colume_idx)=-blend_u*[
-                        0.0,zu0,zu1;
-                        z0v,z00,z01;
-                        z1v,z10,z11]*blend_v;
+                    Point(rdx,cdx,:)=-pagemtimes(pagemtimes(blend_u,[
+                        zo_dim,Pnt_u0(rdx,cdx,:),Pnt_u1(rdx,cdx,:);
+                        Pnt_0v(rdx,cdx,:),vtx_00,vtx_01;
+                        Pnt_1v(rdx,cdx,:),vtx_10,vtx_11]),blend_v);
                 end
             end
         end
     end
 
-    % calculate coord
+    % visualizate function
     methods
-        function [U,V,X,Y,Z]=calCoord(self,X,Y,Z)
-            % base on X, Y, Z calculate local coordinate in surface
+        function fce=getNURBS(self,u_param,v_param)
+            % convert Coons Face into NURBS Face
             %
-            XO=X;YO=Y;ZO=Z;geo_torl=100*eps;
+            % input:
+            % u_param, v_param
+            % or:
+            % value_torl, []
+            %
+            if nargin < 3
+                v_param=[];
+                if nargin < 2
+                    u_param=[];
+                end
+            end
 
-            % base on range of node point to preliminary project to U, V
-            node_1=self.point_00';
-            node_2=self.point_10';
-            node_3=self.point_01';
-            node_4=self.point_11';
-            node_c=(node_1+node_2+node_3+node_4)/4;
-            vector_z=cross(node_4-node_1,node_3-node_2);vector_z=vector_z/norm(vector_z);
-            vector_x=(node_2+node_4)/2-node_c;vector_x=vector_x/norm(vector_x);
-            vector_y=cross(vector_z,vector_x);
-            proj_matrix=[vector_x,vector_y,vector_z]';
-            proj_base=node_c;
-            proj_node_1=proj_matrix*(node_1-proj_base);
-            proj_node_2=proj_matrix*(node_2-proj_base);
-            proj_node_3=proj_matrix*(node_3-proj_base);
-            proj_node_4=proj_matrix*(node_4-proj_base);
-            proj_point=proj_matrix*([X,Y,Z]'-proj_base);
-            proj_node=[proj_node_1,proj_node_2,proj_node_3,proj_node_4];
+            if ~isempty(u_param) && length(u_param) > 1 && u_param(1,1) > u_param(1,2)
+                u_param=fliplr(u_param);
+            end
+            if ~isempty(v_param) && length(v_param) > 1 && v_param(1,1) > v_param(2,1)
+                v_param=flipud(v_param);
+            end
+            [Nodes,U_node,V_node]=calFace(self,u_param,v_param);
 
-            % project to 2D
-            proj_point=proj_point(1:2,:);
-            proj_node=proj_node(1:2,:);
-            
-            % re-deform of uv
-            vector_e1=(proj_node(:,2)-proj_node(:,3))/2;
-            vector_e1=vector_e1/norm(vector_e1)*max(norm(proj_node(:,2)),norm(proj_node(:,3)));
-            vector_e2=(proj_node(:,4)-proj_node(:,1))/2;
-            vector_e2=vector_e2/norm(vector_e2)*max(norm(proj_node(:,4)),norm(proj_node(:,1)));
-            sqrt2_2=sqrt(2)/2;
-            tran_matrix=[sqrt2_2,sqrt2_2;-sqrt2_2,sqrt2_2]/[vector_e1,vector_e2];
-            proj_point=tran_matrix*proj_point;
+            UDegree=min(size(U_node,2)-1,3);VDegree=min(size(V_node,1)-1,3);
+            fce=GeomApp.VertexToFace(self.name,Nodes,UDegree,VDegree,[],[],U_node(1,:),V_node(:,1));
+        end
 
-            U=(proj_point(1,:)/2+0.5)';V=(proj_point(2,:)/2+0.5)';
-
-            % use project function to adjust parameter
-            [X,Y,Z,U,V]=self.calProject(XO,YO,ZO,U,V,geo_torl);
+        function [step_str,obj_idx,ADVANCED_FACE]=getStep(self,obj_idx)
+            % interface of BSpline surface getStep function
+            %
+            surf_BSpline=self.getNURBS(1e-2);
+            [step_str,obj_idx,ADVANCED_FACE]=surf_BSpline.getStep(obj_idx);
         end
     end
 end

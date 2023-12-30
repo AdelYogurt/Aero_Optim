@@ -74,14 +74,14 @@ for body_idx=1:length(Idx_body)
                     surf_type=Data{idx_surf,1};
                     switch surf_type
                         case 'B_SPLINE_SURFACE_WITH_KNOTS'
-                            surf=getFaceBSpline(Data,idx_face,idx_surf);
+                            fce=getFaceNURBS(Data,idx_face,idx_surf);
                         case 'PLANE'
-                            surf=getPLANE(Data,idx_face,idx_surf);
+                            fce=getPLANE(Data,idx_face,idx_surf);
                         otherwise
                             continue;
                             % error('readGeomStep: unknown surface type');
                     end
-                    face_shell{face_idx}=surf;
+                    face_shell{face_idx}=fce;
                 end
                 face_list=[face_list,face_shell];
             end
@@ -103,7 +103,7 @@ end
 
 end
 
-function surf=getFaceBSpline(Data,idx_face,idx_surf)
+function fce=getFaceNURBS(Data,idx_face,idx_surf)
 % generate BSpline surface by BSpline surface string data
 %
 
@@ -112,9 +112,9 @@ str_surf=Data{idx_surf,2};
 idx=find(str_surf == ',',1);
 name=str_surf(1:idx-1);str_surf(1:idx)=[];
 idx=find(str_surf == ',',1);
-u_degree=str2double(str_surf(1:idx-1));str_surf(1:idx)=[];
+UDegree=str2double(str_surf(1:idx-1));str_surf(1:idx)=[];
 idx=find(str_surf == ',',1);
-v_degree=str2double(str_surf(1:idx-1));str_surf(1:idx)=[];
+VDegree=str2double(str_surf(1:idx-1));str_surf(1:idx)=[];
 
 % read control point matrix
 idx=2;par_sum=1;
@@ -133,56 +133,50 @@ str_surf(1:idx+1)=[];
 
 % properties
 idx=find(str_surf == ',',1);
-surface_form=(str_surf(1:idx-1));str_surf(1:idx)=[];
+face_form=(str_surf(1:idx-1));str_surf(1:idx)=[];
 idx=find(str_surf == ',',1);
-u_closed=(str_surf(1:idx-1));str_surf(1:idx)=[];
+UPeriodic=(str_surf(1:idx-1));str_surf(1:idx)=[];
 idx=find(str_surf == ',',1);
-v_closed=(str_surf(1:idx-1));str_surf(1:idx)=[];
+VPeriodic=(str_surf(1:idx-1));str_surf(1:idx)=[];
 idx=find(str_surf == ',',1);
 self_intersect=(str_surf(1:idx-1));str_surf(1:idx)=[];
 
-% knot_multi
+% Mults
 idx=find(str_surf == ')',1);
-u_knot_multi=str2double(split(str_surf(2:idx-1),',',2));str_surf(1:idx+1)=[];
+UMults=str2double(split(str_surf(2:idx-1),',',2));str_surf(1:idx+1)=[];
 idx=find(str_surf == ')',1);
-v_knot_multi=str2double(split(str_surf(2:idx-1),',',2));str_surf(1:idx+1)=[];
+VMults=str2double(split(str_surf(2:idx-1),',',2));str_surf(1:idx+1)=[];
 
-% knot_list
+% Knots
 idx=find(str_surf == ')',1);
-u_knot_list=str2double(split(str_surf(2:idx-1),',',2));str_surf(1:idx+1)=[];
+UKnots=str2double(split(str_surf(2:idx-1),',',2));str_surf(1:idx+1)=[];
 idx=find(str_surf == ')',1);
-v_knot_list=str2double(split(str_surf(2:idx-1),',',2));str_surf(1:idx+1)=[];
+VKnots=str2double(split(str_surf(2:idx-1),',',2));str_surf(1:idx+1)=[];
 
 % knot_spec
 knot_spec=str_surf;
 
 % load control point data
-[u_ctrl_num,v_ctrl_num]=size(Idx_control);
-ctrl_X=zeros(v_ctrl_num,u_ctrl_num);
-ctrl_Y=zeros(v_ctrl_num,u_ctrl_num);
-ctrl_Z=zeros(v_ctrl_num,u_ctrl_num);
-for u_idx=1:u_ctrl_num
-    for v_idx=1:v_ctrl_num
-        idx_point=Idx_control(u_idx,v_ctrl_num-v_idx+1);
+[u_pole_num,v_pole_num]=size(Idx_control);
+Poles=zeros(v_pole_num,u_pole_num,3);
+for u_idx=1:u_pole_num
+    for v_idx=1:v_pole_num
+        idx_point=Idx_control(u_idx,v_pole_num-v_idx+1);
         control_point=getPoint(Data,idx_point);
-        ctrl_X(v_idx,u_idx)=control_point(1);
-        ctrl_Y(v_idx,u_idx)=control_point(2);
-        ctrl_Z(v_idx,u_idx)=control_point(3);
+        Poles(v_idx,u_idx,:)=control_point;
     end
 end
 
-surf=FaceBSpline(name,ctrl_X,ctrl_Y,ctrl_Z,...
-    [],u_degree,v_degree,...
-    u_knot_multi,v_knot_multi,u_knot_list,v_knot_list);
+fce=FaceNURBS(name,Poles,UDegree,VDegree,UMults,VMults,UKnots,VKnots);
 
-surf.surface_form=surface_form;
-surf.u_closed=u_closed;
-surf.v_closed=v_closed;
-surf.self_intersect=self_intersect;
-surf.knot_spec=knot_spec;
+fce.face_form=face_form;
+fce.UPeriodic=UPeriodic;
+fce.VPeriodic=VPeriodic;
+fce.self_intersect=self_intersect;
+fce.knot_spec=knot_spec;
 end
 
-function surf=getPLANE(Data,idx_face,surf_idx)
+function fce=getPLANE(Data,idx_face,surf_idx)
 % generate BSpline surface by plane string data
 %
 
@@ -206,51 +200,51 @@ str_axis=Data{idx_axis,2};
 
 % process edge_list
 if length(edge_list) > 4
-    surf=[];
+    fce=[];
     return;
 end
 switch length(edge_list)
     case 2
         edge_1=edge_list{1};
         edge_3=edge_list{2};
-        v_degree=max(edge_1.degree,edge_3.degree);
-        u_degree=1;
+        VDegree=max(edge_1.Degree,edge_3.Degree);
+        UDegree=1;
 
-        edge_1.changeDegree(v_degree);control_1=[edge_1.ctrl_X,edge_1.ctrl_Y,edge_1.ctrl_Z];
-        edge_3.changeDegree(v_degree);control_3=[edge_3.ctrl_X,edge_3.ctrl_Y,edge_3.ctrl_Z];
+        edge_1.addDegree(VDegree);Poles_1=[edge_1.Poles];
+        edge_3.addDegree(VDegree);Poles_3=[edge_3.Poles];
 
-        control_2=repmat(control_1(end,:),2,1);
-        control_4=repmat(control_1(1,:),2,1);
+        Poles_2=repmat(Poles_1(end,:),2,1);
+        Poles_4=repmat(Poles_1(1,:),2,1);
     case 3
         edge_1=edge_list{1};
         edge_2=edge_list{2};
         edge_3=edge_list{3};
-        u_degree=max(edge_2.degree);
-        v_degree=max(edge_1.degree,edge_3.degree);
+        UDegree=max(edge_2.Degree);
+        VDegree=max(edge_1.Degree,edge_3.Degree);
 
-        edge_1.changeDegree(v_degree);control_1=[edge_1.ctrl_X,edge_1.ctrl_Y,edge_1.ctrl_Z];
-        edge_2.changeDegree(u_degree);control_2=[edge_2.ctrl_X,edge_2.ctrl_Y,edge_2.ctrl_Z];
-        edge_3.changeDegree(v_degree);control_3=[edge_3.ctrl_X,edge_3.ctrl_Y,edge_3.ctrl_Z];
+        edge_1.addDegree(VDegree);Poles_1=[edge_1.Poles];
+        edge_2.addDegree(UDegree);Poles_2=[edge_2.Poles];
+        edge_3.addDegree(VDegree);Poles_3=[edge_3.Poles];
 
-        control_4=repmat(control_1(1,:),u_num,1);
+        Poles_4=repmat(Poles_1(1,:),u_num,1);
     case 4
         edge_1=edge_list{1};
         edge_2=edge_list{2};
         edge_3=edge_list{3};
         edge_4=edge_list{4};
-        u_degree=max(edge_2.degree,edge_4.degree);
-        v_degree=max(edge_1.degree,edge_3.degree);
+        UDegree=max(edge_2.Degree,edge_4.Degree);
+        VDegree=max(edge_1.Degree,edge_3.Degree);
 
-        edge_1.changeDegree(v_degree);control_1=[edge_1.ctrl_X,edge_1.ctrl_Y,edge_1.ctrl_Z];
-        edge_2.changeDegree(u_degree);control_2=[edge_2.ctrl_X,edge_2.ctrl_Y,edge_2.ctrl_Z];
-        edge_3.changeDegree(v_degree);control_3=[edge_3.ctrl_X,edge_3.ctrl_Y,edge_3.ctrl_Z];
-        edge_4.changeDegree(u_degree);control_4=[edge_4.ctrl_X,edge_4.ctrl_Y,edge_4.ctrl_Z];
+        edge_1.addDegree(VDegree);Poles_1=[edge_1.Poles];
+        edge_2.addDegree(UDegree);Poles_2=[edge_2.Poles];
+        edge_3.addDegree(VDegree);Poles_3=[edge_3.Poles];
+        edge_4.addDegree(UDegree);Poles_4=[edge_4.Poles];
 end
 
-[ctrl_X,ctrl_Y,ctrl_Z]=geomMapGrid(control_2,control_3,control_4,control_1);
+Poles=GeomApp.MapGrid(Poles_2,Poles_3,Poles_4,Poles_1);
 
 % process bound with axis
-surf=FaceBSpline(name,ctrl_X,ctrl_Y,ctrl_Z,[],u_degree,v_degree);
+fce=FaceNURBS(name,Poles,UDegree,VDegree);
 end
 
 function edge_list=getBound(Data,Idx_bound)
@@ -309,7 +303,7 @@ for bound_idx=1:length(Idx_bound)
         edge_type=Data{idx_edge,1};
         switch edge_type
             case 'B_SPLINE_CURVE_WITH_KNOTS'
-                edge=getEdgeBSpline(Data,idx_vertex_start,idx_vertex_end,idx_edge);
+                edge=getEdgeNURBS(Data,idx_vertex_start,idx_vertex_end,idx_edge);
             case 'LINE'
                 edge=getLINE(Data,idx_vertex_start,idx_vertex_end,idx_edge);
             otherwise
@@ -328,7 +322,7 @@ for bound_idx=1:length(Idx_bound)
 end
 end
 
-function edge=getEdgeBSpline(Data,idx_vertex_start,idx_vertex_end,idx_edge)
+function edge=getEdgeNURBS(Data,idx_vertex_start,idx_vertex_end,idx_edge)
 % generate BSpline edge by BSpline edge string data
 %
 
@@ -338,7 +332,7 @@ str_edge=Data{idx_edge,2};
 idx=find(str_edge == ',',1);
 name=str_edge(1:idx-1);str_edge(1:idx)=[];
 idx=find(str_edge == ',',1);
-degree=str2double(str_edge(1:idx-1));str_edge(1:idx)=[];
+Degree=str2double(str_edge(1:idx-1));str_edge(1:idx)=[];
 
 % read control point matrix
 idx=find(str_edge == ')',1);
@@ -352,22 +346,22 @@ closed_edge=(str_edge(1:idx-1));str_edge(1:idx)=[];
 idx=find(str_edge == ',',1);
 self_intersect=(str_edge(1:idx-1));str_edge(1:idx)=[];
 
-% knot_multi
+% Mults
 idx=find(str_edge == ')',1);
-knot_multi=str2double(split(str_edge(2:idx-1),',',2));str_edge(1:idx+1)=[];
+Mults=str2double(split(str_edge(2:idx-1),',',2));str_edge(1:idx+1)=[];
 
-% knot_list
+% Knots
 idx=find(str_edge == ')',1);
-knot_list=str2double(split(str_edge(2:idx-1),',',2));str_edge(1:idx+1)=[];
+Knots=str2double(split(str_edge(2:idx-1),',',2));str_edge(1:idx+1)=[];
 
 % knot_spec
 knot_spec=str_edge;
 
 % load control point data
-ctrl_list=zeros(length(Idx_control),3);
+Poles=zeros(length(Idx_control),3);
 for control_idx=1:length(Idx_control)
     idx_control=Idx_control(control_idx);
-    ctrl_list(control_idx,:)=getPoint(Data,idx_control);
+    Poles(control_idx,:)=getPoint(Data,idx_control);
 end
 
 % VERTEX
@@ -381,15 +375,14 @@ idx_point_end=str2double(str_vertex(2:end));
 point_end=getPoint(Data,idx_point_end);
 
 % reverse
-if norm(point_start-ctrl_list(1,:)) > 100*eps &&...
-        norm(point_end-ctrl_list(end,:)) > 100*eps
-    ctrl_list=flipud(ctrl_list);
-    knot_multi=fliplr(knot_multi);
-    knot_list=1-fliplr(knot_list);
+if norm(point_start-Poles(1,:)) > 100*eps &&...
+        norm(point_end-Poles(end,:)) > 100*eps
+    Poles=flipud(Poles);
+    Mults=fliplr(Mults);
+    Knots=1-fliplr(Knots);
 end
 
-edge=EdgeBSpline(name,ctrl_list(:,1),ctrl_list(:,2),ctrl_list(:,3),[],degree,...
-    knot_multi,knot_list);
+edge=EdgeNURBS(name,Poles,Degree,Mults,Knots);
 
 edge.edge_form=edge_form;
 edge.closed_edge=closed_edge;
@@ -436,7 +429,7 @@ idx_point_end=str2double(str_vertex(2:end));
 point_end=getPoint(Data,idx_point_end);
 
 point=[point_start;point_end];
-edge=EdgeBSpline(name,point(:,1),point(:,2),point(:,3));
+edge=EdgeNURBS(name,point);
 
 end
 
