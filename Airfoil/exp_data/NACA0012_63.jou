@@ -4,9 +4,7 @@
 ;
 /file/set-tui-version "22.2"
 ; mesh import from cgns
-/file/import/cgns/mesh "airfoil.cgns"
-; mesh import from msh
-; /file/read-case "NACA0012.msh"
+/file/import/cgns/mesh "NACA0012.cgns"
 /mesh/reorder/reorder-domain 
 ; setting
 /define/models/viscous/spalart-allmaras? yes
@@ -36,4 +34,3 @@
 /solve/convergence-conditions/conv-reports/add cl report-defs cl stop-criterion 1e-4 active? yes print? yes quit quit quit 
 /solve/iterate 1000 
 /file/write-case-data "NACA0012.cas.h5" yes
-/exit

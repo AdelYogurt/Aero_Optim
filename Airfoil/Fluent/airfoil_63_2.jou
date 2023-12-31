@@ -1,0 +1,39 @@
+; notice:
+; three boundary name: farfield airfoil_up airfoil_low
+; out filename: fluent_history.out
+;
+/file/set-tui-version "22.2"
+; mesh import from cgns
+/file/import/cgns/mesh "airfoil.cgns"
+; mesh import from msh
+; /file/read-case "airfoil.msh"
+/mesh/reorder/reorder-domain 
+; setting
+/define/models/viscous/spalart-allmaras? yes
+/define/models/viscous/sa-alternate-prod? yes 
+/define/materials/change-create air air yes ideal-gas no no yes sutherland three-coefficient-method 1.716e-05 273.11 110.56 no no no 
+/define/boundary-conditions/modify-zones/zone-type farfield pressure-far-field
+; pressure-far-farfield parameter
+/define/boundary-conditions/pressure-far-field farfield no 0. no 0.63 no 300. no 0.9994 no 0.0349 no no yes no 10 
+/define/boundary-conditions/modify-zones/zone-type airfoil_up wall
+/define/boundary-conditions/modify-zones/zone-type airfoil_low wall
+/define/boundary-conditions/wall airfoil_up 0. no 0. no no no 0. no no no no 0. no 0.5 no 1 
+/define/boundary-conditions/wall airfoil_low 0. no 0. no no no 0. no no no no 0. no 0.5 no 1 
+; method
+/solve/set/p-v-coupling 24 
+/solve/set/discretization-scheme/nut 1 
+/solve/set/density 0.5 
+/solve/set/nut 0.9 
+; solve
+/solve/initialize/hyb-initialization 
+/report/reference-values/compute/pressure-far-field farfield 
+/report/reference-values/zone fluid 
+/solve/report-definitions/add cd drag force-vector 0.9994 0.0349 thread-names airfoil_up airfoil_low () quit 
+/solve/report-definitions/add cl lift force-vector -0.0349 0.9994 thread-names airfoil_up airfoil_low () quit 
+/solve/report-files/add fluent_history file-name "fluent_history.out" report-defs cd cl () quit
+/solve/report-plots/add fluent_history title "cd_and_cl" report-defs cd cl () quit  
+/solve/convergence-conditions/conv-reports/add cd report-defs cd stop-criterion 1e-4 active? yes print? yes quit quit quit 
+/solve/convergence-conditions/conv-reports/add cl report-defs cl stop-criterion 1e-4 active? yes print? yes quit quit quit 
+/solve/iterate 1000 
+/file/write-case-data "airfoil.cas.h5" yes
+/exit
