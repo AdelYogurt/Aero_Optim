@@ -14,12 +14,12 @@ close all hidden;
 
 %% read CGNS file
 
-mesh_filestr='mesh/NACA0012.cgns';
+mesh_filestr='mesh/NACA0012_26.cgns';
 marker_name_list={'AIRFOIL_UP','AIRFOIL_LOW'};
 [point_list,marker_index_list]=readBCCGNS(mesh_filestr,marker_name_list);
-save('mesh/mesh_data_airfoil.mat','point_list','marker_index_list')
+save('mesh_data_airfoil.mat','point_list','marker_index_list')
 mesh_point=calMesh(point_list,marker_index_list);
-save('mesh/mesh_data_airfoil.mat','mesh_point','-append')
+save('mesh_data_airfoil.mat','mesh_point','-append')
 
 %% pre calculate curve coord
 
@@ -31,9 +31,9 @@ Poles_up=importdata('geom/NACA0012_CSTshape_up.txt');
 airfoil=AirfoilGeom(C_par_low,Poles_low,C_par_up,Poles_up);
 
 % load data
-load('mesh/mesh_data_airfoil.mat','point_list','marker_index_list');
+load('mesh_data_airfoil.mat','point_list','marker_index_list');
 mesh_coord=airfoil.calCoord(point_list,marker_index_list);
-save('mesh/mesh_data_airfoil.mat','mesh_coord','-append')
+save('mesh_data_airfoil.mat','mesh_coord','-append')
 
 % % write coord
 % writeCoord(mesh_coord,1,'airfoil');
@@ -60,9 +60,9 @@ save('mesh/mesh_data_airfoil.mat','mesh_coord','-append')
 % airfoil=AirfoilGeom(C_par_low,Poles_low,C_par_up,Poles_up);
 % 
 % % load data and calculate deform mesh point
-% load('mesh/mesh_data_airfoil.mat','mesh_coord')
+% load('mesh_data_airfoil.mat','mesh_coord')
 % mesh_point=airfoil.calMeshPoint(mesh_coord);
-% save('mesh/mesh_data_airfoil.mat','mesh_point','-append')
+% save('mesh_data_airfoil.mat','mesh_point','-append')
 % 
 % % % write mesh point
 % % writePoint(mesh_point,'airfoil_deform.dat',2)
