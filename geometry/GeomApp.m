@@ -201,19 +201,22 @@ classdef GeomApp
             Poles=[];
             Mults=[];
             Knots=[];
-            Weight=[];
+            Weights=[];
             total_length=0;
             for edg_idx=1:edg_num
                 edg=edg_list{edg_idx};
                 edg.addDegree(Degree);
-                Poles=[Poles(1:end-1);edg.Poles];
                 Mults_new=edg.Mults;
                 Mults_new(1)=Mults_new(1)-1;
+                Weights_new=edg.Weights;
+                edg_length=sum(vecnorm(diff(edg.Poles),2,2));
+
+                Poles=[Poles(1:end-1,:);edg.Poles];
                 Mults=[Mults(1:end-1),Mults_new];
-                edg_length=sum(vecnorm([diff(edg.ctrl_X),diff(edg.ctrl_Y),diff(edg.ctrl_Z)],2,2));
                 Knots=[Knots(1:end-1),edg.Knots*edg_length+total_length];
-                Weight=[Weight(1:end-1),Weight_new/Weight_new(1)];
-                Weight=Weight/Weight(end);
+                Weights=[Weights(1:end-1),Weights_new/Weights_new(1)];
+
+                Weights=Weights/Weights(end);
                 total_length=total_length+edg_length;
             end
             Mults(1)=Mults(1)+1;
@@ -222,7 +225,7 @@ classdef GeomApp
             Knots=Knots/total_length;
             Knots=Knots/max(Knots);
 
-            edg=EdgeNURBS(name,Poles,Degree,Mults,Knots,Weight);
+            edg=EdgeNURBS(name,Poles,Degree,Mults,Knots,Weights);
         end
 
         function edg_list=correctEdge(edg_list,geom_torl)

@@ -86,7 +86,7 @@ classdef EdgeCST2D < EdgeNURBS
         end
     end
 
-    % add BSpline shape function
+    % add NURBS shape function
     methods
         function addNURBS(self,Poles,Degree,Mults,Knots,Weights)
             % add NURBS as shape function
@@ -347,6 +347,39 @@ classdef EdgeCST2D < EdgeNURBS
             U=U(:);
             Point=calCST(self,U);
             Point=self.axisLocalToGlobal(Point,U);
+        end
+
+        function [k1,k2,x1,x2]=calTangTorl(self,torl)
+            % calculate differ tangent by control discrete error in torl
+            %
+            if ~isempty(self.C_par)
+                N1=self.C_par(1);
+                N2=self.C_par(2);
+                nomlz_par=(N1./(N1+N2)).^N1.*(N2./(N1+N2)).^N2;
+                K1=self.shape_fcn(0);KY1=K1(2)/nomlz_par;
+                K2=self.shape_fcn(1);KY2=K2(2)/nomlz_par;
+                KX=abs(K2(1)-K1(1));
+                if self.sym,KX=KX*2;end
+                
+                if N1 == 1
+                    k1=N1*KY1/KX;
+                    x1=0;
+                else
+                    k1=N1*KY1/KX*(torl/KY1/abs(1-N1))^((N1-1)/N1);
+                    x1=KX*(k1*KX/N1/KY1)^(1/(N1-1));
+                end
+
+                if N2 == 1
+                    k2=N2*KY2/KX;
+                    x2=0;
+                else
+                    k2=N2*KY2/KX*(torl/KY2/abs(1-N2))^((N2-1)/N2);
+                    x2=KX*(k1*KX/N2/KY2)^(1/(N2-1));
+                end
+            else
+                k1=[];k2=[];
+                x1=[];x2=[];
+            end
         end
     end
 

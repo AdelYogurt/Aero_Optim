@@ -180,8 +180,9 @@ end
 
 % obtain result
 history_filestr=[config.getParameter('CONV_FILENAME'),'.csv'];
+history_filestr=fullfile(dir_work,history_filestr);
 if exist(history_filestr,"file")
-    SU2_history=readSU2CSV(fullfile(dir_work,history_filestr));
+    SU2_history=readSU2CSV(history_filestr);
     type_list=fieldnames(SU2_history);value_list=cell(length(type_list),1);
     for idx=1:length(value_list)
         value_list{idx}=SU2_history.(type_list{idx})(end);
@@ -193,8 +194,9 @@ else
 end
 
 surface_filestr=[config.getParameter('SURFACE_FILENAME'),'.csv'];
+surface_filestr=fullfile(dir_work,surface_filestr);
 if exist(surface_filestr,"file")
-    SU2_surface=readSU2CSV(fullfile(dir_work,surface_filestr));
+    SU2_surface=readSU2CSV(surface_filestr);
 else
     SU2_surface=[];
 end

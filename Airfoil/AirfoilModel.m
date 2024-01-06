@@ -137,7 +137,7 @@ classdef AirfoilModel < handle
                 if isa(self.CFD_param.SU2_CFD_param,'SU2Config')
                     config=self.CFD_param.SU2_CFD_param;
                 else
-                    config=SU2Config(self.CFD_param.SU2_DEF_param);
+                    config=SU2Config(self.CFD_param.SU2_CFD_param);
                 end
                 config.setParameter('MESH_FILENAME',mesh_out.mesh_filestr);
                 config.setParameter('RESTART_FILENAME',self.CFD_param.restart_filestr);
