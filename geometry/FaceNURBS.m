@@ -26,6 +26,8 @@ classdef FaceNURBS < handle
         dimension;
         u_list;
         v_list;
+
+        reverse=false;
     end
 
     % define Face
@@ -189,15 +191,19 @@ classdef FaceNURBS < handle
                 end
             end
 
-            if isempty(u_param),u_param=1e-2;end
+            if isempty(u_param)
+                pnt=reshape(self.calPoint([0;0;1;1],[0;1;0;1]),4,[]);
+                bou_min=min(pnt,[],1);bou_max=max(pnt,[],1);
+                u_param=2^-8*mean(bou_max-bou_min);
+            end
             if length(u_param) == 1 && u_param ~= fix(u_param)
                 % input is torlance
-                value_torl=u_param;min_level=2;max_level=50;
+                value_torl=u_param;min_level=2;max_level=8;
 
                 % adapt capture U, V
                 low_bou=[0,0];
                 up_bou=[1,1];
-                [U,V,data_list,~]=GeomApp.meshAdapt2DUV(@(x) reshape(self.calPoint(x(1),x(2)),1,3),low_bou,up_bou,value_torl,min_level,max_level,3);
+                [U,V,data_list,~]=GeomApp.meshAdapt2DUV(@(x) reshape(self.calPoint(x(:,1),x(:,2)),[],3),low_bou,up_bou,value_torl,min_level,max_level,3);
                 Point=data_list;
             else
                 % input is U, V or u_grid_number, v_grid_number
@@ -427,7 +433,7 @@ classdef FaceNURBS < handle
             % zlim([center(3)-range,center(3)+range]);
         end
 
-        function [step_str,obj_idx,ADVANCED_FACE]=getStep(self,obj_idx)
+        function [step_str,obj_idx,ADVANCED_FACE]=getStep(self,obj_idx,param)
             % write BSpline into step file
             %
             if nargin < 2,obj_idx=1;end

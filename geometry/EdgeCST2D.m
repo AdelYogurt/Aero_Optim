@@ -365,16 +365,16 @@ classdef EdgeCST2D < EdgeNURBS
                     k1=N1*KY1/KX;
                     x1=0;
                 else
-                    k1=N1*KY1/KX*(torl/KY1/abs(1-N1))^((N1-1)/N1);
-                    x1=KX*(k1*KX/N1/KY1)^(1/(N1-1));
+                    k1=N1*KY1/KX*(torl/abs(KY1)/abs(1-N1))^((N1-1)/N1);
+                    x1=KX*(k1*KX/N1/abs(KY1))^(1/(N1-1));
                 end
 
                 if N2 == 1
                     k2=N2*KY2/KX;
                     x2=0;
                 else
-                    k2=N2*KY2/KX*(torl/KY2/abs(1-N2))^((N2-1)/N2);
-                    x2=KX*(k1*KX/N2/KY2)^(1/(N2-1));
+                    k2=N2*KY2/KX*(torl/abs(KY2)/abs(1-N2))^((N2-1)/N2);
+                    x2=KX*(k1*KX/N2/abs(KY2))^(1/(N2-1));
                 end
             else
                 k1=[];k2=[];

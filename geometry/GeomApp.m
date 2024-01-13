@@ -575,12 +575,10 @@ classdef GeomApp
             end
 
             % fit nan data
-            for rank_idx=1:length(v_list)
-                for colume_idx=1:length(u_list)
-                    if isnan(Fval(rank_idx,colume_idx,1))
-                        Fval(rank_idx,colume_idx,:)=fcn([U(rank_idx,colume_idx),V(rank_idx,colume_idx)]);
-                    end
-                end
+            idx=find(isnan(Fval(:,:,1)));
+            Fval_sub=fcn([U(idx),V(idx)]);
+            for favl_idx=1:fval_num
+                Fval(idx+(favl_idx-1)*(length(v_list)*length(u_list)))=Fval_sub(:,favl_idx);
             end
 
             function [node_num,data_num]=createNodeTree(root_idx,data_num)

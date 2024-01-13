@@ -31,8 +31,8 @@ classdef FaceCST < FaceNURBS
 
     properties
         % deform parameter
-        deform_fcn_X=[]; % (V)
-        deform_fcn_Y=[]; % (U)
+        deform_fcn_X=[]; % (U,V)
+        deform_fcn_Y=[]; % (U,V)
         deform_fcn_Z=[]; % (U,V)
 
         % rotate parameter
@@ -416,10 +416,10 @@ classdef FaceCST < FaceNURBS
         function Point=axisLocalToGlobal(self,Point,U,V)
             % deform surface
             if ~isempty(self.deform_fcn_X)
-                Point(:,:,1)=Point(:,:,1)+self.deform_fcn_X(V);
+                Point(:,:,1)=Point(:,:,1)+self.deform_fcn_X(U,V);
             end
             if ~isempty(self.deform_fcn_Y)
-                Point(:,:,2)=Point(:,:,2)+self.deform_fcn_Y(U);
+                Point(:,:,2)=Point(:,:,2)+self.deform_fcn_Y(U,V);
             end
             if ~isempty(self.deform_fcn_Z)
                 Point(:,:,3)=Point(:,:,3)+self.deform_fcn_Z(U,V);
@@ -461,10 +461,10 @@ classdef FaceCST < FaceNURBS
 
             % re-deform surface
             if ~isempty(self.deform_fcn_X)
-                Point(:,:,1)=Point(:,:,1)-self.deform_fcn_X(V);
+                Point(:,:,1)=Point(:,:,1)-self.deform_fcn_X(U,V);
             end
             if ~isempty(self.deform_fcn_Y)
-                Point(:,:,2)=Point(:,:,2)-self.deform_fcn_Y(U);
+                Point(:,:,2)=Point(:,:,2)-self.deform_fcn_Y(U,V);
             end
             if ~isempty(self.deform_fcn_Z)
                 Point(:,:,3)=Point(:,:,3)-self.deform_fcn_Z(U,V);
@@ -556,7 +556,7 @@ classdef FaceCST < FaceNURBS
             end
 
             % calculate point on surface
-            Point=calFace(self,u_param,v_param);
+            Point=self.calFace(u_param,v_param);
 
             % plot surface
             surface(axe_hdl,Point(:,:,1),Point(:,:,2),Point(:,:,3),srf_option);
@@ -614,11 +614,11 @@ classdef FaceCST < FaceNURBS
             fce=GeomApp.VertexToFace(self.name,Nodes,UDegree,VDegree,[],[],U_node(1,:),V_node(:,1));
         end
 
-        function [step_str,obj_idx,ADVANCED_FACE]=getStep(self,obj_idx)
+        function [step_str,obj_idx,ADVANCED_FACE]=getStep(self,obj_idx,param)
             % interface of BSpline surface getStep function
             %
-            fce=self.getNURBS(1e-2);
-            [step_str,obj_idx,ADVANCED_FACE]=fce.getStep(obj_idx);
+            fce=self.getNURBS(param);
+            [step_str,obj_idx,ADVANCED_FACE]=fce.getStep(obj_idx,param);
         end
     end
 end
