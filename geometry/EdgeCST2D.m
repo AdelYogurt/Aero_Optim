@@ -69,8 +69,6 @@ classdef EdgeCST2D < EdgeNURBS
                 self.C_par=[];
                 self.class_fcn=C_par;
             end
-
-            self.dimension=2;
         end
     
         function Point=calCST(self,U)

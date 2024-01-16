@@ -40,7 +40,7 @@ mesh_param.mesh_filestr='geom/airfoil.su2';
 
 % CFD module
 CFD_param.solver='Fluent';
-CFD_param.fluent_jou_filestr='Fluent/airfoil_80_2.jou';
+CFD_param.fluent_jou_filestr='Fluent/airfoil_80_4.jou';
 CFD_param.fluent_dir='';
 CFD_param.solver_dimension=2;
 CFD_param.out_filename='fluent_history.out';
@@ -48,12 +48,12 @@ CFD_param.out_filename='fluent_history.out';
 % CFD_param.solver='SU2_CFD';
 % CFD_param.SU2_CFD_param='SU2/airfoil.cfg';
 
-% model=AirfoilModel(partitions,geom_param,mesh_param,CFD_param,[],[],run_desc,out_logger);
-% geo_in.C_par_low=[0.5,1.0];
-% geo_in.Poles_low=importdata('geom/RAE2822_CSTshape_low.txt');
-% geo_in.C_par_up=[0.5,1.0];
-% geo_in.Poles_up=importdata('geom/RAE2822_CSTshape_up.txt');
-% [geo_out,mesh_out,CFD_out]=model.solveAirfoil(geo_in);
+model=AirfoilModel(partitions,geom_param,mesh_param,CFD_param,[],[],run_desc,out_logger);
+geo_in.C_par_low=[0.5,1.0];
+geo_in.Poles_low=importdata('geom/RAE2822_CSTshape_low.txt');
+geo_in.C_par_up=[0.5,1.0];
+geo_in.Poles_up=importdata('geom/RAE2822_CSTshape_up.txt');
+[geo_out,mesh_out,CFD_out]=model.solveAirfoil(geo_in);
 
 % problem=AirfoilProblem(partitions,geom_param,mesh_param,CFD_param,[],[],run_desc,out_logger);
 % x=(problem.low_bou+problem.up_bou)/2;

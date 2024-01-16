@@ -1,5 +1,5 @@
 clc;
-% clear;
+clear;
 close all hidden;
 
 %% NURBS edge

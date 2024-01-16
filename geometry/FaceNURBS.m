@@ -18,14 +18,9 @@ classdef FaceNURBS < handle
         UKnots; % UKnots
         VKnots; % VKnots
         knot_spec='.UNSPECIFIED.';
-    end
 
-    properties % Derived Attributes
-        u_pole_num;
-        v_pole_num;
-        dimension;
-        u_list;
-        v_list;
+        u_list; % u_knot_vector
+        v_list; % v_knot_vector
 
         reverse=false;
     end
@@ -60,7 +55,7 @@ classdef FaceNURBS < handle
                 if nargin < 8
                     VKnots=[];
                     if nargin < 7
-                        VMults = [];
+                        VMults=[];
                         if nargin < 6
                             UKnots=[];
                             if nargin < 5
@@ -79,7 +74,7 @@ classdef FaceNURBS < handle
             self.name=name;
 
             if nargin > 1
-                [v_pole_num,u_pole_num,dimension]=size(Poles);
+                [v_pole_num,u_pole_num,~]=size(Poles);
 
                 % default value
                 if isempty(UDegree),UDegree=u_pole_num-1;end
@@ -111,9 +106,6 @@ classdef FaceNURBS < handle
                 self.Weights=Weights;
 
                 % Derived Attributes
-                self.u_pole_num=u_pole_num;
-                self.v_pole_num=v_pole_num;
-                self.dimension=dimension;
                 self.u_list=u_list;
                 self.v_list=v_list;
             end
@@ -123,7 +115,7 @@ classdef FaceNURBS < handle
             % calculate point on Non-Uniform Rational B-Splines Surface
             %
             [rank_num,colume_num]=size(U);
-            Point=zeros(rank_num,colume_num,self.dimension);
+            Point=zeros(rank_num,colume_num,size(self.Poles,3));
 
             N_u_list=zeros(1,self.UDegree+1);
             N_v_list=zeros(self.VDegree+1,1);
@@ -135,11 +127,11 @@ classdef FaceNURBS < handle
 
                     % [index_end_v,index_end_u]=getIndex(); % y, x
 
-                    idx_end_u=self.u_pole_num; % is equal to the section index
+                    idx_end_u=size(self.Poles,2); % is equal to the section index
                     while idx_end_u > self.UDegree+1 && u_x < self.u_list(idx_end_u)
                         idx_end_u=idx_end_u-1;
                     end
-                    idx_end_v=self.v_pole_num; % is equal to the section index
+                    idx_end_v=size(self.Poles,1); % is equal to the section index
                     while idx_end_v > self.VDegree+1 && v_x < self.v_list(idx_end_v)
                         idx_end_v=idx_end_v-1;
                     end
@@ -160,6 +152,93 @@ classdef FaceNURBS < handle
                     Point(rank_idx,colume_idx,:)=sum(NW_list.*self.Poles(idx_start_v:idx_end_v,idx_start_u:idx_end_u,:),[1,2])/sum(NW_list,'all');
                 end
             end
+        end
+    end
+
+    % control Face
+    methods
+        function addDegree(self,Udeg_tar,Vdeg_tar)
+            % increase face degree
+            %
+            Ctrl=cat(3,self.Poles,self.Weights);
+            [v_num,u_num,~]=size(self.Poles);
+
+            % modify V degree
+            if self.VDegree < Vdeg_tar
+                Ctrl=permute(Ctrl,[1 2 3]);
+                Ctrl=reshape(Ctrl,v_num,4*u_num);
+                [Ctrl,self.VMults]=GeomApp.addDegree(self.VDegree,Ctrl,self.VMults,self.VKnots,Vdeg_tar);
+                % Ctrl=Ctrl./Ctrl(:,end);
+                v_num=size(Ctrl,1);
+                Ctrl=reshape(Ctrl,[v_num,u_num,4]);
+                Ctrl=permute(Ctrl,[1 2 3]);
+            end
+
+            % modify U degree
+            if self.UDegree < Udeg_tar
+                Ctrl=permute(Ctrl,[2 1 3]);
+                Ctrl=reshape(Ctrl,u_num,4*v_num);
+                [Ctrl,self.UMults]=GeomApp.addDegree(self.UDegree,Ctrl,self.UMults,self.UKnots,Udeg_tar);
+                % Ctrl=Ctrl./Ctrl(:,end);
+                u_num=size(Ctrl,1);
+                Ctrl=reshape(Ctrl,[u_num,v_num,4]);
+                Ctrl=permute(Ctrl,[2 1 3]);
+            end
+
+            self.Poles=Ctrl(:,:,1:end-1);
+            self.Weights=Ctrl(:,:,end);
+
+            self.u_list=baseKnotVec(self.UMults,self.UKnots);
+            self.v_list=baseKnotVec(self.VMults,self.VKnots);
+        end
+
+        function insertKnot(self,U_ins,V_ins)
+            % insert knot to edge
+            %
+            Ctrl=cat(3,self.Poles,self.Weights);
+            U=self.u_list;
+            V=self.v_list;
+            Vdeg=self.VDegree;
+            Udeg=self.UDegree;
+            [v_num,u_num,~]=size(self.Poles);
+
+            % Insert knots along the v direction
+            if ~isempty(V_ins)
+                Ctrl=permute(Ctrl,[1 2 3]);
+                Ctrl=reshape(Ctrl,v_num,4*u_num);
+                [Ctrl,V]=GeomApp.insertKnot(Vdeg,Ctrl,V,V_ins);
+                v_num=size(Ctrl,1);
+                Ctrl=reshape(Ctrl,[v_num,u_num,4]);
+                Ctrl=permute(Ctrl,[1 2 3]);
+            end
+
+            % Insert knots along the u direction
+            if ~isempty(U_ins)
+                Ctrl=permute(Ctrl,[2 1 3]);
+                Ctrl=reshape(Ctrl,u_num,4*v_num);
+                [Ctrl,U]=GeomApp.insertKnot(Udeg,Ctrl,U,U_ins);
+                u_num=size(Ctrl,1);
+                Ctrl=reshape(Ctrl,[u_num,v_num,4]);
+                Ctrl=permute(Ctrl,[2 1 3]);
+            end
+
+            self.Poles=Ctrl(:,:,1:end-1);
+            self.Weights=Ctrl(:,:,end)';
+
+            self.VKnots=unique(V);
+            self.VMults=ones(size(self.VKnots));
+            for k_idx=1:length(self.VKnots)
+                self.VMults(k_idx)=sum(V == self.VKnots(k_idx));
+            end
+
+            self.UKnots=unique(U);
+            self.UMults=ones(size(self.UKnots));
+            for k_idx=1:length(self.UKnots)
+                self.UMults(k_idx)=sum(U == self.UKnots(k_idx));
+            end
+
+            self.u_list=U;
+            self.v_list=V;
         end
     end
 
@@ -203,7 +282,8 @@ classdef FaceNURBS < handle
                 % adapt capture U, V
                 low_bou=[0,0];
                 up_bou=[1,1];
-                [U,V,data_list,~]=GeomApp.meshAdapt2DUV(@(x) reshape(self.calPoint(x(:,1),x(:,2)),[],3),low_bou,up_bou,value_torl,min_level,max_level,3);
+                dim=numel(self.calPoint(0,0));
+                [U,V,data_list,~]=GeomApp.meshAdapt2DUV(@(x) reshape(self.calPoint(x(:,1),x(:,2)),[],dim),low_bou,up_bou,value_torl,min_level,max_level,dim);
                 Point=data_list;
             else
                 % input is U, V or u_grid_number, v_grid_number
@@ -304,7 +384,7 @@ classdef FaceNURBS < handle
                 RV_RV=sum(dPoint_dV.^2,3);
                 RU_RV=sum(dPoint_dU.*dPoint_dV,3);
                 RU_D=0;RV_D=0;
-                for d_idx=1:self.dimension
+                for d_idx=1:size(self.Poles,3)
                     RU_D=RU_D+dPoint_dU(:,:,d_idx).*dPoint(idx,d_idx);
                     RV_D=RV_D+dPoint_dV(:,:,d_idx).*dPoint(idx,d_idx);
                 end
@@ -327,7 +407,7 @@ classdef FaceNURBS < handle
                 % scatter3(Point(:,:,1),Point(:,:,2),Point(:,:,3));
             end
 
-            Point=reshape(Point,v_num,u_num,self.dimension);
+            Point=reshape(Point,v_num,u_num,size(self.Poles,3));
             U=reshape(U,v_num,u_num);
             V=reshape(V,v_num,u_num);
         end
@@ -337,35 +417,36 @@ classdef FaceNURBS < handle
             %
             if nargin < 4 || isempty(step),step=100*eps;end
 
+            dim=numel(self.calPoint(0,0));
             [v_num,u_num]=size(U);U=U(:);V=V(:);
 
-            Point=self.calPoint(U,V);Point=reshape(Point,[],self.dimension);
+            Point=self.calPoint(U,V);Point=reshape(Point,[],dim);
 
-            Point_UF=self.calPoint(U+step,V);Point_UF=reshape(Point_UF,[],self.dimension);
-            Point_UB=self.calPoint(U-step,V);Point_UB=reshape(Point_UB,[],self.dimension);
+            Point_UF=self.calPoint(U+step,V);Point_UF=reshape(Point_UF,[],dim);
+            Point_UB=self.calPoint(U-step,V);Point_UB=reshape(Point_UB,[],dim);
             Bool_U=(U+step) > 1;
             Bool_D=(U-step) < 0;
             Bool(:,1)=Bool_U;Bool(:,2)=Bool_D;
             Bool_C=~any(Bool,2);
-            dPoint_dU=zeros(v_num*u_num,self.dimension); % allocate memory
+            dPoint_dU=zeros(v_num*u_num,dim); % allocate memory
             dPoint_dU(Bool_C,:)=(Point_UF(Bool_C,:)-Point_UB(Bool_C,:))/2/step;
             dPoint_dU(Bool_U,:)=(Point(Bool_U,:)-Point_UB(Bool_U,:))/step;
             dPoint_dU(Bool_D,:)=(Point_UF(Bool_D,:)-Point(Bool_D,:))/step;
             dPoint_dU=real(dPoint_dU);
-            dPoint_dU=reshape(dPoint_dU,v_num,u_num,self.dimension);
+            dPoint_dU=reshape(dPoint_dU,v_num,u_num,dim);
 
-            Point_VF=self.calPoint(U,V+step);Point_VF=reshape(Point_VF,[],self.dimension);
-            Point_VB=self.calPoint(U,V-step);Point_VB=reshape(Point_VB,[],self.dimension);
+            Point_VF=self.calPoint(U,V+step);Point_VF=reshape(Point_VF,[],dim);
+            Point_VB=self.calPoint(U,V-step);Point_VB=reshape(Point_VB,[],dim);
             Bool_U=(V+step) > 1;
             Bool_D=(V-step) < 0;
             Bool(:,1)=Bool_U;Bool(:,2)=Bool_D;
             Bool_C=~any(Bool,2);
-            dPoint_dV=zeros(v_num*u_num,self.dimension); % allocate memory
+            dPoint_dV=zeros(v_num*u_num,dim); % allocate memory
             dPoint_dV(Bool_C,:)=(Point_VF(Bool_C,:)-Point_VB(Bool_C,:))/2/step;
             dPoint_dV(Bool_U,:)=(Point(Bool_U,:)-Point_VB(Bool_U,:))/step;
             dPoint_dV(Bool_D,:)=(Point_VF(Bool_D,:)-Point(Bool_D,:))/step;
             dPoint_dV=real(dPoint_dV);
-            dPoint_dV=reshape(dPoint_dV,v_num,u_num,self.dimension);
+            dPoint_dV=reshape(dPoint_dV,v_num,u_num,dim);
         end
     end
 
@@ -404,7 +485,8 @@ classdef FaceNURBS < handle
             Point=self.calFace(u_param,v_param);
 
             % plot surface
-            if self.dimension == 2
+            dim=numel(self.calPoint(0,0));
+            if dim == 2
                 surface(axe_hdl,Point(:,:,1),Point(:,:,2),srf_option);
                 if ~isempty(self.Poles)
                     surface(axe_hdl,self.Poles(:,:,1),self.Poles(:,:,2),ctrl_option);
@@ -417,10 +499,8 @@ classdef FaceNURBS < handle
                 zlabel('z');
                 view(3);
             end
-            view(3);
             xlabel('x');
             ylabel('y');
-            zlabel('z');
 
             % axis equal
             % x_range=xlim();
@@ -440,8 +520,8 @@ classdef FaceNURBS < handle
             out_name=self.name;
             if isempty(out_name),out_name='NONE';end
 
-            u_num=self.u_pole_num;
-            v_num=self.v_pole_num;
+            u_num=size(self.Poles,2);
+            v_num=size(self.Poles,1);
 
             % generate CARTESIAN_POINT
             CARTESIAN_POINT=obj_idx;

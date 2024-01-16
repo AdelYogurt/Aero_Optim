@@ -1,14 +1,9 @@
-
 function L=baseFcnL(u_list,u_new_list,i,j,k)
 % base function of increase Degree
 %
 if k == 0
-    if ((u_list(i) <= u_new_list(j)) && (u_new_list(j) <= u_list(i+1)))
-        if any(u_list == u_new_list(j)) && u_new_list(j) ~= u_list(1) && u_new_list(j) ~= u_list(end)
-            L=0.5;
-        else
-            L=1;
-        end
+    if ((u_list(i) <= u_new_list(j)) && (u_new_list(j) < u_list(i+1)))
+        L=1;
     else
         L=0;
     end
@@ -34,11 +29,7 @@ function a=baseFcna(u_list,u_new_list,i,j,k)
 %
 if k == 0
     if ((u_list(i) <= u_new_list(j)) && (u_new_list(j) < u_list(i+1)))
-        if any(u_list == u_new_list(j)) && u_new_list(j) ~= u_list(1) && u_new_list(j) ~= u_list(end)
-            a=0.5;
-        else
-            a=1;
-        end
+        a=1;
     else
         a=0;
     end

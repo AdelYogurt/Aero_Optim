@@ -140,7 +140,6 @@ classdef FaceCST < FaceNURBS
             end
             self.class_fcn=@(U,V) cat(3,self.class_fcn_X(V),self.class_fcn_Y(U),self.class_fcn_ZV(U,V).*self.class_fcn_ZU(U,V));
             self.shape_fcn=@(U,V) cat(3,U*LX,V*LY,ones(size(U))*LZ);
-            self.dimension=3;
         end
     
         function Point=calCST(self,U,V)
