@@ -5,7 +5,7 @@ classdef GeomApp
             %
             % input:
             % name:
-            % Nodes (matrix): fit point, node_num x dimension matrix
+            % Nodes (matrix): fit point,node_num x dimension matrix
             % Degree (optional):
             % Mults (optional):
             % Knots (optional):
@@ -16,12 +16,12 @@ classdef GeomApp
             % EdgeNURBS
             %
             % notice:
-            % if input Degree is empty, Degree default is pole_num-1, which is Bezier curve
+            % if input Degree is empty,Degree default is pole_num-1,which is Bezier curve
             %
             if nargin < 5
                 U_node=[];
                 if nargin < 4
-                    pole_num = [];
+                    pole_num=[];
                     if nargin < 3
                         Degree=[];
                     end
@@ -76,7 +76,7 @@ classdef GeomApp
             %
             % input:
             % name:
-            % Nodes (matrix): fit point, u_node_num x v_node_num x dimension matrix
+            % Nodes (matrix): fit point,u_node_num x v_node_num x dimension matrix
             % Degree (optional):
             % Mults (optional):
             % Knots (optional):
@@ -89,7 +89,7 @@ classdef GeomApp
             % FaceNURBS
             %
             % notice:
-            % if input Degree is empty, Degree default is pole_num-1, which is Bezier curve
+            % if input Degree is empty,Degree default is pole_num-1,which is Bezier curve
             %
             if nargin < 8
                 V_node=[];
@@ -169,15 +169,219 @@ classdef GeomApp
             fce=FaceNURBS(name,Poles,UDegree,VDegree,UMults,VMults,UKnots,VKnots);
         end
 
+        function fce=EdgeToFace(name,edg_u0,edg_u1,edg_0v,edg_1v)
+            % mapping edge to generate face
+            %
+            if nargin < 5
+                edg_1v=[];
+                if nargin < 4
+                    edg_0v=[];
+                end
+            end
+
+            if (~isempty(edg_u0) && ~isempty(edg_u1)) || (~isempty(edg_0v) && ~isempty(edg_1v))
+                if ~isempty(edg_u0) && ~isempty(edg_u1)
+                    [edg_u0,edg_u1,UDegree,UMults,UKnots]=GeomApp.matchEdge(edg_u0,edg_u1);
+                    Ctrl_u0=[edg_u0.Poles,edg_u0.Weights];
+                    Ctrl_u1=[edg_u1.Poles,edg_u1.Weights];
+                end
+
+                if ~isempty(edg_0v) && ~isempty(edg_1v)
+                    [edg_0v,edg_1v,VDegree,VMults,VKnots]=GeomApp.matchEdge(edg_0v,edg_1v);
+                    Ctrl_0v=[edg_0v.Poles,edg_0v.Weights];
+                    Ctrl_1v=[edg_1v.Poles,edg_1v.Weights];
+                end
+
+                if isempty(edg_0v) && isempty(edg_1v)
+                    Ctrl_0v=[Ctrl_u0(1,:);Ctrl_u1(1,:)];
+                    Ctrl_1v=[Ctrl_u0(end,:);Ctrl_u1(end,:)];
+                    VDegree=1;VMults=[2,2];VKnots=[0,1];
+                elseif isempty(edg_u0) && isempty(edg_u1)
+                    Ctrl_u0=[Ctrl_0v(1,:);Ctrl_1v(1,:)];
+                    Ctrl_u1=[Ctrl_0v(end,:);Ctrl_1v(end,:)];
+                    UDegree=1;UMults=[2,2];UKnots=[0,1];
+                elseif isempty(edg_0v) || isempty(edg_1v)
+                    edg_v=[edg_0v,edg_1v];
+                    VDegree=edg_v.Degree;
+                    VMults=edg_v.Mults;
+                    VKnots=edg_v.Knots;
+
+                    if ~isempty(edg_0v)
+                        Ctrl_0v=[edg_0v.Poles,edg_0v.Weights];
+                        % generate new ctrl
+                        Ctrl_1v=getMatchCtrl(Ctrl_u0(end,:),Ctrl_u1(end,:),VDegree,VMults,VKnots);
+                    elseif ~isempty(edg_1v)
+                        Ctrl_1v=[edg_1v.Poles,edg_1v.Weights];
+                        % generate new ctrl
+                        Ctrl_0v=getMatchCtrl(Ctrl_u0(1,:),Ctrl_u1(1,:),VDegree,VMults,VKnots);
+                    end
+                elseif isempty(edg_u0) || isempty(edg_u1)
+                    edg_u=[edg_u0,edg_u1];
+                    UDegree=edg_u.Degree;
+                    UMults=edg_u.Mults;
+                    UKnots=edg_u.Knots;
+
+                    if ~isempty(edg_u0)
+                        Ctrl_u0=[edg_u0.Poles,edg_u0.Weights];
+                        % generate new ctrl
+                        Ctrl_u1=getMatchCtrl(Ctrl_0v(end,:),Ctrl_1v(end,:),UDegree,UMults,UKnots);
+                    elseif ~isempty(edg_u1)
+                        Ctrl_u1=[edg_u1.Poles,edg_u1.Weights];
+                        % generate new ctrl
+                        Ctrl_u0=getMatchCtrl(Ctrl_0v(1,:),Ctrl_1v(1,:),UDegree,UMults,UKnots);
+                    end
+                end
+            else
+                error('GeomApp.EdgeToFace: error input edge');
+            end
+            u_list=baseKnotVec(UMults,UKnots);
+            v_list=baseKnotVec(VMults,VKnots);
+            u_pole_num=size(Ctrl_u0,1);v_pole_num=size(Ctrl_0v,1);
+            U_pole=interp1(linspace(0,1,u_pole_num-UDegree+1),u_list(UDegree+1:u_pole_num+1),linspace(0,1,u_pole_num));
+            V_pole=interp1(linspace(0,1,v_pole_num-VDegree+1),v_list(VDegree+1:v_pole_num+1),linspace(0,1,v_pole_num));
+            [U,V]=meshgrid(U_pole,V_pole);
+            % Ctrl=GeomApp.MapGrid(Ctrl_u0,Ctrl_u1,Ctrl_0v,Ctrl_1v,U_pole,V_pole);
+
+%             UPoles=cat(3,[Ctrl_u0(:,1)';Ctrl_u1(:,1)'],[Ctrl_u0(:,2)';Ctrl_u1(:,2)'],[Ctrl_u0(:,3)';Ctrl_u1(:,3)']);
+%             UWeights=[Ctrl_u0(:,4)';Ctrl_u1(:,4)'];
+%             Ufce=FaceNURBS('',UPoles,UDegree,[],UMults,[],UKnots,[],UWeights);
+%             
+%             VPoles=cat(3,[Ctrl_0v(:,1);Ctrl_1v(:,1)],[Ctrl_0v(:,2);Ctrl_1v(:,2)],[Ctrl_0v(:,3);Ctrl_1v(:,3)]);
+%             VWeights=[Ctrl_0v(:,4),Ctrl_1v(:,4)];
+%             Vfce=FaceNURBS('',VPoles,[],VDegree,[],VMults,[],VKnots,VWeights);
+% 
+%             UVPoles=cat(3,[Ctrl_0v(:,1);Ctrl_1v(:,1)],[Ctrl_0v(:,2);Ctrl_1v(:,2)],[Ctrl_0v(:,3);Ctrl_1v(:,3)]);
+%             UVWeights=[Ctrl_0v(:,4),Ctrl_1v(:,4)];
+%             UVfce=FaceNURBS('',VPoles,[],VDegree,[],VMults,[],VKnots,VWeights);
+
+            % generata U, V and UV direction Poles
+            Ctrl_u0=reshape(Ctrl_u0,1,size(Ctrl_u0,1),size(Ctrl_u0,2));
+            Ctrl_u1=reshape(Ctrl_u1,1,size(Ctrl_u1,1),size(Ctrl_u1,2));
+            Ctrl_0v=reshape(Ctrl_0v,size(Ctrl_0v,1),1,size(Ctrl_0v,2));
+            Ctrl_1v=reshape(Ctrl_1v,size(Ctrl_1v,1),1,size(Ctrl_1v,2));
+            ctrl_00=Ctrl_u0(1,1,:);ctrl_10=Ctrl_u0(1,end,:);
+            ctrl_01=Ctrl_u1(1,1,:);ctrl_11=Ctrl_u1(1,end,:);
+            U_Ctrl=Ctrl_u0.*(1-V)+Ctrl_u1.*V;
+            V_Ctrl=Ctrl_0v.*(1-U)+Ctrl_1v.*U;
+            UV_Ctrl=ctrl_00.*(1-V).*(1-U)+ctrl_10.*(1-V).*U+...
+                ctrl_01.*V.*(1-U)+ctrl_11.*V.*U;
+
+            % combine coefficient to construct Coons surface
+            Ctrl=U_Ctrl+V_Ctrl-UV_Ctrl;
+
+            Poles=Ctrl(:,:,1:end-1);
+            Weights=Ctrl(:,:,end);
+
+            fce=FaceNURBS(name,Poles,UDegree,VDegree,UMults,VMults,UKnots,VKnots,Weights);
+            
+            function Ctrl=getMatchCtrl(Ctrl_0,Ctrl_1,Degree,Mults,Knots)
+                u_num=length(baseKnotVec(Mults,Knots));
+                pole_num=u_num-Degree-1;
+                UC=linspace(0,1,pole_num);
+                Ctrl=Ctrl_0*(1-UC)+Ctrl_1*UC;
+            end
+        end
+    end
+
+    methods(Static)
+        function [Ctrl_new,Mults_new]=addDegree(deg,Ctrl,Mults,Knots,deg_tar)
+            % increase curve degree
+            %
+            if deg_tar <= deg
+                Ctrl_new=Ctrl;
+                Mults_new=Mults;
+                return;
+            end
+
+            U=baseKnotVec(Mults,Knots);
+            for deg_temp=deg+1:deg_tar
+                % add repeat node
+                Deg_new=deg+1;
+                Mults_new=Mults+1;
+                U_new=baseKnotVec(Mults_new,Knots);
+
+                % calculate new ctrl
+                matrix=zeros(size(Ctrl,1)+length(Knots)-1,size(Ctrl,1));
+                for j=1:size(Ctrl,1)+length(Knots)-1
+                    for i=1:size(Ctrl,1)
+                        matrix(j,i)=baseFcnL(U,U_new,i,j,deg);
+                    end
+                end
+                matrix=1/Deg_new*matrix;
+                Ctrl_new=(matrix*Ctrl);
+
+                % sort old curve data
+                Ctrl=Ctrl_new;
+                deg=Deg_new;
+                Mults=Mults_new;
+                U=U_new;
+            end
+        end
+
+        function [Ctrl_new,U_new]=insertKnot(deg,Ctrl,U,U_ins)
+            % insert knot to NURBS
+            %
+
+            % allocate memory
+            [ctrl_num,dim]=size(Ctrl);
+            U_ins =sort(U_ins);
+            nu=length(U_ins);
+            u_num=length(U);
+            ctrl_num_new=ctrl_num+nu;
+            Ctrl_new=zeros(ctrl_num_new,dim);
+            U_new=zeros(1,u_num+nu);
+
+            n=ctrl_num-1;
+            r=nu-1;
+            m=n+deg+1;
+
+            % locate add knots position
+            if (U_ins(1) == U(ctrl_num+1)),a=ctrl_num-1;
+            else,a=find(U_ins(1) >= U,1,'last')-1;end
+            if (U_ins(r+1) == U(ctrl_num+1)),b=ctrl_num-1;
+            else,b=find(U_ins(r+1) >= U,1,'last')-1;end
+            b=b+1;
+
+            Ctrl_new(1:a-deg+1,:)=Ctrl(1:a-deg+1,:);
+            Ctrl_new(b+nu:ctrl_num+nu,:)=Ctrl(b:ctrl_num,:);
+
+            U_new(1:a+1)=U(1:a+1);
+            U_new(b+deg+nu+1:m+nu+1)=U(b+deg+1:m+1);
+
+            ii=b+deg-1;
+            ss=ii+nu;
+
+            % calculate new ctrl point
+            for jj=r:-1:0
+                ind=(a+1):ii;
+                ind=ind(U_ins(jj+1)<=U(ind+1));
+                Ctrl_new(ind+ss-ii-deg,:)=Ctrl(ind-deg,:);
+                U_new(ind+ss-ii+1)=U(ind+1);
+                ii=ii-length(ind);
+                ss=ss-length(ind);
+                Ctrl_new(ss-deg,:)=Ctrl_new(ss-deg+1,:);
+                for l=1:deg
+                    ind=ss-deg+l;
+                    alfa=U_new(ss+l+1)-U_ins(jj+1);
+                    if abs(alfa) == 0
+                        Ctrl_new(ind,:)=Ctrl_new(ind+1,:);
+                    else
+                        alfa=alfa/(U_new(ss+l+1)-U(ii-deg+l+1));
+                        tmp=(1-alfa)*Ctrl_new(ind+1,:);
+                        Ctrl_new(ind,:)=alfa*Ctrl_new(ind,:)+tmp;
+                    end
+                end
+                U_new(ss+1)=U_ins(jj+1);
+                ss=ss-1;
+            end
+        end
     end
 
     methods(Static)
         function edg=JointEdge(name,edg_list,geom_torl)
             % connect BSpline curve into one curve
             %
-            if nargin < 3
-                geom_torl=[];
-            end
+            if nargin < 3,geom_torl=[];end
 
             if isempty(geom_torl),geom_torl=100*eps;end
 
@@ -195,25 +399,39 @@ classdef GeomApp
                 end
                 edg_idx=edg_idx+1;
             end
+            edg_num=length(edg_list);
+
+            % load all Poles to correct line order
+            line_list={};
+            for edg_idx=1:edg_num
+                line_list=[line_list,{[edg_list{edg_idx}.Poles,edg_list{edg_idx}.Weights]}];
+            end
+            [~,map_list,order_list]=GeomApp.correctLine(line_list,geom_torl);
+            edg_list=edg_list(map_list);
 
             % increase Degree of edg and load data
-            edg_num=length(edg_list);
             Poles=[];
             Mults=[];
             Knots=[];
-            Weight=[];
+            Weights=[];
             total_length=0;
             for edg_idx=1:edg_num
+                % load edge
                 edg=edg_list{edg_idx};
+                if order_list(edg_idx),edg.reverse();end
+
                 edg.addDegree(Degree);
-                Poles=[Poles(1:end-1);edg.Poles];
                 Mults_new=edg.Mults;
                 Mults_new(1)=Mults_new(1)-1;
+                Weights_new=edg.Weights;
+                edg_length=sum(vecnorm(diff(edg.Poles),2,2));
+
+                Poles=[Poles(1:end-1,:);edg.Poles];
                 Mults=[Mults(1:end-1),Mults_new];
-                edg_length=sum(vecnorm([diff(edg.ctrl_X),diff(edg.ctrl_Y),diff(edg.ctrl_Z)],2,2));
                 Knots=[Knots(1:end-1),edg.Knots*edg_length+total_length];
-                Weight=[Weight(1:end-1),Weight_new/Weight_new(1)];
-                Weight=Weight/Weight(end);
+                Weights=[Weights(1:end-1);Weights_new/Weights_new(1)];
+
+                Weights=Weights/Weights(end);
                 total_length=total_length+edg_length;
             end
             Mults(1)=Mults(1)+1;
@@ -222,62 +440,35 @@ classdef GeomApp
             Knots=Knots/total_length;
             Knots=Knots/max(Knots);
 
-            edg=EdgeNURBS(name,Poles,Degree,Mults,Knots,Weight);
+            edg=EdgeNURBS(name,Poles,Degree,Mults,Knots,Weights);
         end
 
-        function edg_list=correctEdge(edg_list,geom_torl)
-            % correct line point order
-            % order should be anti clockwise and start from first line
-            %
-            edg_num=length(edg_list);
+        function [edg_1,edg_2,Degree,Mults,Knots]=matchEdge(edg_1,edg_2)
+            Degree=max(edg_1.Degree,edg_2.Degree);
+            edg_1.addDegree(Degree);
+            edg_2.addDegree(Degree);
+            U1=edg_1.u_list;
+            U2=edg_2.u_list;
 
-            % first edg check if connext new edg
-            edg_curr=edg_list{1};
-            ctrl_curr=[edg_curr.ctrl_X,edg_curr.ctrl_Y,edg_curr.ctrl_Z];
-            edg_next=edg_list{2};
-            ctrl_next=[edg_next.ctrl_X,edg_next.ctrl_Y,edg_next.ctrl_Z];
-            if norm(ctrl_curr(end,:)-ctrl_next(1,:)) > geom_torl
-                edg_list=fliplr(edg_list);
+            % merge the knot vectors of u
+            UC=unique([U1,U2]);
+            U1_ins=[];
+            U2_ins=[];
+            for i=1:length(UC)
+                i1=sum(U1 == UC(i));
+                i2=sum(U2 == UC(i));
+                m=max(i1,i2);
+                U1_ins=[U1_ins,UC(i)*ones(1,m-i1)];
+                U2_ins=[U2_ins,UC(i)*ones(1,m-i2)];
             end
 
-            % start from first edg
-            for edg_idx=1:edg_num-1
-                edg_curr=edg_list{edg_idx};
-                ctrl_curr=[edg_curr.ctrl_X,edg_curr.ctrl_Y,edg_curr.ctrl_Z];
-                edg_next=edg_list{edg_idx+1};
-                ctrl_next=[edg_next.ctrl_X,edg_next.ctrl_Y,edg_next.ctrl_Z];
-                if norm(ctrl_curr(end,:)-ctrl_next(1,:)) > geom_torl
-                    % load remain line all vertex
-                    vertex_list=zeros((edg_num-edg_idx)*2,3);
-                    for remain_idx=edg_idx+1:edg_num
-                        edg_rema=edg_list{remain_idx};
-                        ctrl_rema=[edg_rema.ctrl_X,edg_rema.ctrl_Y,edg_rema.ctrl_Z];
-                        vertex_list(2*(remain_idx-edg_idx)-1,:)=ctrl_rema(1,:);
-                        vertex_list(2*(remain_idx-edg_idx),:)=ctrl_rema(end,:);
-                    end
-
-                    % search next connect point
-                    dist=vecnorm((ctrl_curr(end,:)-vertex_list),2,2);
-                    overlap_idx=find(dist < geom_torl);
-                    if ~any(overlap_idx)
-                        error('geomMapGrid: correctLine: line not connect');
-                    end
-                    exchange_idx=ceil(overlap_idx/2)+edg_idx;
-
-                    % exchange line
-                    line_temp=edg_list{exchange_idx};
-                    edg_list{exchange_idx}=edg_next;
-                    edg_list{edg_idx+1}=line_temp;
-
-                    % reorder point in line order
-                    if mod(overlap_idx,2) == 0
-                        edg_list{edg_idx+1}.reverse;
-                    end
-                end
-            end
+            if ~isempty(U1_ins),edg_1.insertKnot(U1_ins);end
+            if ~isempty(U2_ins),edg_2.insertKnot(U2_ins);end
+            Mults=edg_1.Mults;
+            Knots=edg_1.Knots;
         end
 
-        function Point=MapGrid(line_u0,line_u1,line_v0,line_v1,U,V)
+        function Point=MapGrid(line_u0,line_u1,line_0v,line_1v,u_list,v_list)
             % generate discrete area by mapping
             % using Lagrange polynomial mapping method
             % local parameter u and v is equispaced
@@ -291,64 +482,63 @@ classdef GeomApp
             % output:
             % Point (matrix): v_num x u_num x dimension
             %
-            if nargin < 6
-                V=[];
-                if nargin < 5
-                    U=[];
-                end
-            end
+            if nargin < 6,v_list=[];if nargin < 5,u_list=[];end;end
 
             geom_torl=100*eps;
-            line_list={line_u0,line_v1,flipud(line_u1),flipud(line_v0)};
+            line_list={line_u0,line_1v,flipud(line_u1),flipud(line_0v)};
             line_list=GeomApp.correctLine(line_list,geom_torl);
-            line_u0=line_list{1};
-            line_v1=line_list{2};
-            line_u1=flipud(line_list{3});
-            line_v0=flipud(line_list{4});
+            if ~any(norm(line_list{4}(end,:)-line_list{1}(1,:)) < geom_torl)
+                error('GeomApp.MapGrid: line not connect');
+            end
 
-            u_num=size(line_u0,1);v_num=size(line_v0,1);
-            if u_num ~= size(line_u1,1) || v_num ~= size(line_v1,1)
+            line_u0=line_list{1};
+            line_1v=line_list{2};
+            line_u1=flipud(line_list{3});
+            line_0v=flipud(line_list{4});
+
+            u_num=size(line_u0,1);v_num=size(line_0v,1);
+            if u_num ~= size(line_u1,1) || v_num ~= size(line_1v,1)
                 error('GeomApp.MapGrid: opposite line of boundary discrete number no equal')
             end
             dimension=size(line_u0,2);
-            if isempty(U),U=linspace(0,1,u_num);end
-            if isempty(V),V=linspace(0,1,v_num);end
+            if isempty(u_list),u_list=linspace(0,1,u_num);end,u_list=u_list(:)';
+            if isempty(v_list),v_list=linspace(0,1,v_num);end,v_list=v_list(:)';
 
             Point=zeros(v_num,u_num,dimension);
 
             % preproces boundary
             Point(1,:,:)=line_u0(:,:);
             Point(end,:,:)=line_u1(:,:);
-            Point(:,1,:)=line_v0(:,:);
-            Point(:,end,:)=line_v1(:,:);
+            Point(:,1,:)=line_0v(:,:);
+            Point(:,end,:)=line_1v(:,:);
 
             if u_num > 2 && v_num > 2
-                H=diff(U);G=diff(V);
-
-                H_i_j=H(1:end-1)+H(2:end);
-                H_ij=H(1:end-1).*H(2:end).*H_i_j/2;
-                G_i_j=G(1:end-1)+G(2:end);
-                G_ij=G(1:end-1).*G(2:end).*G_i_j/2;
+                H=diff(u_list);G=diff(v_list);
 
                 % solve prepare
+                H_ipj=H(1:end-1)+H(2:end);
+                H_ij=H(1:end-1).*H(2:end).*H_ipj/2;
+                G_ipj=G(1:end-1)+G(2:end);
+                G_ij=G(1:end-1).*G(2:end).*G_ipj/2;
+
                 % D_xx
-                d_xx=spdiags([H(2:end)./H_ij;-H_i_j./H_ij;H(1:end-1)./H_ij]',-1:1,v_num-2,v_num-2)';
-                I_M=speye(u_num-2,u_num-2);
-                D_xx=kron(I_M,d_xx);
+                d_xx=spdiags([H(1:end-1)./H_ij;-H_ipj./H_ij;H(2:end)./H_ij]',-1:1,u_num-2,u_num-2)';
+                I_M=speye(v_num-2,v_num-2);
+                D_xx=kron(d_xx,I_M);
 
                 % D_yy
-                d_yy=spdiags([G(2:end)./G_ij;-G_i_j./G_ij;G(1:end-1)./G_ij]',-1:1,u_num-2,u_num-2)';
-                I_K=speye(v_num-2,v_num-2);
-                D_yy=kron(d_yy,I_K);
+                d_yy=spdiags([G(1:end-1)./G_ij;-G_ipj./G_ij;G(2:end)./G_ij]',-1:1,v_num-2,v_num-2)';
+                I_K=speye(u_num-2,u_num-2);
+                D_yy=kron(I_K,d_yy);
 
                 % Laplace matrix
                 Lap=(D_xx+D_yy);
 
                 Point_B=zeros(v_num-2,u_num-2,dimension);
-                Point_B(1,:,:)=Point_B(1,:,:)-Point(1,2:u_num-1,:)/G(2)^2;
-                Point_B(end,:,:)=Point_B(end,:,:)-Point(end,2:u_num-1,:)/G(end-1)^2;
-                Point_B(:,1,:)=Point_B(:,1,:)-Point(2:v_num-1,1,:)/H(2)^2;
-                Point_B(:,end,:)=Point_B(:,end,:)-Point(2:v_num-1,end,:)/H(end-1)^2;
+                Point_B(1,:,:)=Point_B(1,:,:)-Point(1,2:u_num-1,:)*(G(2)/G_ij(1));
+                Point_B(end,:,:)=Point_B(end,:,:)-Point(end,2:u_num-1,:)*(G(end-1)/G_ij(end));
+                Point_B(:,1,:)=Point_B(:,1,:)-Point(2:v_num-1,1,:)*(H(2)/H_ij(1));
+                Point_B(:,end,:)=Point_B(:,end,:)-Point(2:v_num-1,end,:)*(H(end-1)/H_ij(end));
                 for dim_idx=1:dimension
                     Point_B_page=Point_B(:,:,dim_idx);
                     Point(2:v_num-1,2:u_num-1,dim_idx)=reshape(Lap\Point_B_page(:),v_num-2,u_num-2);
@@ -356,11 +546,13 @@ classdef GeomApp
             end
         end
 
-        function line_list=correctLine(line_list,geom_torl)
+        function [line_list,map_list,order_list]=correctLine(line_list,geom_torl)
             % correct line point order
             % order should be anti clockwise and start from first line
             %
             line_num=length(line_list);
+            map_list=1:line_num;
+            order_list=false(line_num,1);
 
             % start from first line
             for line_idx=1:line_num-1
@@ -377,10 +569,9 @@ classdef GeomApp
 
                     % search next connect point
                     dist=vecnorm((line_curr(end,:)-vertex_list),2,2);
-                    overlap_idx=find(dist < geom_torl);
+                    overlap_idx=find(dist < geom_torl,1);
                     if ~any(overlap_idx)
-                        save();
-                        error('geomMapGrid: correctLine: line not connect');
+                        error('GeomApp.correctLine: line not connect');
                     end
                     exchange_idx=ceil(overlap_idx/2)+line_idx;
 
@@ -388,10 +579,12 @@ classdef GeomApp
                     line_temp=line_list{exchange_idx};
                     line_list{exchange_idx}=line_next;
                     line_list{line_idx+1}=line_temp;
+                    map_list(line_idx+1)=exchange_idx;
 
                     % reorder point in line order
                     if mod(overlap_idx,2) == 0
                         line_list{line_idx+1}=flipud(line_list{line_idx+1});
+                        order_list(line_idx+1)=true;
                     end
                 end
             end
@@ -407,16 +600,16 @@ classdef GeomApp
             if nargin < 7,fval_num=1;end
 
             % node_list which is a matrix store all node
-            % a node is a array, contain level, index_1, index_2, index_c, node_index_1, node_index_2
+            % a node is a array,contain level,index_1,index_2,index_c,node_index_1,node_index_2
             % place:
             % 1-c-2
             % cell:
             % 1-2
-            % if children node is empty, left_index or right_index will be zero
+            % if children node is empty,left_index or right_index will be zero
             list_add_num=50; % node_list will be extend only when node_list is not enough
             node_list=zeros(list_add_num,6,'int64');
 
-            % data_list use to sort all float data include coodinate, function value
+            % data_list use to sort all float data include coodinate,function value
             data_list=zeros(list_add_num,fval_num+1);
 
             % add vertex of cell into data_list first
@@ -448,7 +641,7 @@ classdef GeomApp
 
                     if node(1) < max_level
                         % judge if linear predict if accptable
-                        % if not, create children cell
+                        % if not,create children cell
                         %
                         coord_c=(data_list(node(2),1)+data_list(node(3),1))/2;
                         fval_c=fcn(coord_c);
@@ -522,8 +715,8 @@ classdef GeomApp
             if nargin < 7,fval_num=1;end
 
             % node_list which is a matrix store all node
-            % a node is a array, contain:
-            % level, idx_1-8(index of data_list), idx_c, node_index_1-4
+            % a node is a array,contain:
+            % level,idx_1-8(index of data_list),idx_c,node_index_1-4
             % place:
             % 3-8-4 or 3-4 or 3-8-4
             % 1-5-2    6-7    6-c-7
@@ -531,10 +724,10 @@ classdef GeomApp
             % node:
             % 1-2 or 3 or 3-4
             %        1    1-2
-            % if children node is empty, left_index or right_index will be zero
+            % if children node is empty,left_index or right_index will be zero
             list_add_num=50; % list will be extend only when list is not enough
             node_list=zeros(list_add_num,14,'int64');
-            % data_list use to sort all float data include coodinate, function value
+            % data_list use to sort all float data include coodinate,function value
             data_list=zeros(list_add_num,fval_num+2);
 
             % add vertex of cell into data_list first
@@ -572,12 +765,10 @@ classdef GeomApp
             end
 
             % fit nan data
-            for rank_idx=1:length(v_list)
-                for colume_idx=1:length(u_list)
-                    if isnan(Fval(rank_idx,colume_idx,1))
-                        Fval(rank_idx,colume_idx,:)=fcn([U(rank_idx,colume_idx),V(rank_idx,colume_idx)]);
-                    end
-                end
+            idx=find(isnan(Fval(:,:,1)));
+            Fval_sub=fcn([U(idx),V(idx)]);
+            for favl_idx=1:fval_num
+                Fval(idx+(favl_idx-1)*(length(v_list)*length(u_list)))=Fval_sub(:,favl_idx);
             end
 
             function [node_num,data_num]=createNodeTree(root_idx,data_num)
@@ -594,7 +785,7 @@ classdef GeomApp
 
                     if node(1) < max_level
                         % judge if linear predict if accptable
-                        % if not, create children cell
+                        % if not,create children cell
                         %
                         [coord_c,coord_5,coord_6,coord_7,coord_8,...
                             fval_c,fval_5,fval_6,fval_7,fval_8]=calCell(node(2),node(3),node(4),node(5));
@@ -707,7 +898,7 @@ classdef GeomApp
 
             function [coord_c,coord_5,coord_6,coord_7,coord_8,...
                     fval_c,fval_5,fval_6,fval_7,fval_8]=calCell(vidx_1,vidx_2,vidx_3,vidx_4)
-                % calculate index of c, 5, 6, 7, 8 place function value
+                % calculate index of c,5,6,7,8 place function value
                 % abbreviation:
                 % vidx: vertex index
                 %
@@ -726,7 +917,7 @@ classdef GeomApp
 
             function [fval_pred_c,fval_pred_5,fval_pred_6,...
                     fval_pred_7,fval_pred_8]=calCellPred(vidx_1,vidx_2,vidx_3,vidx_4)
-                % calculate index of c, 5, 6, 7, 8 place linear predict function value
+                % calculate index of c,5,6,7,8 place linear predict function value
                 %
                 fval_pred_c=(data_list(vidx_1,3:end)+data_list(vidx_2,3:end)+data_list(vidx_3,3:end)+data_list(vidx_4,3:end))/4;
                 fval_pred_5=(data_list(vidx_1,3:end)+data_list(vidx_2,3:end))/2;

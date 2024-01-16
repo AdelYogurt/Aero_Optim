@@ -6,7 +6,7 @@ classdef EdgeNURBS < handle
         name='';
         Degree; % degree
         Poles; % control_points_list
-        curve_form='.UNSPECIFIED.'; % curve_form
+        edge_form='.UNSPECIFIED.'; % edge_form
         Periodic='.F.'; % closed_curve (boolean)
         self_intersect='.F.'; % self_intersect (boolean)
         Weights; % weights_data
@@ -14,12 +14,8 @@ classdef EdgeNURBS < handle
         Mults; % knot_multiplicities
         Knots; % Knots
         knot_spec='.UNSPECIFIED.';
-    end
 
-    properties % Derived Attributes
-        pole_num;
-        dimension;
-        u_list;
+        u_list; % knot_vector
     end
 
     % define Edge
@@ -46,7 +42,7 @@ classdef EdgeNURBS < handle
             if nargin < 6
                 Weights=[];
                 if nargin < 5
-                    Knots = [];
+                    Knots=[];
                     if nargin < 4
                         Mults=[];
                         if nargin < 3
@@ -58,13 +54,13 @@ classdef EdgeNURBS < handle
             self.name=name;
 
             if nargin > 1
-                [pole_num,dimension]=size(Poles);
+                [pole_num,~]=size(Poles);
 
                 % default value
                 if isempty(Degree),Degree=pole_num-1;end
                 if isempty(Mults),Mults=[Degree+1,ones(1,pole_num-Degree-1),Degree+1];end
                 if isempty(Knots),Knots=linspace(0,1,pole_num-Degree+1);end
-                if isempty(Weights), Weights=ones(1,pole_num);end;Weights=Weights(:)';
+                if isempty(Weights), Weights=ones(1,pole_num);end;Weights=Weights(:);
                 u_list=baseKnotVec(Mults,Knots);
 
                 if pole_num < (Degree+1)
@@ -81,10 +77,6 @@ classdef EdgeNURBS < handle
                 self.Mults=Mults;
                 self.Knots=Knots;
                 self.Weights=Weights;
-
-                % Derived Attributes
-                self.pole_num=pole_num;
-                self.dimension=dimension;
                 self.u_list=u_list;
             end
         end
@@ -94,13 +86,13 @@ classdef EdgeNURBS < handle
             %
             U=U(:);point_num=length(U);
 
-            Point=zeros(point_num,self.dimension);
+            Point=zeros(point_num,size(self.Poles,2));
 
             N_list=zeros(1,self.Degree+1);
             for point_idx=1:point_num
                 % local u_x in u_list index
                 u=U(point_idx);
-                idx_end=self.pole_num; % is equal to the section index
+                idx_end=size(self.Poles,1); % is equal to the section index
                 while idx_end > self.Degree+1 && u < self.u_list(idx_end)
                     idx_end=idx_end-1;
                 end
@@ -108,14 +100,14 @@ classdef EdgeNURBS < handle
                 for N_idx=1:self.Degree+1
                     N_list(N_idx)=baseFcnN(self.u_list,u,N_idx+idx_start-1,self.Degree);
                 end
-                NW_list=N_list.*self.Weights(idx_start:idx_end);
+                NW_list=N_list.*self.Weights(idx_start:idx_end)';
 
                 Point(point_idx,:)=NW_list*self.Poles(idx_start:idx_end,:)/sum(NW_list);
             end
         end
     end
 
-    % control curve
+    % control Edge
     methods
         function reverse(self)
             % revese direction of curve
@@ -123,55 +115,45 @@ classdef EdgeNURBS < handle
             self.Poles=flipud(self.Poles);
             self.Mults=fliplr(self.Mults);
             self.Knots=1-fliplr(self.Knots);
-            self.Weights=fliplr(self.Weights);
+            self.Weights=flipud(self.Weights);
             self.u_list=1-fliplr(self.u_list);
         end
 
-        function addDegree(self,degree_target)
-            % increase curve degree
+        function addDegree(self,deg_tar)
+            % increase edge degree
             %
-            if degree_target > self.Degree
-                Poles_old=self.Poles;
-                Degree_old=self.Degree;
-                Mults_old=self.Mults;
-                Weights_old=self.Weights;
-                pole_num_old=self.pole_num;
-                u_list_old=self.u_list;
-                
-                for degree_temp=self.Degree+1:degree_target
-                    % add repeat node
-                    Degree_new=Degree_old+1;
-                    pole_num_new=pole_num_old+1;
-                    Mults_new=Mults_old+1;
-                    u_list_new=baseKnotVec(Mults_new,self.Knots);
-
-                    % calculate new ctrl
-                    matrix=zeros(pole_num_new,pole_num_old);
-                    for j=1:pole_num_new
-                        for i=1:pole_num_old
-                            matrix(j,i)=baseFcnL(u_list_old,u_list_new,i,j,Degree_old);
-                        end
-                    end
-                    matrix=1/Degree_new*matrix;
-                    Weights_new=(matrix*Weights_old')'; % different to BSpline
-                    Poles_new=(matrix.*Weights_old*Poles_old)./Weights_new'; % different to BSpline
-
-                    % sort old curve data
-                    Poles_old=Poles_new;
-                    Degree_old=Degree_new;
-                    Mults_old=Mults_new;
-                    Weights_old=Weights_new;
-                    pole_num_old=pole_num_new;
-                    u_list_old=u_list_new;
-                end
-
-                self.Poles=Poles_new;
-                self.Degree=Degree_new;
-                self.Mults=Mults_new;
-                self.Weights=Weights_new;
-                self.pole_num=pole_num_new;
-                self.u_list=u_list_new;
+            if deg_tar <= self.Degree
+                return;
             end
+
+            Ctrl=[self.Poles,self.Weights];
+            [Ctrl_new,Mults_new]=GeomApp.addDegree(self.Degree,Ctrl,self.Mults,self.Knots,deg_tar);
+            % Ctrl_new=Ctrl_new./Ctrl_new(:,end);
+
+            self.Poles=Ctrl_new(:,1:end-1);
+            self.Degree=deg_tar;
+            self.Mults=Mults_new;
+            self.Weights=Ctrl_new(:,end);
+            self.u_list=baseKnotVec(self.Mults,self.Knots);
+        end
+
+        function insertKnot(self,U_ins)
+            % insert knot to edge
+            %
+            Ctrl=[self.Poles,self.Weights];
+            U=self.u_list;
+            deg=self.Degree;
+
+            [Ctrl,U]=GeomApp.insertKnot(deg,Ctrl,U,U_ins);
+
+            self.Poles=Ctrl(:,1:end-1);
+            self.Weights=Ctrl(:,end);
+            self.Knots=unique(U);
+            self.Mults=ones(size(self.Knots));
+            for k_idx=1:length(self.Knots)
+                self.Mults(k_idx)=sum(U == self.Knots(k_idx));
+            end
+            self.u_list=U;
         end
     end
 
@@ -187,7 +169,8 @@ classdef EdgeNURBS < handle
             low_bou=0;up_bou=1;
             if length(u_param) == 1 && u_param ~= fix(u_param)
                 value_torl=u_param;min_level=2;max_level=50;
-                [U,Point,~]=GeomApp.meshAdapt1D(@(x) self.calPoint(x),low_bou,up_bou,value_torl,min_level,max_level,self.dimension);
+                dim=numel(self.calPoint(0));
+                [U,Point,~]=GeomApp.meshAdapt1D(@(x) self.calPoint(x),low_bou,up_bou,value_torl,min_level,max_level,dim);
             else
                 if length(u_param) == 1
                     U=[];
@@ -220,7 +203,7 @@ classdef EdgeNURBS < handle
             % also can project point to surface
             %
             if nargin < 6,geo_torl=sqrt(eps);end
-            
+
         end
 
         function dPoint_dU=calGradient(self,U,step)
@@ -230,14 +213,14 @@ classdef EdgeNURBS < handle
 
             U=U(:);
             Point=self.calPoint(U);
-            
+
             Point_UF=self.calPoint(U+step);
             Point_UB=self.calPoint(U-step);
             Bool_U=(U+step) > 1;
             Bool_D=(U-step) < 0;
             Bool(:,1)=Bool_U;Bool(:,2)=Bool_D;
             Bool_C=~any(Bool,2);
-            dPoint_dU=zeros(size(U,1),self.dimension); % allocate memory
+            dPoint_dU=zeros(size(U,1),dim); % allocate memory
             dPoint_dU(Bool_C,:)=(Point_UF(Bool_C,:)-Point_UB(Bool_C,:))/2/step;
             dPoint_dU(Bool_U,:)=(Point(Bool_U,:)-Point_UB(Bool_U,:))/step;
             dPoint_dU(Bool_D,:)=(Point_UF(Bool_D,:)-Point(Bool_D,:))/step;
@@ -277,7 +260,8 @@ classdef EdgeNURBS < handle
             Point=self.calEdge(u_param);
 
             % plot curve
-            if self.dimension == 2
+            dim=numel(self.calPoint(0));
+            if dim == 2
                 line(axe_hdl,Point(:,1),Point(:,2),crv_option);
                 if ~isempty(self.Poles)
                     line(axe_hdl,self.Poles(:,1),self.Poles(:,2),ctrl_option);
@@ -314,8 +298,8 @@ classdef EdgeNURBS < handle
             % generate CARTESIAN_POINT
             CARTESIAN_POINT=obj_idx;
 
-            str_ctrl=[];Ctrl=[self.Poles,zeros(self.pole_num,3-self.dimension)];
-            for ctrl_idx=1:self.pole_num
+            str_ctrl=[];Ctrl=[self.Poles,zeros(size(self.Poles,1),3-size(self.Poles,2))];
+            for ctrl_idx=1:size(self.Poles,1)
                 str=[num2str(obj_idx,'#%d ='),' CARTESIAN_POINT',...
                     ' ( ',...
                     '''NONE''',', ',...
@@ -328,13 +312,13 @@ classdef EdgeNURBS < handle
             end
 
             % generate curve
-            point_idx=((1:self.pole_num)-1)+CARTESIAN_POINT;
+            point_idx=((1:size(self.Poles,1))-1)+CARTESIAN_POINT;
             str_curve=[num2str(obj_idx,'#%d ='),' B_SPLINE_CURVE_WITH_KNOTS',...
                 ' ( ',...
                 '''',out_name,'''',', ',...
                 num2str(self.Degree,'%d'),', ',...
                 '( ',num2str(point_idx(1),'#%d'),num2str(point_idx(2:end),', #%d'),' ),\n',...
-                self.curve_form,', ',self.Periodic,', ',self.self_intersect,',\n',...
+                self.edge_form,', ',self.Periodic,', ',self.self_intersect,',\n',...
                 '( ',num2str(self.Mults(1),'%d'),num2str(self.Mults(2:end),', %d'),' ),\n',...
                 '( ',num2str(self.Knots(1),'%.16f'),num2str(self.Knots(2:end),', %.16f'),' ),\n',...
                 self.knot_spec,...

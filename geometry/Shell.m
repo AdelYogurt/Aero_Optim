@@ -14,6 +14,12 @@ classdef Shell < handle
             self.face_list=face_list;
         end
 
+        function addFace(self,fce)
+            % add face into shell
+            %
+            self.face_list=[self.face_list;{fce}];
+        end
+
         function fce_list=calShell(self,u_param,v_param)
             % calculate all face point
             %
@@ -24,8 +30,7 @@ classdef Shell < handle
                 end
             end
 
-            fce_list=[];
-            fce_num=length(self.face_list);
+            fce_list=[];fce_num=length(self.face_list);
             for fce_idx=1:fce_num
                 fce=self.face_list{fce_idx};
                 if ~isempty(fce)
@@ -45,6 +50,45 @@ classdef Shell < handle
             end
             surf=[];
             surf_idx=0;
+        end
+    end
+
+    % generate mesh
+    methods
+        function mesh_data=getMeshWGS(self,u_param,v_param)
+            % generate LaWGS mesh data
+            %
+            if nargin < 3
+                v_param=[];
+                if nargin < 2
+                    u_param=[];
+                end
+            end
+
+            fce_list=self.calShell(u_param,v_param);
+            mesh_data=struct();
+            unknown_idx=1;fce_num=length(self.face_list);
+            for fce_idx=1:fce_num
+                fce=self.face_list{fce_idx};
+                if ~isempty(fce)
+                    Pnt=fce_list{fce_idx};
+                    srf.X=Pnt(:,:,1);
+                    srf.Y=Pnt(:,:,2);
+                    srf.Z=Pnt(:,:,3);
+                    if fce.reverse
+                        srf.X=flipud(srf.X);
+                        srf.Y=flipud(srf.Y);
+                        srf.Z=flipud(srf.Z);
+                    end
+                    srf.type='wgs';
+                    srf_name=fce.name;
+                    if isempty(srf_name)
+                        srf_name=['srf_',num2str(unknown_idx)];
+                        unknown_idx=unknown_idx+1;
+                    end
+                    mesh_data.(srf_name)=srf;
+                end
+            end
         end
     end
 
@@ -117,7 +161,7 @@ classdef Shell < handle
             fprintf(step_file,'\n');
         end
 
-        function writeStepOpenShell(self,step_filestr)
+        function writeStepOpenShell(self,step_filestr,param)
             % write surface into step file
             %
             surf_num=length(self.face_list);
@@ -134,7 +178,7 @@ classdef Shell < handle
             for surf_idx=1:surf_num
                 surf=self.face_list{surf_idx};
 
-                [step_str,obj_idx,ADVANCED_FACE]=surf.getStep(obj_idx);
+                [step_str,obj_idx,ADVANCED_FACE]=surf.getStep(obj_idx,param);
                 fprintf(step_file,step_str);
 
                 ADVANCED_FACE_list(surf_idx)=ADVANCED_FACE;

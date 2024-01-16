@@ -203,45 +203,47 @@ if length(edge_list) > 4
     fce=[];
     return;
 end
+
+% if edge num equal to 4, edge order is 0v, u1, 1v, u0
 switch length(edge_list)
     case 2
-        edge_1=edge_list{1};
-        edge_3=edge_list{2};
-        VDegree=max(edge_1.Degree,edge_3.Degree);
+        edge_0v=edge_list{1};
+        edge_1v=edge_list{2};
+        VDegree=max(edge_0v.Degree,edge_1v.Degree);
         UDegree=1;
 
-        edge_1.addDegree(VDegree);Poles_1=[edge_1.Poles];
-        edge_3.addDegree(VDegree);Poles_3=[edge_3.Poles];
+        edge_0v.addDegree(VDegree);Poles_0v=[edge_0v.Poles];
+        edge_1v.addDegree(VDegree);Poles_1v=[edge_1v.Poles];
 
-        Poles_2=repmat(Poles_1(end,:),2,1);
-        Poles_4=repmat(Poles_1(1,:),2,1);
+        Poles_u1=repmat(Poles_0v(end,:),2,1);
+        Poles_u0=repmat(Poles_0v(1,:),2,1);
     case 3
-        edge_1=edge_list{1};
-        edge_2=edge_list{2};
-        edge_3=edge_list{3};
-        UDegree=max(edge_2.Degree);
-        VDegree=max(edge_1.Degree,edge_3.Degree);
+        edge_0v=edge_list{1};
+        edge_u1=edge_list{2};
+        edge_1v=edge_list{3};
+        UDegree=max(edge_u1.Degree);
+        VDegree=max(edge_0v.Degree,edge_1v.Degree);
 
-        edge_1.addDegree(VDegree);Poles_1=[edge_1.Poles];
-        edge_2.addDegree(UDegree);Poles_2=[edge_2.Poles];
-        edge_3.addDegree(VDegree);Poles_3=[edge_3.Poles];
+        edge_0v.addDegree(VDegree);Poles_0v=[edge_0v.Poles];
+        edge_u1.addDegree(UDegree);Poles_u1=[edge_u1.Poles];
+        edge_1v.addDegree(VDegree);Poles_1v=[edge_1v.Poles];
 
-        Poles_4=repmat(Poles_1(1,:),u_num,1);
+        Poles_u0=repmat(Poles_0v(1,:),u_num,1);
     case 4
-        edge_1=edge_list{1};
-        edge_2=edge_list{2};
-        edge_3=edge_list{3};
-        edge_4=edge_list{4};
-        UDegree=max(edge_2.Degree,edge_4.Degree);
-        VDegree=max(edge_1.Degree,edge_3.Degree);
+        edge_0v=edge_list{1};
+        edge_u1=edge_list{2};
+        edge_1v=edge_list{3};
+        edge_u0=edge_list{4};
+        UDegree=max(edge_u0.Degree,edge_u1.Degree);
+        VDegree=max(edge_0v.Degree,edge_1v.Degree);
 
-        edge_1.addDegree(VDegree);Poles_1=[edge_1.Poles];
-        edge_2.addDegree(UDegree);Poles_2=[edge_2.Poles];
-        edge_3.addDegree(VDegree);Poles_3=[edge_3.Poles];
-        edge_4.addDegree(UDegree);Poles_4=[edge_4.Poles];
+        edge_0v.addDegree(VDegree);Poles_0v=[edge_0v.Poles];
+        edge_u1.addDegree(UDegree);Poles_u1=[edge_u1.Poles];
+        edge_1v.addDegree(VDegree);Poles_1v=[edge_1v.Poles];
+        edge_u0.addDegree(UDegree);Poles_u0=[edge_u0.Poles];
 end
 
-Poles=GeomApp.MapGrid(Poles_2,Poles_3,Poles_4,Poles_1);
+Poles=GeomApp.MapGrid(Poles_u0,Poles_u1,Poles_0v,Poles_1v);
 
 % process bound with axis
 fce=FaceNURBS(name,Poles,UDegree,VDegree);
@@ -342,7 +344,7 @@ Idx_control=str2double(strsplit(strrep(str_edge(2:idx-1),'#',''),','));str_edge(
 idx=find(str_edge == ',',1);
 edge_form=(str_edge(1:idx-1));str_edge(1:idx)=[];
 idx=find(str_edge == ',',1);
-closed_edge=(str_edge(1:idx-1));str_edge(1:idx)=[];
+Periodic=(str_edge(1:idx-1));str_edge(1:idx)=[];
 idx=find(str_edge == ',',1);
 self_intersect=(str_edge(1:idx-1));str_edge(1:idx)=[];
 
@@ -385,7 +387,7 @@ end
 edge=EdgeNURBS(name,Poles,Degree,Mults,Knots);
 
 edge.edge_form=edge_form;
-edge.closed_edge=closed_edge;
+edge.Periodic=Periodic;
 edge.self_intersect=self_intersect;
 edge.knot_spec=knot_spec;
 end

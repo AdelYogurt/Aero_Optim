@@ -1,22 +1,22 @@
-classdef AirfoilProblem < AirfoilModel
+classdef PhysicsProblem < AirfoilModel
     % optimal problem define
     properties
         % basical parameter
-        vari_num=10;
+        vari_num=7;
         con_num=2;
         coneq_num=0;
-        low_bou=0.01*ones(1,10);
-        up_bou=0.1*ones(1,10);
+        low_bou=[0.01*ones(1,6),0.6];
+        up_bou=[0.1*ones(1,6),0.99];
 
         % constraint define
-        CL_min=0.28;
+        CL_min=0.8;
         t_mim=0.12;
     end
 
     % main function
     methods
         % problem setup function
-        function self=AirfoilProblem(partitions,geom_param,mesh_param,CFD_param,...
+        function self=PhysicsProblem(partitions,geom_param,mesh_param,CFD_param,...
                 dir_temp,REMOVE_TEMP,run_desc,out_logger)
             % setup airfoil problem function
             %
@@ -44,18 +44,19 @@ classdef AirfoilProblem < AirfoilModel
                 dir_temp,REMOVE_TEMP,run_desc,out_logger);
 
             if strcmp(geom_param.solver,'CST')
-                geom_low_bou=-0.03*ones(1,self.vari_num);
-                geom_up_bou=0.1*ones(1,self.vari_num);
+                geom_low_bou=0.01*ones(1,6);
+                geom_up_bou=0.1*ones(1,6);
             elseif strcmp(geom_param.solver,'FFD')
-                geom_low_bou=-0.1*ones(1,self.vari_num);
-                geom_up_bou=0.1*ones(1,self.vari_num);
+                geom_low_bou=-0.1*ones(1,6);
+                geom_up_bou=0.1*ones(1,6);
             elseif strcmp(geom_param.solver,'HICKS_HENNE')
-                geom_low_bou=-0.01*ones(1,self.vari_num);
-                geom_up_bou=0.01*ones(1,self.vari_num);
+                geom_low_bou=-0.01*ones(1,6);
+                geom_up_bou=0.01*ones(1,6);
             end
-
-            self.low_bou=geom_low_bou;
-            self.up_bou=geom_up_bou;
+            mach_low_bou=0.6;
+            mach_up_bou=0.99;
+            self.low_bou=[geom_low_bou,mach_low_bou];
+            self.up_bou=[geom_up_bou,mach_up_bou];
         end
     end
 
@@ -71,12 +72,18 @@ classdef AirfoilProblem < AirfoilModel
             % obj, con, coneq
             %
             geo_in=self.decode(x);
+            if ischar(self.CFD_param.SU2_CFD_param)
+                self.CFD_param.SU2_CFD_param=SU2Config(self.CFD_param.SU2_CFD_param);
+            end
+            self.CFD_param.SU2_CFD_param.setParameter('MACH_NUMBER',x(end));
+            self.CFD_param.SU2_CFD_param.setParameter('AOA',4);
 
             [geo_out,mesh_out,CFD_out]=self.solveAirfoil(geo_in);
             mesh_point=geo_out.mesh_point;
             if strcmp(self.CFD_param.solver,'SU2_CFD')
-                CEff=CFD_out.SU2_data.('CEff')(end);
+                CD=CFD_out.SU2_data.('CD')(end);
                 CL=CFD_out.SU2_data.('CL')(end);
+                CEff=CFD_out.SU2_data.('CEff')(end);
             elseif strcmp(self.CFD_param.solver,'Fluent')
                 CD=CFD_out.fluent_out.data(end,2);
                 CL=CFD_out.fluent_out.data(end,3);
@@ -89,7 +96,7 @@ classdef AirfoilProblem < AirfoilModel
             t=max(point_up.Y-interpLinear(point_low.X,point_low.Y,point_up.X));
 
             % objective
-            obj=-CEff;
+            obj=CD;
 
             % constaints
             g1=self.CL_min-CL;
@@ -118,10 +125,13 @@ classdef AirfoilProblem < AirfoilModel
         function geo_in=decode(self,x)
             % decode x into geo_in
             %
+            x=x(1:end-1);
             if strcmp(self.geom_param.solver,'CST')
                 x_num=length(x);
-                geo_in.Poles_low=[linspace(0,1,x_num/2);-x(1:x_num/2)]';
-                geo_in.Poles_up=[linspace(0,1,x_num/2);x(x_num/2+1:end)]';
+                y_low=-x(1:x_num/2);
+                y_up=x(x_num/2+1:end);
+                geo_in.Poles_low=[linspace(0,1,x_num/2+2);[-0.05,y_low,0.015]]';
+                geo_in.Poles_up=[linspace(0,1,x_num/2+2);[0.05,y_up,0.077]]';
 
                 if ~isfield(self.geom_param,'C_par_low'), geo_in.C_par_low=[0.5,1];
                 else,geo_in.C_par_low=self.geom_param.C_par_low;end
