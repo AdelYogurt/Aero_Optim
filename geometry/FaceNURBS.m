@@ -168,7 +168,6 @@ classdef FaceNURBS < handle
                 Ctrl=permute(Ctrl,[1 2 3]);
                 Ctrl=reshape(Ctrl,v_num,4*u_num);
                 [Ctrl,self.VMults]=GeomApp.addDegree(self.VDegree,Ctrl,self.VMults,self.VKnots,Vdeg_tar);
-                % Ctrl=Ctrl./Ctrl(:,end);
                 v_num=size(Ctrl,1);
                 Ctrl=reshape(Ctrl,[v_num,u_num,4]);
                 Ctrl=permute(Ctrl,[1 2 3]);
@@ -179,7 +178,6 @@ classdef FaceNURBS < handle
                 Ctrl=permute(Ctrl,[2 1 3]);
                 Ctrl=reshape(Ctrl,u_num,4*v_num);
                 [Ctrl,self.UMults]=GeomApp.addDegree(self.UDegree,Ctrl,self.UMults,self.UKnots,Udeg_tar);
-                % Ctrl=Ctrl./Ctrl(:,end);
                 u_num=size(Ctrl,1);
                 Ctrl=reshape(Ctrl,[u_num,v_num,4]);
                 Ctrl=permute(Ctrl,[2 1 3]);
@@ -195,7 +193,7 @@ classdef FaceNURBS < handle
         function insertKnot(self,U_ins,V_ins)
             % insert knot to edge
             %
-            Ctrl=cat(3,self.Poles,self.Weights);
+            Ctrl=cat(3,self.Poles.*self.Weights,self.Weights);
             U=self.u_list;
             V=self.v_list;
             Vdeg=self.VDegree;
@@ -222,8 +220,8 @@ classdef FaceNURBS < handle
                 Ctrl=permute(Ctrl,[2 1 3]);
             end
 
-            self.Poles=Ctrl(:,:,1:end-1);
-            self.Weights=Ctrl(:,:,end)';
+            self.Poles=Ctrl(:,:,1:end-1)./Ctrl(:,:,end);
+            self.Weights=Ctrl(:,:,end);
 
             self.VKnots=unique(V);
             self.VMults=ones(size(self.VKnots));
@@ -239,6 +237,19 @@ classdef FaceNURBS < handle
 
             self.u_list=U;
             self.v_list=V;
+        end
+
+        function edg=getBoundEdge(self,type)
+            switch type
+                case 'u0'
+                    edg=EdgeNURBS('',reshape(self.Poles(1,:,:),size(self.Poles,2),[]),self.UDegree,self.UMults,self.UKnots,self.Weights(1,:));
+                case 'u1'
+                    edg=EdgeNURBS('',reshape(self.Poles(end,:,:),size(self.Poles,2),[]),self.UDegree,self.UMults,self.UKnots,self.Weights(end,:));
+                case 'v0'
+                    edg=EdgeNURBS('',reshape(self.Poles(:,1,:),size(self.Poles,1),[]),self.VDegree,self.VMults,self.VKnots,self.Weights(:,1));
+                case 'v1'
+                    edg=EdgeNURBS('',reshape(self.Poles(:,end,:),size(self.Poles,1),[]),self.VDegree,self.VMults,self.VKnots,self.Weights(:,end));
+            end
         end
     end
 
@@ -452,7 +463,7 @@ classdef FaceNURBS < handle
 
     % visualizate surface
     methods
-        function drawFace(self,axe_hdl,u_param,v_param,srf_option,ctrl_option)
+        function gplot(self,axe_hdl,u_param,v_param,srf_option,ctrl_option)
             % draw surface on axes handle
             %
             if nargin < 6
@@ -511,183 +522,6 @@ classdef FaceNURBS < handle
             % xlim([center(1)-range,center(1)+range]);
             % ylim([center(2)-range,center(2)+range]);
             % zlim([center(3)-range,center(3)+range]);
-        end
-
-        function [step_str,obj_idx,ADVANCED_FACE]=getStep(self,obj_idx,param)
-            % write BSpline into step file
-            %
-            if nargin < 2,obj_idx=1;end
-            out_name=self.name;
-            if isempty(out_name),out_name='NONE';end
-
-            u_num=size(self.Poles,2);
-            v_num=size(self.Poles,1);
-
-            % generate CARTESIAN_POINT
-            CARTESIAN_POINT=obj_idx;
-
-            str_control=[];
-            for u_idx=1:u_num
-                for v_idx=1:v_num
-                    str=[num2str(obj_idx,'#%d ='),' CARTESIAN_POINT ',...
-                        '( ',...
-                        '''NONE'', ',...
-                        '( ',num2str(self.Poles(v_idx,u_idx,1),'%.16f'),', ',...
-                        num2str(self.Poles(v_idx,u_idx,2),'%.16f'),', ',...
-                        num2str(self.Poles(v_idx,u_idx,3),'%.16f'),' )',...
-                        ' ) ;\n'];
-                    str_control=[str_control,str];
-                    obj_idx=obj_idx+1;
-                end
-            end
-
-            % generate B_SPLINE_CURVE_WITH_KNOTS
-            B_SPLINE_CURVE_WITH_KNOTS=obj_idx;
-            str_curve=[];
-            str_curve=[str_curve,stepCurve((1:v_num) +CARTESIAN_POINT-1,...
-                self.VDegree,self.VMults,self.VKnots)];
-            str_curve=[str_curve,stepCurve(((1:u_num)*v_num) +CARTESIAN_POINT-1,...
-                self.UDegree,self.UMults,self.UKnots)];
-            str_curve=[str_curve,stepCurve(((v_num*u_num):-1:(v_num*u_num-v_num+1)) +CARTESIAN_POINT-1,...
-                self.VDegree,self.VMults,self.VKnots)];
-            str_curve=[str_curve,stepCurve((((u_num-1):-1:0)*v_num+1) +CARTESIAN_POINT-1,...
-                self.UDegree,self.UMults,self.UKnots)];
-
-            % generate VERTEX_POINT
-            VERTEX_POINT=obj_idx;
-            str_vertex=[];
-            str_vertex=[str_vertex,stepVertex(1 +CARTESIAN_POINT-1)];
-            str_vertex=[str_vertex,stepVertex(v_num +CARTESIAN_POINT-1)];
-            str_vertex=[str_vertex,stepVertex(v_num*u_num +CARTESIAN_POINT-1)];
-            str_vertex=[str_vertex,stepVertex(v_num*u_num-v_num+1 +CARTESIAN_POINT-1)];
-
-            % generate EDGE_CURVE
-            EDGE_CURVE=obj_idx;
-            str_edge=[];
-            str_edge=[str_edge,stepEdge(VERTEX_POINT,VERTEX_POINT+1,B_SPLINE_CURVE_WITH_KNOTS)];
-            str_edge=[str_edge,stepEdge(VERTEX_POINT+1,VERTEX_POINT+2,B_SPLINE_CURVE_WITH_KNOTS+1)];
-            str_edge=[str_edge,stepEdge(VERTEX_POINT+2,VERTEX_POINT+3,B_SPLINE_CURVE_WITH_KNOTS+2)];
-            str_edge=[str_edge,stepEdge(VERTEX_POINT+3,VERTEX_POINT,B_SPLINE_CURVE_WITH_KNOTS+3)];
-
-            % generate ORIENTED_EDGE
-            ORIENTED_EDGE=obj_idx;
-            str_oriented=[];
-            str_oriented=[str_oriented,stepOriented(EDGE_CURVE)];
-            str_oriented=[str_oriented,stepOriented(EDGE_CURVE+1)];
-            str_oriented=[str_oriented,stepOriented(EDGE_CURVE+2)];
-            str_oriented=[str_oriented,stepOriented(EDGE_CURVE+3)];
-
-            % generate EDGE_LOOP
-            EDGE_LOOP=obj_idx;
-            str_loop=[num2str(obj_idx,'#%d ='),' EDGE_LOOP',...
-                ' ( ',...
-                '''NONE''',', ',...
-                '( ',num2str(ORIENTED_EDGE,'#%d'),', ',...
-                num2str(ORIENTED_EDGE+1,'#%d'),', ',...
-                num2str(ORIENTED_EDGE+2,'#%d'),', ',...
-                num2str(ORIENTED_EDGE+3,'#%d'),') ',...
-                ' ) ;\n'];
-            obj_idx=obj_idx+1;
-
-            % generate FACE_OUTER_BOUND
-            FACE_OUTER_BOUND=obj_idx;
-            str_outer=[num2str(obj_idx,'#%d ='),' FACE_OUTER_BOUND',...
-                ' ( ',...
-                '''NONE''',', ',...
-                num2str(EDGE_LOOP,'#%d'),', ',...
-                '.T.',...
-                ' ) ;\n'];
-            obj_idx=obj_idx+1;
-
-            % generate B_SPLINE_SURFACE_WITH_KNOTS
-            B_SPLINE_SURFACE_WITH_KNOTS=obj_idx;
-            str_surf=[num2str(obj_idx,'#%d ='),' B_SPLINE_SURFACE_WITH_KNOTS',...
-                ' ( ',...
-                '''',out_name,'''',', ',...
-                num2str(self.UDegree,'%d'),', ',num2str(self.VDegree,'%d'),', \n'];
-            str_surf=[str_surf,'('];
-            for u_bias=0:v_num:v_num*(u_num-2)
-                str_surf=[str_surf,'( ',...
-                    num2str((v_num+u_bias) +CARTESIAN_POINT-1,'#%d'),...
-                    num2str((((v_num-1):-1:1)+u_bias) +CARTESIAN_POINT-1,', #%d'),...
-                    ' ),\n'];
-            end
-            u_bias=v_num*(u_num-1);
-            str_surf=[str_surf,'( ',...
-                num2str((v_num+u_bias) +CARTESIAN_POINT-1,'#%d'),...
-                num2str((((v_num-1):-1:1)+u_bias) +CARTESIAN_POINT-1,', #%d'),...
-                ' )'];
-            str_surf=[str_surf,'),\n'];
-            str_surf=[str_surf,'.UNSPECIFIED.',', ','.F.',', ','.F.',', ','.F.',',\n',...
-                '( ',num2str(self.UMults(1),'%d'),num2str(self.UMults(2:end),', %d'),' ),\n',...
-                '( ',num2str(self.VMults(1),'%d'),num2str(self.VMults(2:end),', %d'),' ),\n',...
-                '( ',num2str(self.UKnots(1),'%.16f'),num2str(self.UKnots(2:end),', %.16f'),' ),\n',...
-                '( ',num2str(self.VKnots(1),'%.16f'),num2str(self.VKnots(2:end),', %.16f'),' ),\n',...
-                '.UNSPECIFIED.',...
-                ') ;\n'];
-            obj_idx=obj_idx+1;
-
-            % generate ADVANCED_FACE
-            ADVANCED_FACE=obj_idx;
-            str_face=[num2str(obj_idx,'#%d ='),' ADVANCED_FACE',...
-                ' ( ',...
-                '''',out_name,'''',', ',...
-                '( ',num2str(FACE_OUTER_BOUND,'#%d'),' )',', '...
-                num2str(B_SPLINE_SURFACE_WITH_KNOTS,'#%d'),', ',...
-                '.T.',...
-                ' ) ;\n'];
-            obj_idx=obj_idx+1;
-
-            % generate all
-            step_str=[str_control,'\n',str_curve,'\n',str_vertex,'\n',...
-                str_edge,'\n',str_oriented,'\n',str_loop,'\n',str_outer,'\n',...
-                str_surf,'\n',str_face,'\n'];
-
-            function str_edge=stepCurve(point_index,Degree,Mults,Knots)
-                str_edge=[num2str(obj_idx,'#%d ='),' B_SPLINE_CURVE_WITH_KNOTS',...
-                    ' ( ',...
-                    '''NONE''',', ',...
-                    num2str(Degree,'%d'),', \n',...
-                    '( ',num2str(point_index(1),'#%d'),num2str(point_index(2:end),', #%d'),' ),\n',...
-                    '.UNSPECIFIED., .F., .F.,\n',...
-                    '( ',num2str(Mults(1),'%d'),num2str(Mults(2:end),', %d'),' ),\n',...
-                    '( ',num2str(Knots(1),'%.16f'),num2str(Knots(2:end),', %.16f'),' ),\n',...
-                    '.UNSPECIFIED.',...
-                    ' ) ;\n'];
-                obj_idx=obj_idx+1;
-            end
-
-            function str_vertex=stepVertex(point_index)
-                str_vertex=[num2str(obj_idx,'#%d ='),' VERTEX_POINT',...
-                    ' ( ',...
-                    '''NONE''',', ',...
-                    num2str(point_index,'#%d'),...
-                    ' ) ;\n'];
-                obj_idx=obj_idx+1;
-            end
-
-            function str_edge=stepEdge(start_vertex,end_vertex,edge_index)
-                str_edge=[num2str(obj_idx,'#%d ='),' EDGE_CURVE',...
-                    ' ( ',...
-                    '''NONE''',', ',...
-                    num2str(start_vertex,'#%d'),', ',...
-                    num2str(end_vertex,'#%d'),', ',...
-                    num2str(edge_index,'#%d'),', ',...
-                    '.T.',...
-                    ' ) ;\n'];
-                obj_idx=obj_idx+1;
-            end
-
-            function str_oriented=stepOriented(edge_index)
-                str_oriented=[num2str(obj_idx,'#%d ='),' ORIENTED_EDGE',...
-                    ' ( ',...
-                    '''NONE''',', ',...
-                    '*',', ','*',', ',...
-                    num2str(edge_index,'#%d'),', ',...
-                    '.T.',...
-                    ' ) ;\n'];
-                obj_idx=obj_idx+1;
-            end
         end
     end
 end

@@ -101,7 +101,7 @@ classdef AirfoilGeom < handle
 
         end
 
-        function drawEdge(self,axe_hdl,U_param,draw_option)
+        function gplot(self,axe_hdl,U_param,draw_option)
             % draw curve on figure handle
             %
             if nargin < 4

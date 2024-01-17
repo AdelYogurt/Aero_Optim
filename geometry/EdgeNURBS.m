@@ -140,13 +140,13 @@ classdef EdgeNURBS < handle
         function insertKnot(self,U_ins)
             % insert knot to edge
             %
-            Ctrl=[self.Poles,self.Weights];
+            Ctrl=[self.Poles.*self.Weights,self.Weights];
             U=self.u_list;
             deg=self.Degree;
 
             [Ctrl,U]=GeomApp.insertKnot(deg,Ctrl,U,U_ins);
 
-            self.Poles=Ctrl(:,1:end-1);
+            self.Poles=Ctrl(:,1:end-1)./Ctrl(:,end);
             self.Weights=Ctrl(:,end);
             self.Knots=unique(U);
             self.Mults=ones(size(self.Knots));
@@ -230,7 +230,7 @@ classdef EdgeNURBS < handle
 
     % visualizate curve
     methods
-        function drawEdge(self,axe_hdl,u_param,crv_option,ctrl_option)
+        function gplot(self,axe_hdl,u_param,crv_option,ctrl_option)
             % draw curve on figure handle
             %
             if nargin < 5
@@ -286,46 +286,6 @@ classdef EdgeNURBS < handle
             % xlim([center(1)-range,center(1)+range]);
             % ylim([center(2)-range,center(2)+range]);
             % zlim([center(3)-range,center(3)+range]);
-        end
-
-        function [step_str,obj_idx]=getStep(self,obj_idx)
-            % write BSpline into step file
-            %
-            if nargin < 2,obj_idx=1;end
-            out_name=self.name;
-            if isempty(out_name),out_name='NONE';end
-
-            % generate CARTESIAN_POINT
-            CARTESIAN_POINT=obj_idx;
-
-            str_ctrl=[];Ctrl=[self.Poles,zeros(size(self.Poles,1),3-size(self.Poles,2))];
-            for ctrl_idx=1:size(self.Poles,1)
-                str=[num2str(obj_idx,'#%d ='),' CARTESIAN_POINT',...
-                    ' ( ',...
-                    '''NONE''',', ',...
-                    '( ',num2str(Ctrl(ctrl_idx,1),'%.16f'),', ',...
-                    num2str(Ctrl(ctrl_idx,2),'%.16f'),', ',...
-                    num2str(Ctrl(ctrl_idx,2),'%.16f'),' )',...
-                    ' ) ;\n'];
-                str_ctrl=[str_ctrl,str];
-                obj_idx=obj_idx+1;
-            end
-
-            % generate curve
-            point_idx=((1:size(self.Poles,1))-1)+CARTESIAN_POINT;
-            str_curve=[num2str(obj_idx,'#%d ='),' B_SPLINE_CURVE_WITH_KNOTS',...
-                ' ( ',...
-                '''',out_name,'''',', ',...
-                num2str(self.Degree,'%d'),', ',...
-                '( ',num2str(point_idx(1),'#%d'),num2str(point_idx(2:end),', #%d'),' ),\n',...
-                self.edge_form,', ',self.Periodic,', ',self.self_intersect,',\n',...
-                '( ',num2str(self.Mults(1),'%d'),num2str(self.Mults(2:end),', %d'),' ),\n',...
-                '( ',num2str(self.Knots(1),'%.16f'),num2str(self.Knots(2:end),', %.16f'),' ),\n',...
-                self.knot_spec,...
-                ' ) ;\n'];
-
-            step_str=[str_ctrl,'\n',str_curve,'\n'];
-
         end
 
     end

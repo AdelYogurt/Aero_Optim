@@ -23,7 +23,7 @@ close all hidden;
 % U_num=21;
 % V_num=21;
 % W_num=21;
-% waverider.drawShell([],U_num,[],W_num);axis equal;
+% waverider.gplot([],U_num,[],W_num);axis equal;
 % waverider.writeStepOpenShell('waverider_cone.step',U_num,[],W_num);
 % 
 % srf_total=waverider.calShell(U_num,[],W_num);
@@ -60,6 +60,6 @@ srf_up.fitNURBS(cat(3,X_up,Y_up,Z_up),UDegree,VDegree,u_pole_num,v_pole_num,U_no
 srf_low.fitNURBS(cat(3,X_low,Y_low,Z_low),UDegree,VDegree,u_pole_num,v_pole_num,U_node,V_node);
 
 axe_hdl=axes(figure());
-srf_up.drawFace(axe_hdl,100,10);
-srf_low.drawFace(axe_hdl,100,10);
+srf_up.gplot(axe_hdl,100,10);
+srf_low.gplot(axe_hdl,100,10);
 axis equal

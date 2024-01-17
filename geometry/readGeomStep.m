@@ -1,5 +1,5 @@
-function body_list=readGeomStep(step_filestr)
-% read step file into
+function geom_list=readGeomStep(step_filestr)
+% read step file
 %
 
 step_file=fopen(step_filestr,'r');
@@ -41,7 +41,7 @@ Data=[cell(Idx(1)-1,2);Data];
 % create model
 Idx_body=[find(strcmp(Data(:,1),'MANIFOLD_SOLID_BREP')),...
     find(strcmp(Data(:,1),'SHELL_BASED_SURFACE_MODEL'))];
-body_list=cell(1,length(Idx_body));
+geom_list=cell(1,length(Idx_body));
 for body_idx=1:length(Idx_body)
     idx_body=Idx_body(body_idx);
     body_type=Data{idx_body,1};
@@ -50,7 +50,7 @@ for body_idx=1:length(Idx_body)
         case 'SHELL_BASED_SURFACE_MODEL'
             str_body=Data{idx_body,2};
             str_list=split(str_body,',');
-            shell_name=str_list{1};
+            shell_name=str_list{1}(2:end-1);
             str_shell_list=join(str_list(2:end),',');
             Idx_shell=str2double(strsplit(strrep(str_shell_list{1}(2:end-1),'#',''),','));
             face_list=[];
@@ -91,14 +91,14 @@ for body_idx=1:length(Idx_body)
         case 'MANIFOLD_SOLID_BREP'
             str_body=Data{idx_body,2};
             str_list=split(str_body,',');
-            solid_name=str_list{1};
+            solid_name=str_list{1}(2:end-1);
             Idx_solid=str2double(str_list{2}(2:end));
 
             body=Solid(solid_name);
         otherwise
             error('readGeomStep: unknown body type');
     end
-    body_list{body_idx}=body;
+    geom_list{body_idx}=body;
 end
 
 end
@@ -110,7 +110,7 @@ function fce=getFaceNURBS(Data,idx_face,idx_surf)
 str_surf=Data{idx_surf,2};
 % main properties
 idx=find(str_surf == ',',1);
-name=str_surf(1:idx-1);str_surf(1:idx)=[];
+name=str_surf(2:idx-2);str_surf(1:idx)=[];
 idx=find(str_surf == ',',1);
 UDegree=str2double(str_surf(1:idx-1));str_surf(1:idx)=[];
 idx=find(str_surf == ',',1);
@@ -161,7 +161,7 @@ knot_spec=str_surf;
 Poles=zeros(v_pole_num,u_pole_num,3);
 for u_idx=1:u_pole_num
     for v_idx=1:v_pole_num
-        idx_point=Idx_control(u_idx,v_pole_num-v_idx+1);
+        idx_point=Idx_control(u_idx,v_idx);
         control_point=getPoint(Data,idx_point);
         Poles(v_idx,u_idx,:)=control_point;
     end
@@ -192,7 +192,7 @@ edge_list=getBound(Data,Idx_bound);
 str_surf=Data{surf_idx,2};
 % main properties
 idx=find(str_surf == ',',1);
-name=str_surf(1:idx-1);str_surf(1:idx)=[];
+name=str_surf(2:idx-2);str_surf(1:idx)=[];
 idx_axis=str2double(str_surf(2:end));
 
 % axis
@@ -261,7 +261,7 @@ for bound_idx=1:length(Idx_bound)
 
     % FACE_OUTER_BOUND
     idx=find(str_bound == ',',1);
-    name=str_bound(1:idx-1);str_bound(1:idx)=[];
+    name=str_bound(2:end-1);str_bound(1:idx)=[];
     idx=find(str_bound == ',',1);
     idx_loop=str2double(str_bound(2:idx-1));str_bound(1:idx)=[];
     orientation=str_bound;
@@ -269,7 +269,7 @@ for bound_idx=1:length(Idx_bound)
     % EDGE_LOOP
     str_loop=Data{idx_loop,2};
     idx=find(str_loop == ',',1);
-    name=str_loop(1:idx-1);str_loop(1:idx)=[];
+    name=str_loop(2:end-1);str_loop(1:idx)=[];
     Idx_edge=str2double(strsplit(strrep(str_loop(2:end-1),'#',''),','));
 
     loop_edge_list=cell(1,length(Idx_edge));
@@ -280,7 +280,7 @@ for bound_idx=1:length(Idx_bound)
         % ORIENTED_EDGE
         str_oriented=Data{idx_edge,2};
         idx=find(str_oriented == ',',1);
-        name=str_oriented(1:idx-1);str_oriented(1:idx)=[];
+        name=str_oriented(2:end-1);str_oriented(1:idx)=[];
         idx=find(str_oriented == ',',1);
         idx_vertex_start=str2double(str_oriented(2:idx-1));str_oriented(1:idx)=[];
         idx=find(str_oriented == ',',1);
@@ -292,7 +292,7 @@ for bound_idx=1:length(Idx_bound)
         % EDGE_CURVE
         str_edge=Data{idx_edge,2};
         idx=find(str_edge == ',',1);
-        name=str_edge(1:idx-1);str_edge(1:idx)=[];
+        name=str_edge(2:end-1);str_edge(1:idx)=[];
         idx=find(str_edge == ',',1);
         idx_vertex_start=str2double(str_edge(2:idx-1));str_edge(1:idx)=[];
         idx=find(str_edge == ',',1);
@@ -332,7 +332,7 @@ str_edge=Data{idx_edge,2};
 
 % main properties
 idx=find(str_edge == ',',1);
-name=str_edge(1:idx-1);str_edge(1:idx)=[];
+name=str_edge(2:end-1);str_edge(1:idx)=[];
 idx=find(str_edge == ',',1);
 Degree=str2double(str_edge(1:idx-1));str_edge(1:idx)=[];
 
@@ -400,7 +400,7 @@ str_edge=Data{idx_edge,2};
 
 % name
 idx=find(str_edge == ',',1);
-name=str_edge(1:idx-1);str_edge(1:idx)=[];
+name=str_edge(2:end-1);str_edge(1:idx)=[];
 
 % properties
 idx=find(str_edge == ',',1);

@@ -11,7 +11,7 @@ close all hidden;
 % crv=EdgeNURBS('',Points,Degree);
 % crv=GeomApp.VertexToEdge('',Points,Degree);
 % crv=EdgeNURBS('',[1,0;1,1;0,1],[],[],[],[1,sqrt(2)/2,1]); % arc
-% crv.drawEdge(axe_hdl);
+% crv.gplot(axe_hdl);
 % axis equal;
 
 %% CST2D edge
@@ -22,9 +22,9 @@ close all hidden;
 % axe_hdl=axes(figure());
 % crv=EdgeCST2D('',C_par_Y,sym,LX,LY);
 % crv.addNURBS([ctrl_X,ctrl_Y],Degree);
-% crv.drawEdge(axe_hdl);
+% crv.gplot(axe_hdl);
 % crv=crv.getNURBS();
-% crv.drawEdge(axe_hdl);
+% crv.gplot(axe_hdl);
 % axis equal;
 
 %% BCST2D edge
@@ -35,11 +35,11 @@ close all hidden;
 % axe_hdl=axes(figure());
 % crv=EdgeBCST2D('',C_par_Y,sym,LX,LY);
 % crv.addNURBS([ctrl_X,ctrl_Y],Degree);
-% crv.drawEdge(axe_hdl);
+% crv.gplot(axe_hdl);
 % crv.addBlunt(1,0.05);
-% crv.drawEdge(axe_hdl);
+% crv.gplot(axe_hdl);
 % crv=crv.getNURBS();
-% crv.drawEdge(axe_hdl);
+% crv.gplot(axe_hdl);
 % axis equal;
 
 %% fit airfoil with CST2D
@@ -70,8 +70,8 @@ close all hidden;
 % axe_hdl=axes(figure());
 % line(axe_hdl,airfoil_up(:,1),airfoil_up(:,2),'LineStyle','none','Marker','o','MarkerEdgeColor',[0.8500 0.3250 0.0980])
 % line(axe_hdl,airfoil_low(:,1),airfoil_low(:,2),'LineStyle','none','Marker','o','MarkerEdgeColor',[0.8500 0.3250 0.0980])
-% crv_up.drawEdge(axe_hdl);
-% crv_low.drawEdge(axe_hdl);
+% crv_up.gplot(axe_hdl);
+% crv_low.gplot(axe_hdl);
 % axis equal;
 % 
 % writematrix(crv_up.Poles,'CSTshape_up.txt')
@@ -85,23 +85,23 @@ close all hidden;
 % surface(axe_hdl,point_X,point_Y,point_Z,'Marker','*','MarkerEdgeColor','r','LineStyle','none','FaceAlpha',0);
 % srf=FaceNURBS('',cat(3,point_X,point_Y,point_Z),UDegree,VDegree);
 % srf=GeomApp.VertexToFace('',cat(3,point_X,point_Y,point_Z),UDegree,VDegree);
-% srf.drawFace(axe_hdl);
+% srf.gplot(axe_hdl);
 % axis equal;
 
 %% CST Face
 
-% LX=2;LY=1/2;LZ=0.3;
-% C_par_X=[0,0];C_par_Y=[0.5,0];C_par_ZV=[15,15];C_par_ZU=[0.5,0];sym_x=false;sym_y=true;
-% srf_up=FaceCST('',C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y,LX,LY,LZ);
-% srf_low=FaceCST('',C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y,LX,-LY,LZ);
-% axe_hdl=axes(figure());
-% srf_up.drawFace(axe_hdl);
-% srf_low.drawFace(axe_hdl);
-% srf_up=srf_up.getNURBS();
-% srf_low=srf_low.getNURBS();
-% srf_up.drawFace(axe_hdl);
-% srf_low.drawFace(axe_hdl);
-% axis equal
+LX=2;LY=1/2;LZ=0.3;
+C_par_X=[0,0];C_par_Y=[0.5,0];C_par_ZV=[15,15];C_par_ZU=[0.5,0];sym_x=false;sym_y=true;
+srf_up=FaceCST('',C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y,LX,LY,LZ);
+srf_low=FaceCST('',C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y,LX,-LY,LZ);
+axe_hdl=axes(figure());
+srf_up.gplot(axe_hdl);
+srf_low.gplot(axe_hdl);
+srf_up=srf_up.getNURBS([],[],11,11);
+srf_low=srf_low.getNURBS([],[],11,11);
+srf_up.gplot(axe_hdl);
+srf_low.gplot(axe_hdl);
+axis equal
 
 %% Coons Face
 
@@ -113,14 +113,14 @@ close all hidden;
 % axe_hdl=axes(figure());
 % axis equal;view(3);
 % 
-% crv_u0.drawEdge(axe_hdl);
-% crv_1v.drawEdge(axe_hdl);
-% crv_u1.drawEdge(axe_hdl);
-% crv_0v.drawEdge(axe_hdl);
+% crv_u0.gplot(axe_hdl);
+% crv_1v.gplot(axe_hdl);
+% crv_u1.gplot(axe_hdl);
+% crv_0v.gplot(axe_hdl);
 % 
 % srf=FaceCoons('',@(u) crv_u0.calPoint(u),@(u) crv_u1.calPoint(u),...
 %     @(v) crv_0v.calPoint(v),@(v) crv_1v.calPoint(v));
-% srf.drawFace(axe_hdl,[],[],struct('LineStyle','none','FaceAlpha',0.5));
+% srf.gplot(axe_hdl,[],[],struct('LineStyle','none','FaceAlpha',0.5));
 
 %% mapping generate Face
 
@@ -135,14 +135,14 @@ close all hidden;
 % edge_u1=EdgeNURBS('',line_u1);
 % edge_0v=EdgeNURBS('',line_v0);
 % edge_1v=EdgeNURBS('',line_v1);
-% edge_u0.drawEdge(axe_hdl);
-% edge_1v.drawEdge(axe_hdl);
-% edge_u1.drawEdge(axe_hdl);
-% edge_0v.drawEdge(axe_hdl);
+% edge_u0.gplot(axe_hdl);
+% edge_1v.gplot(axe_hdl);
+% edge_u1.gplot(axe_hdl);
+% edge_0v.gplot(axe_hdl);
 % 
 % Point=GeomApp.MapGrid(line_u0,line_u1,line_v0,line_v1);
 % srf=FaceNURBS('',Point);
-% srf.drawFace(axe_hdl,[],[],struct('LineStyle','none','FaceAlpha',0.5));
+% srf.gplot(axe_hdl,[],[],struct('LineStyle','none','FaceAlpha',0.5));
 
 %% Fit 3D wing
 
@@ -161,8 +161,8 @@ close all hidden;
 % srf_low.fitNURBS(cat(3,X_low,Y_low,Z_low),UDegree,VDegree,u_pole_num,v_pole_num,U_node_low,V_node_low);
 % 
 % axe_hdl=axes(figure());
-% srf_up.drawFace(axe_hdl,20,20);
-% srf_low.drawFace(axe_hdl,20,20);
+% srf_up.gplot(axe_hdl,20,20);
+% srf_low.gplot(axe_hdl,20,20);
 % axis equal
 
 %% generate 3D wing

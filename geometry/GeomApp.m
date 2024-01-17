@@ -166,6 +166,22 @@ classdef GeomApp
             end
             Poles=pagemrdivide(pagemldivide(matrix_v,Nodes),matrix_u);
 
+            % adjust bound poles
+            Poles_u0=pagemrdivide(pagemldivide(matrix_v(1,1),Nodes(1,:,:)),matrix_u);
+            Poles_u1=pagemrdivide(pagemldivide(matrix_v(end,end),Nodes(end,:,:)),matrix_u);
+            Poles_0v=pagemrdivide(pagemldivide(matrix_v,Nodes(:,1,:)),matrix_u(1,1));
+            Poles_1v=pagemrdivide(pagemldivide(matrix_v,Nodes(:,end,:)),matrix_u(end,end));
+
+            Poles(1,:,:)=Poles_u0;
+            Poles(end,:,:)=Poles_u1;
+            Poles(:,1,:)=Poles_0v;
+            Poles(:,end,:)=Poles_1v;
+
+            Poles(1,1,:)=Nodes(1,1,:);
+            Poles(1,end,:)=Nodes(1,end,:);
+            Poles(end,1,:)=Nodes(end,1,:);
+            Poles(end,end,:)=Nodes(end,end,:);
+
             fce=FaceNURBS(name,Poles,UDegree,VDegree,UMults,VMults,UKnots,VKnots);
         end
 
@@ -208,12 +224,20 @@ classdef GeomApp
 
                     if ~isempty(edg_0v)
                         Ctrl_0v=[edg_0v.Poles,edg_0v.Weights];
+                        
                         % generate new ctrl
-                        Ctrl_1v=getMatchCtrl(Ctrl_u0(end,:),Ctrl_u1(end,:),VDegree,VMults,VKnots);
+                        Ctrl_1v=[Ctrl_u0(end,:);Ctrl_u1(end,:)];
+                        edg_1v=EdgeNURBS('',Ctrl_1v(:,1:end-1),[],[],[],Ctrl_1v(:,end));
+                        [~,edg_1v]=GeomApp.matchEdge(edg_v,edg_1v);
+                        Ctrl_1v=[edg_1v.Poles,edg_1v.Weights];
                     elseif ~isempty(edg_1v)
                         Ctrl_1v=[edg_1v.Poles,edg_1v.Weights];
+                        
                         % generate new ctrl
-                        Ctrl_0v=getMatchCtrl(Ctrl_u0(1,:),Ctrl_u1(1,:),VDegree,VMults,VKnots);
+                        Ctrl_0v=[Ctrl_u0(1,:);Ctrl_u1(1,:)];
+                        edg_0v=EdgeNURBS('',Ctrl_0v(:,1:end-1),[],[],[],Ctrl_0v(:,end));
+                        [~,edg_0v]=GeomApp.matchEdge(edg_v,edg_0v);
+                        Ctrl_0v=[edg_0v.Poles,edg_0v.Weights];
                     end
                 elseif isempty(edg_u0) || isempty(edg_u1)
                     edg_u=[edg_u0,edg_u1];
@@ -223,12 +247,20 @@ classdef GeomApp
 
                     if ~isempty(edg_u0)
                         Ctrl_u0=[edg_u0.Poles,edg_u0.Weights];
+
                         % generate new ctrl
-                        Ctrl_u1=getMatchCtrl(Ctrl_0v(end,:),Ctrl_1v(end,:),UDegree,UMults,UKnots);
+                        Ctrl_u1=[Ctrl_u0(end,:);Ctrl_u1(end,:)];
+                        edg_u1=EdgeNURBS('',Ctrl_u1(:,1:end-1),[],[],[],Ctrl_u1(:,end));
+                        [~,edg_u1]=GeomApp.matchEdge(edg_u,edg_u1);
+                        Ctrl_u1=[edg_u1.Poles,edg_u1.Weights];
                     elseif ~isempty(edg_u1)
                         Ctrl_u1=[edg_u1.Poles,edg_u1.Weights];
+
                         % generate new ctrl
-                        Ctrl_u0=getMatchCtrl(Ctrl_0v(1,:),Ctrl_1v(1,:),UDegree,UMults,UKnots);
+                        Ctrl_u0=[Ctrl_u0(1,:);Ctrl_u1(1,:)];
+                        edg_u0=EdgeNURBS('',Ctrl_u0(:,1:end-1),[],[],[],Ctrl_u0(:,end));
+                        [~,edg_u0]=GeomApp.matchEdge(edg_u,edg_u0);
+                        Ctrl_u0=[edg_u0.Poles,edg_u0.Weights];
                     end
                 end
             else
@@ -273,13 +305,6 @@ classdef GeomApp
             Weights=Ctrl(:,:,end);
 
             fce=FaceNURBS(name,Poles,UDegree,VDegree,UMults,VMults,UKnots,VKnots,Weights);
-            
-            function Ctrl=getMatchCtrl(Ctrl_0,Ctrl_1,Degree,Mults,Knots)
-                u_num=length(baseKnotVec(Mults,Knots));
-                pole_num=u_num-Degree-1;
-                UC=linspace(0,1,pole_num);
-                Ctrl=Ctrl_0*(1-UC)+Ctrl_1*UC;
-            end
         end
     end
 
@@ -635,9 +660,9 @@ classdef GeomApp
 
                 while ~isempty(stack)
                     % current node information
-                    node_idx=stack(end);
+                    node_idx=stack(1);
                     node=node_list(node_idx,:);
-                    stack=stack(1:end-1);
+                    stack=stack(2:end);
 
                     if node(1) < max_level
                         % judge if linear predict if accptable
@@ -779,9 +804,9 @@ classdef GeomApp
 
                 while ~isempty(stack)
                     % current node information
-                    node_idx=stack(end);
+                    node_idx=stack(1);
                     node=node_list(node_idx,:);
-                    stack=stack(1:end-1);
+                    stack=stack(2:end);
 
                     if node(1) < max_level
                         % judge if linear predict if accptable
@@ -806,11 +831,11 @@ classdef GeomApp
                             add_v_flag=false(1);
                         end
 
-                        % check center place
-                        if any(abs(fval_c-fval_pred_c) > torl)
-                            add_u_flag=true(1);
-                            add_v_flag=true(1);
-                        end
+%                         % check center place
+%                         if any(abs(fval_c-fval_pred_c) > torl)
+%                             add_u_flag=true(1);
+%                             add_v_flag=true(1);
+%                         end
 
                         if (add_u_flag && add_v_flag) || node(1) < min_level
                             % add 5 data into data_list

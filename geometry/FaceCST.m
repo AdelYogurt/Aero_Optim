@@ -214,11 +214,6 @@ classdef FaceCST < FaceNURBS
             self.UKnots=UKnots;
             self.VKnots=VKnots;
             self.Weights=Weights;
-
-            % Derived Attributes
-            self.u_pole_num=u_pole_num;
-            self.v_pole_num=v_pole_num;
-            self.dimension=dimension;
             self.u_list=u_list;
             self.v_list=v_list;
 
@@ -337,9 +332,6 @@ classdef FaceCST < FaceNURBS
             self.Weights=Weights;
 
             % Derived Attributes
-            self.u_pole_num=u_pole_num;
-            self.v_pole_num=v_pole_num;
-            self.dimension=dimension;
             self.u_list=u_list;
             self.v_list=v_list;
 
@@ -525,7 +517,7 @@ classdef FaceCST < FaceNURBS
 
     % visualizate function
     methods
-        function drawFace(self,axe_hdl,u_param,v_param,srf_option,ctrl_option)
+        function gplot(self,axe_hdl,u_param,v_param,srf_option,ctrl_option)
             % draw surface on axes handle
             %
             if nargin < 5
@@ -560,7 +552,7 @@ classdef FaceCST < FaceNURBS
             % plot surface
             surface(axe_hdl,Point(:,:,1),Point(:,:,2),Point(:,:,3),srf_option);
             if ~isempty(self.Poles)
-                u_pole_num=self.u_pole_num;v_pole_num=self.v_pole_num;
+                u_pole_num=size(self.Poles,2);v_pole_num=size(self.Poles,1);
                 U_pole=interp1(linspace(0,1,u_pole_num-self.UDegree+1),self.u_list(self.UDegree+1:u_pole_num+1),linspace(0,1,u_pole_num));
                 V_pole=interp1(linspace(0,1,v_pole_num-self.VDegree+1),self.v_list(self.VDegree+1:v_pole_num+1),linspace(0,1,v_pole_num));
                 [U_pole,V_pole]=meshgrid(U_pole,V_pole);
@@ -586,7 +578,7 @@ classdef FaceCST < FaceNURBS
             % zlim([center(3)-range,center(3)+range]);
         end
 
-        function fce=getNURBS(self,u_param,v_param)
+        function fce=getNURBS(self,u_param,v_param,u_pole_num,v_pole_num)
             % convert CST Face into NURBS Face
             %
             % input:
@@ -594,10 +586,16 @@ classdef FaceCST < FaceNURBS
             % or:
             % value_torl, []
             %
-            if nargin < 3
-                v_param=[];
-                if nargin < 2
-                    u_param=[];
+            if nargin < 5
+                v_pole_num=[];
+                if nargin < 4
+                    u_pole_num=[];
+                    if nargin < 3
+                        v_param=[];
+                        if nargin < 2
+                            u_param=[];
+                        end
+                    end
                 end
             end
 
@@ -609,8 +607,8 @@ classdef FaceCST < FaceNURBS
             end
             [Nodes,U_node,V_node]=calFace(self,u_param,v_param);
 
-            UDegree=min(size(U_node,2)-1,3);VDegree=min(size(V_node,1)-1,3);
-            fce=GeomApp.VertexToFace(self.name,Nodes,UDegree,VDegree,[],[],U_node(1,:),V_node(:,1));
+            UDegree=min([size(U_node,2)-1,3,u_pole_num-1]);VDegree=min([size(V_node,1)-1,3,v_pole_num-1]);
+            fce=GeomApp.VertexToFace(self.name,Nodes,UDegree,VDegree,u_pole_num,v_pole_num,U_node(1,:),V_node(:,1));
         end
 
         function [step_str,obj_idx,ADVANCED_FACE]=getStep(self,obj_idx,param)

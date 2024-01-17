@@ -312,7 +312,7 @@ classdef WaveriderCone < Shell
 
         end
 
-        function drawShell(self,axes_handle,U_num,V_par,W_num)
+        function gplot(self,axes_handle,U_num,V_par,W_num)
             % show all surface of shell
             %
             if isempty(axes_handle),axes_handle=axes(figure());end

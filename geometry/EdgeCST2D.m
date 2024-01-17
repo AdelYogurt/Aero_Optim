@@ -70,7 +70,7 @@ classdef EdgeCST2D < EdgeNURBS
                 self.class_fcn=C_par;
             end
         end
-    
+
         function Point=calCST(self,U)
             % calculate class
             U_class=U;
@@ -108,7 +108,7 @@ classdef EdgeCST2D < EdgeNURBS
             if isempty(Degree),Degree=pole_num-1;end
             if isempty(Mults),Mults=[Degree+1,ones(1,pole_num-Degree-1),Degree+1];end
             if isempty(Knots),Knots=linspace(0,1,pole_num-Degree+1);end
-            if isempty(Weights), Weights=ones(1,pole_num);end;Weights=Weights(:)';
+            if isempty(Weights), Weights=ones(1,pole_num);end;Weights=Weights(:);
             u_list=baseKnotVec(Mults,Knots);
 
             if pole_num < (Degree+1)
@@ -125,9 +125,6 @@ classdef EdgeCST2D < EdgeNURBS
             self.Mults=Mults;
             self.Knots=Knots;
             self.Weights=Weights;
-
-            % Derived Attributes
-            self.pole_num=pole_num;
             self.u_list=u_list;
 
             % add shape function
@@ -187,7 +184,7 @@ classdef EdgeCST2D < EdgeNURBS
 
             % reverse calculate control point
             Poles=[fit_matrix\Nodes(:,1),matrix_class\Nodes(:,2)];
-            Weights=ones(1,pole_num);
+            Weights=ones(pole_num,1);
 
             % Explicit Attributes
             self.Degree=Degree;
@@ -195,9 +192,6 @@ classdef EdgeCST2D < EdgeNURBS
             self.Mults=Mults;
             self.Knots=Knots;
             self.Weights=Weights;
-
-            % Derived Attributes
-            self.pole_num=pole_num;
             self.u_list=u_list;
 
             % add shape function
@@ -249,7 +243,7 @@ classdef EdgeCST2D < EdgeNURBS
             U_node=self.fit_data.U_node;
             Nodes=self.fit_data.Nodes;
             fit_matrix=self.fit_data.fit_matrix;
-            
+
             % add class coefficient
             Point=self.class_fcn(U_node);
             matrix_class=fit_matrix.*Point(:,2);
@@ -358,7 +352,7 @@ classdef EdgeCST2D < EdgeNURBS
                 K2=self.shape_fcn(1);KY2=K2(2)/nomlz_par;
                 KX=abs(K2(1)-K1(1));
                 if self.sym,KX=KX*2;end
-                
+
                 if N1 == 1
                     k1=N1*KY1/KX;
                     x1=0;
@@ -408,7 +402,7 @@ classdef EdgeCST2D < EdgeNURBS
 
     % visualizate function
     methods
-        function drawEdge(self,axe_hdl,u_param,crv_option,ctrl_option)
+        function gplot(self,axe_hdl,u_param,crv_option,ctrl_option)
             % draw curve on figure handle
             %
             if nargin < 5
@@ -438,16 +432,14 @@ classdef EdgeCST2D < EdgeNURBS
             Points=self.calEdge(u_param);
 
             % plot line
-            if self.dimension == 2
-                line(axe_hdl,Points(:,1),Points(:,2),crv_option);
-                if ~isempty(self.Poles)
-                    u_num=self.pole_num-self.Degree+1;
-                    U_pole=interp1(linspace(0,1,u_num),self.u_list(self.Degree+1:self.pole_num+1),linspace(0,1,self.pole_num))';
-                    if self.sym;U_pole=U_pole/2+0.5;end
-                    Poles=self.Poles.*self.class_fcn(U_pole);
-                    Poles=self.axisLocalToGlobal(Poles);
-                    line(axe_hdl,Poles(:,1),Poles(:,2),ctrl_option);
-                end
+            line(axe_hdl,Points(:,1),Points(:,2),crv_option);
+            if ~isempty(self.Poles)
+                u_num=size(self.Poles,1)-self.Degree+1;
+                U_pole=interp1(linspace(0,1,u_num),self.u_list(self.Degree+1:size(self.Poles,1)+1),linspace(0,1,size(self.Poles,1)))';
+                if self.sym;U_pole=U_pole/2+0.5;end
+                Poles=self.Poles.*self.class_fcn(U_pole);
+                Poles=self.axisLocalToGlobal(Poles);
+                line(axe_hdl,Poles(:,1),Poles(:,2),ctrl_option);
             end
             xlabel('x');
             ylabel('y');
@@ -480,6 +472,80 @@ classdef EdgeCST2D < EdgeNURBS
 
             Degree=min(length(U_node)-1,3);
             edg=GeomApp.VertexToEdge(self.name,Nodes,Degree,[],U_node);
+
+        end
+
+        function edg=getNURBSExact(self)
+            if ~isempty(self.C_par) && self.C_par(1) == 0.5 && self.C_par(2) == 1.0
+                if ~isempty(self.deform_fcn), KY=self.deform_fcn(1);
+                else, KY=0;end
+
+                SP=self.shape_fcn(1);
+                LX=SP(1);PY=SP(2);
+                if ~isempty(self.Poles), PY=self.Poles(:,2);end
+
+                [ploe_mat,deg,~]=getBezier(self.C_par(1),self.C_par(2),LX,PY,KY);
+                edg=EdgeNURBS(self.name,ploe_mat,deg);
+            end
+
+            function [ploe_mat,deg,B_mat]=getBezier(N1,N2,LX,PY,KY)
+                % convert CST into Bezier excatly
+                %
+                c_nomlz=(N1./(N1+N2)).^N1.*(N2./(N1+N2)).^N2;
+                c_nomlz((N1 == 0) & (N2 == 0))=1;
+                PY=PY(:)';
+                deg=length(PY)-1;
+                fac_list_temp=[1,cumprod(1:2*deg+3)];
+
+                if deg == 0
+                    B_mat=zeros(2,2*deg+3+1);
+
+                    % X
+                    B_mat(1,2+1)=LX;
+                    B_mat(2,1+1)=PY/c_nomlz;
+                    B_mat(2,2+1)=KY;
+                    B_mat(2,3+1)=-PY/c_nomlz;
+                else
+                    % calculate a list
+                    fac_list=fac_list_temp(1:deg+1);
+                    ir_mat=zeros(deg+1);
+                    sign_mat=ones(deg+1);
+                    i=0:deg;ni_list=fac_list(deg+1)./fac_list(deg-i+1)./fac_list(i+1);
+                    for i=0:deg
+                        r=0:i;
+                        ir_mat(1:(i+1),i+1)=fac_list(i+1)./fac_list(i-r+1)./fac_list(r+1);
+                        sign_mat(1:(i+1),i+1)=(-1).^(i-r);
+                    end
+                    a_list=sum(ni_list.*ir_mat.*sign_mat.*PY',1);
+
+                    % calculate B matrix
+                    B_mat=zeros(2,2*deg+3+1);
+
+                    % X
+                    B_mat(1,2+1)=LX;
+
+                    % Y
+                    B_mat(2,1+1)=a_list(1)/c_nomlz;
+                    B_mat(2,2+1)=KY;
+                    i=1:deg;
+                    B_mat(2,i*2+1+1)=(a_list(i+1)-a_list(i))/c_nomlz;
+                    B_mat(2,2*deg+3+1)=-a_list(deg+1)/c_nomlz;
+                end
+                % calculate new Poles
+                fac_list=fac_list_temp;
+                deg=2*deg+3;
+                i=0:deg;mi_list=fac_list(deg+1)./fac_list(deg-i+1)./fac_list(i+1);
+                miij_mat=zeros(deg+1);
+                for i=0:deg
+                    j=0:i;
+                    miij_mat(i+1,1:(i+1))=fac_list(deg-j+1)./fac_list((deg-j)-(i-j)+1)./fac_list((i-j)+1);
+                end
+
+                ploe_mat=zeros(size(B_mat))';
+                ploe_mat(:,1)=sum(miij_mat.*B_mat(1,:),2)./mi_list';
+                ploe_mat(:,2)=sum(miij_mat.*B_mat(2,:),2)./mi_list';
+
+            end
         end
     end
 end
