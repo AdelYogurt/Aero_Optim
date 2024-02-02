@@ -4,18 +4,22 @@ classdef EdgeNURBS < handle
     %
     properties % Explicit Attributes
         name='';
-        Degree; % degree
-        Poles; % control_points_list
+        Degree=[]; % degree
+        Poles=[]; % control_points_list
         edge_form='.UNSPECIFIED.'; % edge_form
         Periodic='.F.'; % closed_curve (boolean)
         self_intersect='.F.'; % self_intersect (boolean)
-        Weights; % weights_data
+        Weights=[]; % weights_data
 
-        Mults; % knot_multiplicities
-        Knots; % Knots
+        Mults=[]; % knot_multiplicities
+        Knots=[]; % Knots
         knot_spec='.UNSPECIFIED.';
 
-        u_list; % knot_vector
+        u_list=[]; % knot_vector
+    end
+
+    properties(Access=private)
+        Ctrls=[]; % control points with weight
     end
 
     % define Edge
@@ -81,35 +85,37 @@ classdef EdgeNURBS < handle
             end
         end
 
-        function Point=calNURBS(self,U)
+        function Pnts=calNURBS(self,U)
             % calculate point on Non-Uniform Rational B-Splines Curve
             %
-            U=U(:);point_num=length(U);
-
-            Point=zeros(point_num,size(self.Poles,2));
-
-            N_list=zeros(1,self.Degree+1);
-            for point_idx=1:point_num
-                % local u_x in u_list index
-                u=U(point_idx);
-                idx_end=size(self.Poles,1); % is equal to the section index
-                while idx_end > self.Degree+1 && u < self.u_list(idx_end)
-                    idx_end=idx_end-1;
-                end
-                idx_start=idx_end-self.Degree;
-                for N_idx=1:self.Degree+1
-                    N_list(N_idx)=baseFcnN(self.u_list,u,N_idx+idx_start-1,self.Degree);
-                end
-                NW_list=N_list.*self.Weights(idx_start:idx_end)';
-
-                Point(point_idx,:)=NW_list*self.Poles(idx_start:idx_end,:)/sum(NW_list);
-            end
+            Pnts=GeomBSpline.bspeval(self.Ctrls,self.Degree,self.u_list,U);
+            Pnts=Pnts(:,1:end-1)./Pnts(:,end);
+            % U=U(:);point_num=length(U);
+            % 
+            % Point=zeros(point_num,size(self.Poles,2));
+            % 
+            % N_list=zeros(1,self.Degree+1);
+            % for point_idx=1:point_num
+            %     % local u_x in u_list index
+            %     u=U(point_idx);
+            %     idx_end=size(self.Poles,1); % is equal to the section index
+            %     while idx_end > self.Degree+1 && u < self.u_list(idx_end)
+            %         idx_end=idx_end-1;
+            %     end
+            %     idx_start=idx_end-self.Degree;
+            %     for N_idx=1:self.Degree+1
+            %         N_list(N_idx)=baseFcnN(self.u_list,u,N_idx+idx_start-1,self.Degree);
+            %     end
+            %     NW_list=N_list.*self.Weights(idx_start:idx_end)';
+            % 
+            %     Point(point_idx,:)=NW_list*self.Poles(idx_start:idx_end,:)/sum(NW_list);
+            % end
         end
     end
 
     % control Edge
     methods
-        function reverse(self)
+        function self=reverse(self)
             % revese direction of curve
             %
             self.Poles=flipud(self.Poles);
@@ -119,7 +125,7 @@ classdef EdgeNURBS < handle
             self.u_list=1-fliplr(self.u_list);
         end
 
-        function addDegree(self,deg_tar)
+        function self=addDegree(self,deg_tar)
             % increase edge degree
             %
             if deg_tar <= self.Degree
@@ -137,7 +143,7 @@ classdef EdgeNURBS < handle
             self.u_list=baseKnotVec(self.Mults,self.Knots);
         end
 
-        function insertKnot(self,U_ins)
+        function self=insertKnot(self,U_ins)
             % insert knot to edge
             %
             Ctrl=[self.Poles.*self.Weights,self.Weights];
@@ -155,18 +161,32 @@ classdef EdgeNURBS < handle
             end
             self.u_list=U;
         end
+    
+        function self=translate(self,tran_vctr)
+            self.Poles=self.Poles+tran_vctr;
+        end
+
+        function self=rotate(self,rotate_matrix)
+            self.Poles=self.Poles*rotate_matrix';
+        end
+
     end
 
     % calculate point
     methods
-        function [Point,U]=calEdge(self,u_param)
+        function [Point,U]=calGeom(self,u_param)
             % generate curve matrix by u_x_list or point_number
             %
-            if nargin < 2 || isempty(u_param)
-                u_param=1e-3;
+            if nargin < 2
+                u_param=[];
             end
 
             low_bou=0;up_bou=1;
+            if isempty(u_param)
+                pnt=self.calPoint([0;1]);
+                bou_min=min(pnt,[],1);bou_max=max(pnt,[],1);
+                u_param=2^-12*mean(bou_max-bou_min);
+            end
             if length(u_param) == 1 && u_param ~= fix(u_param)
                 value_torl=u_param;min_level=2;max_level=50;
                 dim=numel(self.calPoint(0));
@@ -230,7 +250,7 @@ classdef EdgeNURBS < handle
 
     % visualizate curve
     methods
-        function gplot(self,axe_hdl,u_param,crv_option,ctrl_option)
+        function li_hdl=plotGeom(self,axe_hdl,u_param,crv_option,ctrl_option)
             % draw curve on figure handle
             %
             if nargin < 5
@@ -246,7 +266,7 @@ classdef EdgeNURBS < handle
                 end
             end
 
-            if isempty(axe_hdl),axe_hdl=axes(figure());end
+            if isempty(axe_hdl),axe_hdl=gca();end
 
             % default draw option
             if isempty(crv_option)
@@ -257,15 +277,15 @@ classdef EdgeNURBS < handle
             end
 
             % calculate point on curve
-            Point=self.calEdge(u_param);
+            Point=self.calGeom(u_param);
 
             % plot curve
             dim=numel(self.calPoint(0));
             if dim == 2
-                line(axe_hdl,Point(:,1),Point(:,2),crv_option);
-                if ~isempty(self.Poles)
-                    line(axe_hdl,self.Poles(:,1),self.Poles(:,2),ctrl_option);
-                end
+                li_hdl=line(axe_hdl,Point(:,1),Point(:,2),crv_option);
+%                 if ~isempty(self.Poles)
+%                     line(axe_hdl,self.Poles(:,1),self.Poles(:,2),ctrl_option);
+%                 end
             else
                 line(axe_hdl,Point(:,1),Point(:,2),Point(:,3),crv_option);
                 if ~isempty(self.Poles)
@@ -288,5 +308,21 @@ classdef EdgeNURBS < handle
             % zlim([center(3)-range,center(3)+range]);
         end
 
+    end
+
+    methods
+        function set.Poles(self,Poles)
+            self.Poles=Poles;
+            if isempty(self.Weights) || size(self.Poles,1) ~= size(self.Weights,1)
+                self.Ctrls=[self.Poles,ones(size(self.Poles,1),1)];
+            else
+                self.Ctrls=[self.Poles.*self.Weights,self.Weights];
+            end
+        end
+
+        function set.Weights(self,Weights)
+            self.Weights=Weights;
+            self.Ctrls=[self.Poles.*self.Weights,self.Weights];
+        end
     end
 end

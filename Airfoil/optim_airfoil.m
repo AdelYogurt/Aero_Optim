@@ -53,7 +53,7 @@ geo_in.C_par_low=[0.5,1.0];
 geo_in.Poles_low=importdata('geom/RAE2822_CSTshape_low.txt');
 geo_in.C_par_up=[0.5,1.0];
 geo_in.Poles_up=importdata('geom/RAE2822_CSTshape_up.txt');
-[geo_out,mesh_out,CFD_out]=model.solveAirfoil(geo_in);
+[geo_out,mesh_out,CFD_out]=model.solveModel(geo_in);
 
 % problem=AirfoilProblem(partitions,geom_param,mesh_param,CFD_param,[],[],run_desc,out_logger);
 % x=(problem.low_bou+problem.up_bou)/2;

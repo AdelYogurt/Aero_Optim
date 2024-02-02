@@ -75,7 +75,7 @@ classdef WaveriderCone < Shell
 
         end
 
-        function srf_list=calShell(self,U_num,V_par,W_num)
+        function srf_list=calGeom(self,U_num,V_par,W_num)
             % calculate all face point
             %
             sin_beta=sin(self.beta);
@@ -273,7 +273,7 @@ classdef WaveriderCone < Shell
             % write surface
             ADVANCED_FACE_index_list=zeros(1,length(self.face_list));
 
-            surf_total=calShell(self,U_num,V_num,W_num);
+            surf_total=calGeom(self,U_num,V_num,W_num);
             surf_num=length(surf_total);
 
             for surf_idx=1:surf_num
@@ -312,12 +312,12 @@ classdef WaveriderCone < Shell
 
         end
 
-        function gplot(self,axes_handle,U_num,V_par,W_num)
+        function plotGeom(self,axes_handle,U_num,V_par,W_num)
             % show all surface of shell
             %
             if isempty(axes_handle),axes_handle=axes(figure());end
 
-            surf_total=self.calShell(U_num,V_par,W_num);
+            surf_total=self.calGeom(U_num,V_par,W_num);
 
             for surf_index=1:length(surf_total)
                 surf=surf_total{surf_index};

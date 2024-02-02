@@ -78,7 +78,7 @@ classdef PhysicsProblem < AirfoilModel
             self.CFD_param.SU2_CFD_param.setParameter('MACH_NUMBER',x(end));
             self.CFD_param.SU2_CFD_param.setParameter('AOA',4);
 
-            [geo_out,mesh_out,CFD_out]=self.solveAirfoil(geo_in);
+            [geo_out,mesh_out,CFD_out]=self.solveModel(geo_in);
             mesh_point=geo_out.mesh_point;
             if strcmp(self.CFD_param.solver,'SU2_CFD')
                 CD=CFD_out.SU2_data.('CD')(end);

@@ -2,8 +2,9 @@ classdef Shell < handle
     % shell
     %
     properties
-        name;
-        face_list; % cell, can be surface CST3D or surface BSpline
+        name='';
+        face_list={}; % cell, can be surface CST3D or surface BSpline
+        topo_list=[]; % define the geometry topology
     end
 
     % define Shell
@@ -12,31 +13,6 @@ classdef Shell < handle
             if nargin < 2,face_list={};end
             self.name=name;
             self.face_list=face_list;
-        end
-
-        function addFace(self,fce)
-            % add face into shell
-            %
-            self.face_list=[self.face_list;{fce}];
-        end
-
-        function fce_list=calShell(self,u_param,v_param)
-            % calculate all face point
-            %
-            if nargin < 3
-                v_param=[];
-                if nargin < 2
-                    u_param=[];
-                end
-            end
-
-            fce_list=[];fce_num=length(self.face_list);
-            for fce_idx=1:fce_num
-                fce=self.face_list{fce_idx};
-                if ~isempty(fce)
-                    fce_list=[fce_list,{fce.calFace(u_param,v_param)}];
-                end
-            end
         end
 
         function [surf,surf_idx]=getFace(self,surf_name)
@@ -51,10 +27,76 @@ classdef Shell < handle
             surf=[];
             surf_idx=0;
         end
+
+        function addFace(self,fce_new)
+            % add face into shell
+            %
+            if ~iscell(fce_new),fce_new={fce_new};end
+            
+            for fce_idx=1:length(fce_new)
+                self.face_list=[self.face_list;fce_new(fce_idx)];
+                self.topo_list=[self.topo_list;zeros(1,1)];
+            end
+        end
+
+        function addTopo(self,fceA,fceB,idx)
+            % add new topology into shell
+            %
+            idxA=find(self.face_list == fceA);
+            idxB=find(self.face_list == fceB);
+            data=[idxA,idxB,idx];
+            self.topo_list=[self.topo_list;data];
+        end
     end
 
-    % generate mesh
+    % control Face
     methods
+        function self=translate(self,tran_vctr)
+            for fce_idx=1:length(self.face_list)
+                self.face_list{fce_idx}.translate(tran_vctr);
+            end
+        end
+
+        function self=rotate(self,rotate_matrix)
+            for fce_idx=1:length(self.face_list)
+                self.face_list{fce_idx}.rotate(rotate_matrix);
+            end
+        end
+    end
+
+    % calculate point
+    methods
+        function [srf_list,U,V]=calGeom(self,u_param,v_param)
+            % calculate all face point
+            %
+            if nargin < 3
+                v_param=[];
+                if nargin < 2
+                    u_param=[];
+                end
+            end
+
+            fce_num=length(self.face_list);
+            srf_list=cell(1,fce_num);
+            U_list=cell(1,fce_num);
+            V_list=cell(1,fce_num);
+            for fce_idx=1:fce_num
+                fce=self.face_list{fce_idx};
+                [Pnt,U,V]=fce.calGeom(u_param,v_param);
+                srf_list{fce_idx}=Pnt;
+                U_list{fce_idx}=U;
+                V_list{fce_idx}=V;
+            end
+
+            % adjust U and V to satisfy topology tight
+            U=[];V=[];   
+            topo_num=size(self.topo_list,1);
+            for topo_idx=topo_num
+                data=self.topo_list(topo_idx,:);
+            end
+
+        end
+
         function mesh_data=getMeshWGS(self,u_param,v_param)
             % generate LaWGS mesh data
             %
@@ -65,7 +107,7 @@ classdef Shell < handle
                 end
             end
 
-            fce_list=self.calShell(u_param,v_param);
+            fce_list=self.calGeom(u_param,v_param);
             mesh_data=struct();
             unknown_idx=1;fce_num=length(self.face_list);
             for fce_idx=1:fce_num
@@ -92,11 +134,67 @@ classdef Shell < handle
         end
     end
 
+    % parameterized function
+    methods
+        function coord=calCoord(self,point_list,fce_index_list)
+            % calculate all input point local coordinate
+            %
+            coord=struct();
+
+            fce_name_list=fieldnames(fce_index_list);
+            for fce_idx=1:length(fce_name_list)
+                % get surf
+                fce_name=fce_name_list{fce_idx};
+                fce=self.getFace(fce_name);
+                if isempty(fce)
+                    continue;
+                end
+                point_idx=fce_index_list.(fce_name);
+
+                % calculate coordinate
+                point=point_list(point_idx,1:3);
+                [U,V,~]=fce.calCoord(reshape(point,[],1,3));
+                coord.(fce_name).index=point_idx;
+                coord.(fce_name).U=U;
+                coord.(fce_name).V=V;
+            end
+
+        end
+
+        function mesh_data=calMeshPoint(self,coord)
+            % calculate all mesh point by input W coord
+            %
+            mesh_data=struct();
+
+            surf_name_list=fieldnames(coord);
+            for surf_idx=1:length(surf_name_list)
+                % get surface
+                surf_name=surf_name_list{surf_idx};
+                surf=self.getFace(surf_name);
+                if isempty(surf)
+                    continue;
+                end
+                point_idx=coord.(surf_name).index;
+                U=coord.(surf_name).U;
+                V=coord.(surf_name).V;
+
+                % calculate coordinate
+                Pnts=surf.calPoint(U,V);
+                mesh_data.(surf_name).type='scatter';
+                mesh_data.(surf_name).index=point_idx;
+                mesh_data.(surf_name).X=Pnts(:,:,1);
+                mesh_data.(surf_name).Y=Pnts(:,:,2);
+                mesh_data.(surf_name).Z=Pnts(:,:,3);
+            end
+
+        end
+    end
+
     % visualizate function
     methods
-        function gplot(self,axe_hdl,u_param,v_param,crv_option,ctrl_option)
+        function plotGeom(self,axe_hdl,u_param,v_param,crv_option,ctrl_option)
             % draw all surface of shell
-            % wrapper of gplot
+            % wrapper of plotGeom
             %
             if nargin < 6
                 ctrl_option=[];
@@ -116,11 +214,11 @@ classdef Shell < handle
 
             if isempty(axe_hdl),axe_hdl=axes(figure());end
 
-            surf_num=length(self.face_list);
-            for surf_idx=1:surf_num
-                surf=self.face_list{surf_idx};
-                if ~isempty(surf)
-                    surf.gplot(axe_hdl,u_param,v_param,crv_option,ctrl_option);
+            fce_num=length(self.face_list);
+            for fce_idx=1:fce_num
+                fce=self.face_list{fce_idx};
+                if ~isempty(fce)
+                    fce.plotGeom(axe_hdl,u_param,v_param,crv_option,ctrl_option);
                 end
             end
             

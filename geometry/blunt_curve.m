@@ -22,14 +22,14 @@ close all hidden;
 % % P2=[0,0.2];
 % 
 % crv=EdgeNURBS('',[P0;P1;P2]);
-% crv.gplot(gca());view(2);axis equal;
+% crv.plotGeom(gca());view(2);axis equal;
 % 
 % dP=-2*P0+2*P1;ddP=2*P0-4*P1+2*P2;
 % R=1/((dP(1)*ddP(2)-dP(2)*ddP(1))/norm(dP)^3)
 % 
 % hold on;
 % quiver(P_up(1),P_up(2),vctr_up(1),vctr_up(2));
-% crv.gplot(gca());view(2);axis equal;
+% crv.plotGeom(gca());view(2);axis equal;
 % hold off;
 
 %% cubic blunt
@@ -45,7 +45,7 @@ close all hidden;
 % hold on;
 % quiver(P_up(1),P_up(2),vctr_up(1),vctr_up(2));
 % quiver(P_low(1),P_low(2),vctr_low(1),vctr_low(2));
-% crv.gplot(gca());view(2);axis equal;
+% crv.plotGeom(gca());view(2);axis equal;
 % hold off;
 % 
 % function crv=getBluntEdge(vctr_low,vctr_up,P_low,P_up)
@@ -137,7 +137,7 @@ close all hidden;
 % crv.addNURBS(cat(2,(0:0.2:1)',rand(6,1)-0.5))
 % fig_hdl=figure();
 % axe_hdl=axes(fig_hdl);axis equal;
-% crv.gplot(axe_hdl);
+% crv.plotGeom(axe_hdl);
 % [k1,k2]=crv.calTangTorl(torl/N);
 % [h1,d1]=calBluntHD(R,k1);
 % [h2,d2]=calBluntHD(R,k2);
@@ -145,7 +145,7 @@ close all hidden;
 % 
 % crv_blunt=EdgeCST2D('');
 % crv_blunt.shape_fcn=@(U) calPoint(U,crv,R,LX,usb,ueb,d1,d2,h1,h2);
-% crv_blunt.gplot(axe_hdl)
+% crv_blunt.plotGeom(axe_hdl)
 % 
 % 
 % function Point=calPoint(U,crv,R,LX,usb,ueb,d1,d2,h1,h2)

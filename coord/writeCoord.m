@@ -16,9 +16,7 @@ switch dimension
             
             % write coord
             coord_file=fopen(fullfile(coor_filedir,[edge_name,'_local_coord.txt']),'w');
-            for point_index=1:length(index)
-                fprintf(coord_file,'%d %.12f\n',index(point_index),U(point_index));
-            end
+            fprintf(coord_file,'%d %.12f\n',[double(index),U]');
             fclose(coord_file);
         end
 
@@ -33,9 +31,7 @@ switch dimension
 
             % write coord
             coord_file=fopen(fullfile(coor_filedir,[face_name,'_local_coord.txt']),'w');
-            for point_index=1:length(index)
-                fprintf(coord_file,'%d %.12f %.12f\n',index(point_index),U(point_index),V(point_index));
-            end
+            fprintf(coord_file,'%d %.12f %.12f\n',[double(index),U,V]');
             fclose(coord_file);
         end
     otherwise

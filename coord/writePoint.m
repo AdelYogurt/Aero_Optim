@@ -30,9 +30,7 @@ switch dimension
         X=X./Repeat;Y=Y./Repeat;
 
         point_file=fopen(point_filestr,'w');
-        for point_index=1:size(Idx,1)
-            fprintf(point_file,'%d %f %f\n',Idx(point_index)-1,X(point_index),Y(point_index));
-        end
+        fprintf(point_file,'%d %f %f\n',[double(Idx-1),X,Y]');
         fclose(point_file);
     case 3
         face_name_list=fieldnames(mesh_point);
@@ -59,9 +57,7 @@ switch dimension
         X=X./Repeat;Y=Y./Repeat;Z=Z./Repeat;
 
         point_file=fopen(point_filestr,'w');
-        for point_index=1:size(Idx,1)
-            fprintf(point_file,'%d %f %f %f\n',Idx(point_index)-1,X(point_index),Y(point_index),Z(point_index));
-        end
+        fprintf(point_file,'%d %f %f %f\n',[double(Idx-1),X,Y,Z]');
         fclose(point_file);
     otherwise
         error('pointWrite: unknow dimension');

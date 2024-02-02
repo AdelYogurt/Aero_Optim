@@ -107,7 +107,7 @@ classdef AirfoilModel < handle
         end
 
         % solve airfoil aerodynamic model function
-        function [geo_out,mesh_out,CFD_out]=solveAirfoil(self,geo_in)
+        function [geo_out,mesh_out,CFD_out]=solveModel(self,geo_in)
             % call each module to solve aerodynamic model
             %
             % solve flow:

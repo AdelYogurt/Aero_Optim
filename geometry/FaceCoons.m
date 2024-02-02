@@ -122,7 +122,7 @@ classdef FaceCoons < FaceNURBS
             if ~isempty(v_param) && length(v_param) > 1 && v_param(1,1) > v_param(2,1)
                 v_param=flipud(v_param);
             end
-            [Nodes,U_node,V_node]=calFace(self,u_param,v_param);
+            [Nodes,U_node,V_node]=calGeom(self,u_param,v_param);
 
             UDegree=min(size(U_node,2)-1,3);VDegree=min(size(V_node,1)-1,3);
             fce=GeomApp.VertexToFace(self.name,Nodes,UDegree,VDegree,[],[],U_node(1,:),V_node(:,1));

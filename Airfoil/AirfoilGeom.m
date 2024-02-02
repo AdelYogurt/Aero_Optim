@@ -94,14 +94,14 @@ classdef AirfoilGeom < handle
 
             curve_total=cell(length(self.edge_list),1);
             for curve_idx=1:length(self.edge_list)
-                [curve.X,curve.Y]=self.edge_list{curve_idx}.calEdge(U_par);
+                [curve.X,curve.Y]=self.edge_list{curve_idx}.calGeom(U_par);
                 curve.name=self.edge_list{curve_idx}.name;
                 curve_total{curve_idx}=curve;
             end
 
         end
 
-        function gplot(self,axe_hdl,U_param,draw_option)
+        function plotGeom(self,axe_hdl,U_param,draw_option)
             % draw curve on figure handle
             %
             if nargin < 4

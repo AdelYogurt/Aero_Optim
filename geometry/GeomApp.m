@@ -1,55 +1,102 @@
 classdef GeomApp
     methods(Static)
-        function edg=VertexToEdge(name,Nodes,Degree,pole_num,U_node)
+        function [edg,U_node]=VertexToEdge(name,Nodes,Degree,pole_num,U_node,Derivs)
             % generate BSpline curve by defined fitting points
             %
             % input:
             % name:
-            % Nodes (matrix): fit point,node_num x dimension matrix
+            % Nodes (matrix): fit point, node_num x dimension matrix
             % Degree (optional):
             % Mults (optional):
             % Knots (optional):
             % pole_num (optional):
             % U_node (optional):
+            % Derivs (optional): derivative of Nodes. Set nan if der is free
             %
             % output:
             % EdgeNURBS
             %
             % notice:
-            % if input Degree is empty,Degree default is pole_num-1,which is Bezier curve
+            % if input Degree is empty, Degree default is pole_num-1, which is Bezier curve
             %
-            if nargin < 5
-                U_node=[];
-                if nargin < 4
-                    pole_num=[];
-                    if nargin < 3
-                        Degree=[];
+            if nargin < 6
+                Derivs=[];
+                if nargin < 5
+                    U_node=[];
+                    if nargin < 4
+                        pole_num=[];
+                        if nargin < 3
+                            Degree=[];
+                        end
                     end
                 end
             end
 
+            % derivative number
+            if isempty(Derivs) || all(any(isnan(Derivs),2)), deriv_num=0;
+            else, deriv_num=sum(all(~isnan(Derivs),2));end
+
             node_num=size(Nodes,1);
-            if isempty(pole_num),pole_num=node_num;end
-            if pole_num > node_num
+            if isempty(pole_num),pole_num=node_num+deriv_num;end
+            if isempty(Degree),Degree=pole_num-1;end
+            if pole_num > node_num+deriv_num
                 error('GeomApp.VertexToEdge: pole_num more than node_num')
             end
-            % default value
+            % default value of knots vector
             if isempty(U_node)
+                % % modified sine length parameterization method
+                % vctr_list=Nodes(2:end,:)-Nodes(1:end-1,:);
+                % len_list=vecnorm(vctr_list,2,2);
+                % vctr_list=vctr_list./len_list;
+                % 
+                % % calculate angle min(pi-theta,pi/2);
+                % theta_list=zeros(node_num-2,1);
+                % for theta_idx=1:node_num-2
+                %     cos_theta=vctr_list(theta_idx,:)*vctr_list(theta_idx+1,:)';
+                %     if cos_theta > 1,theta=0;
+                %     elseif cos_theta < -1,theta=pi;
+                %     else,theta=acos(cos_theta);
+                %     end
+                %     theta_list(theta_idx)=min(pi-theta,pi/2);
+                % end
+                % 
+                % % calcuate curvature
+                % curv_list=zeros(node_num-1,1);
+                % curv_list(1)=1+3*(theta_list(1)*len_list(1)/(len_list(1)+len_list(2)));
+                % for curv_idx=2:node_num-2
+                %     curv_list(curv_idx)=1+3/2*...
+                %         (theta_list(curv_idx-1)*len_list(curv_idx-1)/(len_list(curv_idx)+len_list(curv_idx-1))+...
+                %         theta_list(curv_idx)*len_list(curv_idx+1)/(len_list(curv_idx)+len_list(curv_idx+1)));
+                % end
+                % curv_list(end)=1+3*(theta_list(end)*len_list(end)/(len_list(end)+len_list(end-1)));
+
                 U_node=vecnorm(Nodes(2:end,:)-Nodes(1:end-1,:),2,2);
                 U_node=[0;cumsum(U_node)];U_node=U_node/U_node(end);
             end
             U_node=U_node(:);
+            U_node_knots=U_node;
+            if node_num ~= 0
+                U_node_knots=[U_node;U_node(all(~isnan(Derivs),2))];
+                U_node_knots=sort(U_node_knots);
+            end
+            U_node_knots=interp1(linspace(0,1,length(U_node_knots)),U_node_knots,linspace(0,1,pole_num));
+
+            if ~isempty(Derivs) && size(Derivs,1) ~= node_num
+                error('GeomApp.VertexToEdge: Derivs matrix do not equal to node_num');
+            end
 
             % reference:
             % [1] 施法中. 计算机辅助几何设计与非均匀有理B样条[M]. 208-281.
             % [2] https://blog.csdn.net/he_nan/article/details/107134271
             Mults=[Degree+1,ones(1,pole_num-Degree-1),Degree+1];
-            Knots=linspace(0,1,node_num-Degree+1);
-            for j=2:node_num-Degree
-                Knots(j)=mean(U_node(j:j+Degree-1));
+            % Knots=linspace(0,1,node_num-(Degree-deriv_num)+1);
+            % for j=2:node_num-Degree
+            Knots=linspace(0,1,pole_num-Degree+1);
+            for j=2:pole_num-Degree
+                Knots(j)=mean(U_node_knots(j:j+Degree-1));
             end
             % modify
-            Knots=interp1(linspace(0,1,node_num-Degree+1),Knots,linspace(0,1,pole_num-Degree+1));
+            Knots=interp1(linspace(0,1,length(Knots)),Knots,linspace(0,1,pole_num-Degree+1));
             % c=(node_num)/(pole_num-Degree);
             % for j=1:pole_num-Degree-1
             %     i=floor(j*c);
@@ -59,14 +106,39 @@ classdef GeomApp
             u_list=baseKnotVec(Mults,Knots);
 
             % base on node point list inverse calculate control point list
-            fit_matrix=zeros(node_num,pole_num);
+            fit_matrix=zeros(node_num+deriv_num,pole_num);
             for node_idx=1:node_num
                 u=U_node(node_idx);
                 for ctrl_idx=1:pole_num
                     fit_matrix(node_idx,ctrl_idx)=baseFcnN(u_list,u,ctrl_idx,Degree);
                 end
             end
-            Poles=fit_matrix\Nodes;
+
+            % process derivative
+            if deriv_num ~= 0
+                u_list_deriv=u_list(2:end-1);
+                U_node_deriv=U_node(all(~isnan(Derivs),2));
+                for deriv_idx=1:deriv_num
+                    u=U_node_deriv(deriv_idx);
+
+                    d=Degree/(u_list(1+Degree+1)-u_list(1+1));
+                    fit_matrix(node_num+deriv_idx,1)=-d*baseFcnN(u_list_deriv,u,1,Degree-1);
+                    for ctrl_idx=2:pole_num-1
+                        dn=Degree/(u_list(ctrl_idx+Degree+1)-u_list(ctrl_idx+1));
+                        fit_matrix(node_num+deriv_idx,ctrl_idx)=...
+                            d*baseFcnN(u_list_deriv,u,ctrl_idx-1,Degree-1)-...
+                            dn*baseFcnN(u_list_deriv,u,ctrl_idx,Degree-1);
+                        d=dn;
+                    end
+                    fit_matrix(node_num+deriv_idx,pole_num)=dn*baseFcnN(u_list_deriv,u,pole_num-1,Degree-1);
+                end
+            end
+
+            if deriv_num == 0, Poles=fit_matrix\Nodes;
+            else, Poles=fit_matrix\[Nodes;Derivs(all(~isnan(Derivs),2),:)];end
+
+            Poles(1,:)=Nodes(1,:);
+            Poles(end,:)=Nodes(end,:);
 
             edg=EdgeNURBS(name,Poles,Degree,Mults,Knots);
         end
@@ -124,29 +196,32 @@ classdef GeomApp
                 U_node=[0;cumsum(U_node')];U_node=U_node/U_node(end);
             end
             U_node=U_node(:);
+            U_node_knots=interp1(linspace(0,1,length(U_node)),U_node,linspace(0,1,u_pole_num));
+
             if isempty(V_node)
                 V_node=vecnorm(Nodes(2:end,:,:)-Nodes(1:end-1,:,:),2,3);
                 V_node=mean(V_node,2);
                 V_node=[0;cumsum(V_node)];V_node=V_node/V_node(end);
             end
             V_node=V_node(:);
+            V_node_knots=interp1(linspace(0,1,length(V_node)),V_node,linspace(0,1,v_pole_num));
             
             UMults=[UDegree+1,ones(1,u_pole_num-UDegree-1),UDegree+1];
-            UKnots=linspace(0,1,u_node_num-UDegree+1);
-            for j=2:u_node_num-UDegree
-                UKnots(j)=mean(U_node(j:j+UDegree-1));
+            UKnots=linspace(0,1,u_pole_num-UDegree+1);
+            for j=2:u_pole_num-UDegree
+                UKnots(j)=mean(U_node_knots(j:j+UDegree-1));
             end
             % modify
-            UKnots=interp1(linspace(0,1,u_node_num-UDegree+1),UKnots,linspace(0,1,u_pole_num-UDegree+1));
+            UKnots=interp1(linspace(0,1,length(UKnots)),UKnots,linspace(0,1,u_pole_num-UDegree+1));
             u_list=baseKnotVec(UMults,UKnots);
 
             VMults=[VDegree+1,ones(1,v_pole_num-VDegree-1),VDegree+1];
-            VKnots=linspace(0,1,v_node_num-VDegree+1);
-            for j=2:v_node_num-VDegree
-                VKnots(j)=mean(V_node(j:j+VDegree-1));
+            VKnots=linspace(0,1,v_pole_num-VDegree+1);
+            for j=2:v_pole_num-VDegree
+                VKnots(j)=mean(V_node_knots(j:j+VDegree-1));
             end
             % modify
-            VKnots=interp1(linspace(0,1,v_node_num-VDegree+1),VKnots,linspace(0,1,v_pole_num-VDegree+1));
+            VKnots=interp1(linspace(0,1,length(VKnots)),VKnots,linspace(0,1,v_pole_num-VDegree+1));
             v_list=baseKnotVec(VMults,VKnots);
 
             % base on node point list inverse calculate control point list

@@ -203,7 +203,7 @@ classdef EdgeCST2D < EdgeNURBS
             self.fit_data.fit_matrix=fit_matrix;
         end
 
-        function optimClass(self,optim_option)
+        function fit_err=optimClass(self,optim_option)
             % optimization coefficient of class function
             %
             if nargin < 2
@@ -222,7 +222,7 @@ classdef EdgeCST2D < EdgeNURBS
             C_par_up_bou=[1e3,1e3];
             C_par_init=self.C_par;
             obj_fit=@(C_par) self.fitError(C_par,C_par_low_bou,C_par_up_bou);
-            C_par_optim=fminunc(obj_fit,C_par_init,optim_option);
+            [C_par_optim,fit_err]=fminunc(obj_fit,C_par_init,optim_option);
 
             C_par_optim=max(C_par_optim,C_par_low_bou);
             C_par_optim=min(C_par_optim,C_par_up_bou);
@@ -259,7 +259,7 @@ classdef EdgeCST2D < EdgeNURBS
 
     % deform, rotate, translate
     methods
-        function addDeform(self,deform_fcn_Y)
+        function self=addDeform(self,deform_fcn_Y)
             % base on local coordinate deform curve
             %
             % input:
@@ -268,7 +268,7 @@ classdef EdgeCST2D < EdgeNURBS
             self.deform_fcn=deform_fcn_Y;
         end
 
-        function addRotate(self,ang)
+        function self=addRotate(self,ang)
             % base on angle to rotate surface
             % rotate is anti-clock
             %
@@ -283,7 +283,7 @@ classdef EdgeCST2D < EdgeNURBS
             self.rotate_matrix=matrix;
         end
 
-        function addTranslate(self,tran_x,tran_y)
+        function self=addTranslate(self,tran_x,tran_y)
             % base on angle to rotate surface
             %
             self.translate=[tran_x,tran_y];
@@ -402,7 +402,7 @@ classdef EdgeCST2D < EdgeNURBS
 
     % visualizate function
     methods
-        function gplot(self,axe_hdl,u_param,crv_option,ctrl_option)
+        function li_hdl=plotGeom(self,axe_hdl,u_param,crv_option,ctrl_option)
             % draw curve on figure handle
             %
             if nargin < 5
@@ -429,18 +429,18 @@ classdef EdgeCST2D < EdgeNURBS
             end
 
             % calculate point on curve
-            Points=self.calEdge(u_param);
+            Points=self.calGeom(u_param);
 
             % plot line
-            line(axe_hdl,Points(:,1),Points(:,2),crv_option);
-            if ~isempty(self.Poles)
-                u_num=size(self.Poles,1)-self.Degree+1;
-                U_pole=interp1(linspace(0,1,u_num),self.u_list(self.Degree+1:size(self.Poles,1)+1),linspace(0,1,size(self.Poles,1)))';
-                if self.sym;U_pole=U_pole/2+0.5;end
-                Poles=self.Poles.*self.class_fcn(U_pole);
-                Poles=self.axisLocalToGlobal(Poles);
-                line(axe_hdl,Poles(:,1),Poles(:,2),ctrl_option);
-            end
+            li_hdl=line(axe_hdl,Points(:,1),Points(:,2),crv_option);
+%             if ~isempty(self.Poles)
+%                 u_num=size(self.Poles,1)-self.Degree+1;
+%                 U_pole=interp1(linspace(0,1,u_num),self.u_list(self.Degree+1:size(self.Poles,1)+1),linspace(0,1,size(self.Poles,1)))';
+%                 if self.sym;U_pole=U_pole/2+0.5;end
+%                 Poles=self.Poles.*self.class_fcn(U_pole);
+%                 Poles=self.axisLocalToGlobal(Poles);
+%                 line(axe_hdl,Poles(:,1),Poles(:,2),ctrl_option);
+%             end
             xlabel('x');
             ylabel('y');
 
@@ -453,7 +453,7 @@ classdef EdgeCST2D < EdgeNURBS
             % ylim([center(2)-range,center(2)+range]);
         end
 
-        function edg=getNURBS(self,u_param)
+        function edg=getNURBS(self,u_param,Degree,u_pole_num)
             % convert CST Edge into NURBS Edge
             %
             % input:
@@ -461,17 +461,15 @@ classdef EdgeCST2D < EdgeNURBS
             % or:
             % value_torl
             %
-            if nargin < 2
-                u_param=[];
-            end
+            if nargin < 4, u_pole_num=[];if nargin < 3,Degree=[];if nargin < 2,u_param=[];end;end;end
 
             if ~isempty(u_param) && length(u_param) > 1 && u_param(1,1) > u_param(1,2)
                 u_param=fliplr(u_param);
             end
-            [Nodes,U_node]=self.calEdge(u_param);
+            [Nodes,U_node]=self.calGeom(u_param);
 
-            Degree=min(length(U_node)-1,3);
-            edg=GeomApp.VertexToEdge(self.name,Nodes,Degree,[],U_node);
+            if isempty(Degree),Degree=min(length(U_node)-1,3);end
+            edg=GeomApp.VertexToEdge(self.name,Nodes,Degree,u_pole_num,U_node);
 
         end
 

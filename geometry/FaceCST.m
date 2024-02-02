@@ -349,7 +349,7 @@ classdef FaceCST < FaceNURBS
 
     % deform, rotate, translate
     methods
-        function addDeform(self,deform_fcn_X,deform_fcn_Y,deform_fcn_Z)
+        function self=addDeform(self,deform_fcn_X,deform_fcn_Y,deform_fcn_Z)
             % base on local coordinate deform surface
             %
             % input:
@@ -360,7 +360,7 @@ classdef FaceCST < FaceNURBS
             self.deform_fcn_Z=deform_fcn_Z;
         end
 
-        function addRotate(self,ang_x,ang_y,ang_z)
+        function self=addRotate(self,ang_x,ang_y,ang_z)
             % base on angle to rotate surface
             % rotate order:
             % y, z, x
@@ -398,7 +398,7 @@ classdef FaceCST < FaceNURBS
             self.rotate_matrix=matrix;
         end
 
-        function addTranslate(self,tran_x,tran_y,tran_z)
+        function self=addTranslate(self,tran_x,tran_y,tran_z)
             % base on angle to rotate surface
             %
             self.translate=[tran_x,tran_y,tran_z];
@@ -517,7 +517,7 @@ classdef FaceCST < FaceNURBS
 
     % visualizate function
     methods
-        function gplot(self,axe_hdl,u_param,v_param,srf_option,ctrl_option)
+        function plotGeom(self,axe_hdl,u_param,v_param,srf_option,ctrl_option)
             % draw surface on axes handle
             %
             if nargin < 5
@@ -547,7 +547,7 @@ classdef FaceCST < FaceNURBS
             end
 
             % calculate point on surface
-            Point=self.calFace(u_param,v_param);
+            Point=self.calGeom(u_param,v_param);
 
             % plot surface
             surface(axe_hdl,Point(:,:,1),Point(:,:,2),Point(:,:,3),srf_option);
@@ -578,7 +578,7 @@ classdef FaceCST < FaceNURBS
             % zlim([center(3)-range,center(3)+range]);
         end
 
-        function fce=getNURBS(self,u_param,v_param,u_pole_num,v_pole_num)
+        function fce=getNURBS(self,u_param,v_param,UDegree,VDegree,u_pole_num,v_pole_num)
             % convert CST Face into NURBS Face
             %
             % input:
@@ -586,14 +586,20 @@ classdef FaceCST < FaceNURBS
             % or:
             % value_torl, []
             %
-            if nargin < 5
+            if nargin < 7
                 v_pole_num=[];
-                if nargin < 4
+                if nargin < 6
                     u_pole_num=[];
-                    if nargin < 3
-                        v_param=[];
-                        if nargin < 2
-                            u_param=[];
+                    if nargin < 5
+                        VDegree=[];
+                        if nargin < 4
+                            UDegree=[];
+                            if nargin < 3
+                                v_param=[];
+                                if nargin < 2
+                                    u_param=[];
+                                end
+                            end
                         end
                     end
                 end
@@ -605,9 +611,10 @@ classdef FaceCST < FaceNURBS
             if ~isempty(v_param) && length(v_param) > 1 && v_param(1,1) > v_param(2,1)
                 v_param=flipud(v_param);
             end
-            [Nodes,U_node,V_node]=calFace(self,u_param,v_param);
+            [Nodes,U_node,V_node]=self.calGeom(u_param,v_param);
 
-            UDegree=min([size(U_node,2)-1,3,u_pole_num-1]);VDegree=min([size(V_node,1)-1,3,v_pole_num-1]);
+            if isempty(UDegree),UDegree=min([size(U_node,2)-1,3,u_pole_num-1]);end
+            if isempty(VDegree),VDegree=min([size(V_node,1)-1,3,v_pole_num-1]);end
             fce=GeomApp.VertexToFace(self.name,Nodes,UDegree,VDegree,u_pole_num,v_pole_num,U_node(1,:),V_node(:,1));
         end
 

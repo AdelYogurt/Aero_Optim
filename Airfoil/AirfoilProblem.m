@@ -10,7 +10,7 @@ classdef AirfoilProblem < AirfoilModel
 
         % constraint define
         CL_min=0.28;
-        t_mim=0.12;
+        t_min=0.12;
     end
 
     % main function
@@ -72,7 +72,7 @@ classdef AirfoilProblem < AirfoilModel
             %
             geo_in=self.decode(x);
 
-            [geo_out,mesh_out,CFD_out]=self.solveAirfoil(geo_in);
+            [geo_out,mesh_out,CFD_out]=self.solveModel(geo_in);
             mesh_point=geo_out.mesh_point;
             if strcmp(self.CFD_param.solver,'SU2_CFD')
                 CEff=CFD_out.SU2_data.('CEff')(end);
@@ -93,7 +93,7 @@ classdef AirfoilProblem < AirfoilModel
 
             % constaints
             g1=self.CL_min-CL;
-            g2=self.t_mim-t;
+            g2=self.t_min-t;
             con=[g1,g2];
             coneq=[];
         end

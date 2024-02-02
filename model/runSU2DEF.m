@@ -39,7 +39,7 @@ elseif ischar(cfg_param) || isstring(cfg_param)
     [~,~,cfg_filestr]=safeSplitFileStr(cfg_filestr);
     config=SU2Config(cfg_filestr);
 else
-    error('runSU2CFD: error input, config is not SU2Config or cfg_filestr')
+    error('runSU2DEF: error input, config is not SU2Config or cfg_filestr')
 end
 config.setParameter('NUMBER_PART',partitions);
 
@@ -66,12 +66,12 @@ safeMakeDirs(dir_work,out_logger);
 
 % process mesh file
 if ~config.isParameter('MESH_FILENAME')
-    error('runSU2CFD: config lack MESH_FILENAME define');
+    error('runSU2DEF: config lack MESH_FILENAME define');
 end
 mesh_filestr=config.getParameter('MESH_FILENAME');
 [mesh_filename,mesh_filedir,mesh_filestr]=safeSplitFileStr(mesh_filestr);
 if ~exist(mesh_filestr,'file')
-    error('runSU2CFD: mesh file do not exist')
+    error('runSU2DEF: mesh file do not exist')
 end
 config.setParameter('MESH_FILENAME',mesh_filename);
 if contains(mesh_filename,'cgns','IgnoreCase',true)
@@ -79,7 +79,7 @@ if contains(mesh_filename,'cgns','IgnoreCase',true)
 elseif contains(mesh_filename,'su2','IgnoreCase',true)
     config.setParameter('MESH_FORMAT','SU2');
 else
-    error('runSU2CFD: unsupport mesh type');
+    error('runSU2DEF: unsupport mesh type');
 end
 safeCopyDirs(mesh_filename,mesh_filedir,dir_work,out_logger);
 
