@@ -87,35 +87,35 @@ cd Aero_Optim/Airfoil;
 
 %% parallel run
 
-NFE_max=100;iter_max=300;obj_torl=1e-6;con_torl=0;
-repeat_num=12;
-
-data_list=cell(1,repeat_num);
-parfor par_idx=1:repeat_num
-    run_desc=['optim',num2str(par_idx)];
-
-    % mesh module
-    mesh_param=struct();
-    mesh_param.solver='SU2_DEF';
-    mesh_param.initial_mesh_filestr='mesh/NACA0012.cgns';
-    mesh_param.SU2_DEF_param=SU2Config('SU2/NACA0012_deform.cfg');
-    mesh_param.dat_filestr=['optim/',num2str(par_idx),'/NACA0012_deform.dat'];
-    mesh_param.mesh_filestr=['optim/',num2str(par_idx),'/airfoil.su2'];
-
-    % problem=AirfoilProblem(partitions,geom_param,mesh_param,CFD_param,[],[],run_desc,out_logger);
-    problem=PhysicsProblem(partitions,geom_param,mesh_param,CFD_param,[],[],run_desc,out_logger);
-
-    optimizer=OptimSKO(NFE_max,iter_max,obj_torl,con_torl);
-
-    % x=rand(1,problem.vari_num).*(problem.up_bou-problem.low_bou)+problem.low_bou;
-    % [obj,con,coneq]=problem.objcon_fcn(x);
-    % data_list{par_idx}={obj,con,coneq};
-    % disp(obj);disp(con);disp(coneq);
-
-    disp('optimization begin')
-    [x_best,obj_best,NFE,output,con_best,coneq_best,vio_best]=optimizer.optimize(problem);
-    disp('optimization all done')
-    data_list{par_idx}=output;
-end
-
-save('optim.mat','data_list');
+% NFE_max=100;iter_max=300;obj_torl=1e-6;con_torl=0;
+% repeat_num=12;
+% 
+% data_list=cell(1,repeat_num);
+% parfor par_idx=1:repeat_num
+%     run_desc=['optim',num2str(par_idx)];
+% 
+%     % mesh module
+%     mesh_param=struct();
+%     mesh_param.solver='SU2_DEF';
+%     mesh_param.initial_mesh_filestr='mesh/NACA0012.cgns';
+%     mesh_param.SU2_DEF_param=SU2Config('SU2/NACA0012_deform.cfg');
+%     mesh_param.dat_filestr=['optim/',num2str(par_idx),'/NACA0012_deform.dat'];
+%     mesh_param.mesh_filestr=['optim/',num2str(par_idx),'/airfoil.su2'];
+% 
+%     % problem=AirfoilProblem(partitions,geom_param,mesh_param,CFD_param,[],[],run_desc,out_logger);
+%     problem=PhysicsProblem(partitions,geom_param,mesh_param,CFD_param,[],[],run_desc,out_logger);
+% 
+%     optimizer=OptimSKO(NFE_max,iter_max,obj_torl,con_torl);
+% 
+%     % x=rand(1,problem.vari_num).*(problem.up_bou-problem.low_bou)+problem.low_bou;
+%     % [obj,con,coneq]=problem.objcon_fcn(x);
+%     % data_list{par_idx}={obj,con,coneq};
+%     % disp(obj);disp(con);disp(coneq);
+% 
+%     disp('optimization begin')
+%     [x_best,obj_best,NFE,output,con_best,coneq_best,vio_best]=optimizer.optimize(problem);
+%     disp('optimization all done')
+%     data_list{par_idx}=output;
+% end
+% 
+% save('optim.mat','data_list');

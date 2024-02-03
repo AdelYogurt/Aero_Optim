@@ -1,4 +1,4 @@
-function [SU2_data,SU2_history,SU2_surface,SU2_CFD_info]=runSU2CFD...
+function [SU2_data,SU2_surface,dir_work]=runSU2CFD...
     (cfg_param,partitions,dir_temp,run_desc,REMOVE_TEMP,out_logger)
 % interface of SU2_CFD
 % base on input cfg_param and partitions to run SU2_CFD
@@ -50,9 +50,8 @@ if strcmp(config.getParameter('SOLVER'),'MULTIPHYSICS')
 end
 
 % get dir work
-[str_filedir__,~]=fileparts(which('runSU2CFD.m'));
 if isempty(dir_temp)
-    dir_temp=fullfile(str_filedir__,'SU2_temp');
+    dir_temp=fullfile(pwd(),'SU2_temp');
     if ~exist(dir_temp,'dir')
         mkdir(dir_temp);
     end
@@ -189,7 +188,6 @@ if exist(history_filestr,"file")
     end
     SU2_data=cell2struct(value_list,type_list);
 else
-    SU2_history=[];
     SU2_data=[];
 end
 

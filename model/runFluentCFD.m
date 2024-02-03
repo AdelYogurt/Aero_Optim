@@ -1,4 +1,4 @@
-function [fluent_out,fluent_info]=runFluentCFD...
+function [fluent_out,dir_work]=runFluentCFD...
     (mesh_filestr,jou_filestr,partitions,fluent_dir,dimension,out_filename,...
     dir_temp,run_desc)
 % interface of fluent CFD
@@ -13,9 +13,8 @@ end
 dir_cur=pwd();
 
 % get dir work
-[str_filedir__,~]=fileparts(which('runFluentCFD.m'));
 if isempty(dir_temp)
-    dir_temp=fullfile(str_filedir__,'Fluent_temp');
+    dir_temp=fullfile(pwd(),'SU2_temp');
     if ~exist(dir_temp,'dir')
         mkdir(dir_temp);
     end

@@ -128,7 +128,7 @@ classdef AirfoilModel < handle
             config.setParameter('MESH_FILENAME',self.mesh_param.initial_mesh_filestr);
             config.setParameter('DV_FILENAME',self.mesh_param.dat_filestr);
             config.setParameter('MESH_OUT_FILENAME',self.mesh_param.mesh_filestr);
-            [mesh_out.mesh_filestr,mesh_out.SU2_DEF_info]=runSU2DEF...
+            [mesh_out.mesh_filestr,mesh_out.dir_work]=runSU2DEF...
                 (config,self.partitions,self.dir_temp,self.run_desc,self.REMOVE_TEMP,self.out_logger);
 
             % step 3: CFD module
@@ -141,7 +141,7 @@ classdef AirfoilModel < handle
                 end
                 config.setParameter('MESH_FILENAME',mesh_out.mesh_filestr);
                 config.setParameter('RESTART_FILENAME',self.CFD_param.restart_filestr);
-                [CFD_out.SU2_data,CFD_out.SU2_history,CFD_out.SU2_surface,CFD_out.SU2_CFD_info]=runSU2CFD...
+                [CFD_out.SU2_data,CFD_out.SU2_surface,CFD_out.dir_work]=runSU2CFD...
                     (config,self.partitions,self.dir_temp,self.run_desc,self.REMOVE_TEMP,self.out_logger);
             elseif strcmp(self.CFD_param.solver,'Fluent')
                 % convert SU2 to cgns
@@ -155,7 +155,7 @@ classdef AirfoilModel < handle
                 writeMeshCGNS(mesh_data,mesh_filestr)
 
                 % run fluent to get result
-                [CFD_out.fluent_out,CFD_out.fluent_info]=runFluentCFD...
+                [CFD_out.fluent_out,CFD_out.dir_work]=runFluentCFD...
                     (mesh_filestr,self.CFD_param.fluent_jou_filestr,self.partitions,self.CFD_param.fluent_dir,self.CFD_param.solver_dimension,self.CFD_param.out_filename,...
                     self.dir_temp,self.run_desc);
             end

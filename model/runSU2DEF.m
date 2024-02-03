@@ -1,4 +1,4 @@
-function [mesh_out_filestr,SU2_DEF_info]=runSU2DEF...
+function [mesh_out_filestr,dir_work]=runSU2DEF...
     (cfg_param,partitions,dir_temp,run_desc,REMOVE_TEMP,out_logger)
 % interface of SU2_DEF
 % base on input cfg_param and partitions to run SU2_DEF
@@ -44,9 +44,8 @@ end
 config.setParameter('NUMBER_PART',partitions);
 
 % get dir work
-[str_filedir__,~]=fileparts(which('runSU2DEF.m'));
 if isempty(dir_temp)
-    dir_temp=fullfile(str_filedir__,'SU2_temp');
+    dir_temp=fullfile(pwd(),'SU2_temp');
     if ~exist(dir_temp,'dir')
         mkdir(dir_temp);
     end
