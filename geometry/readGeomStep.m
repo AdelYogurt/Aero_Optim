@@ -167,7 +167,7 @@ for u_idx=1:u_pole_num
     end
 end
 
-fce=FaceNURBS(name,Poles,UDegree,VDegree,UMults,VMults,UKnots,VKnots);
+fce=Surface(name,Poles,UDegree,VDegree,UMults,VMults,UKnots,VKnots);
 
 fce.face_form=face_form;
 fce.UPeriodic=UPeriodic;
@@ -246,7 +246,7 @@ end
 Poles=GeomApp.MapGrid(Poles_u0,Poles_u1,Poles_0v,Poles_1v);
 
 % process bound with axis
-fce=FaceNURBS(name,Poles,UDegree,VDegree);
+fce=Surface(name,Poles,UDegree,VDegree);
 end
 
 function edge_list=getBound(Data,Idx_bound)

@@ -1,73 +1,131 @@
 classdef Shell < handle
-    % shell
+    % Topology Entity Shell
     %
     properties
-        name='';
-        face_list={}; % cell, can be surface CST3D or surface BSpline
-        topo_list=[]; % define the geometry topology
+        name=''; % name of shell
+        face_list=Face.empty(); % face list
+        edge_list=Edge.empty(); % edge list
+        vertex_list=[]; % vertex list
+        closed=false; % if shell is closed
     end
 
-    % define Shell
-    methods
-        function self=Shell(name,face_list)
-            if nargin < 2,face_list={};end
-            self.name=name;
-            self.face_list=face_list;
-        end
+    properties
+        topology=struct(); % association with face
 
-        function [surf,surf_idx]=getFace(self,surf_name)
-            % load surface from face_list base on input surface name
+        bound_box=[]; % geometry bounding box
+        dimension=[]; % dimension of curve
+    end
+
+    % define shell
+    methods
+        function self=Shell(name,fce_list,geom_torl)
+            % generate shell entity
             %
-            for surf_idx=1:length(self.face_list)
-                surf=self.face_list{surf_idx};
-                if strcmp(surf.name,surf_name)
-                    return;
+            if nargin < 3, geom_torl=[];end
+            if isempty(geom_torl), geom_torl=1e-6;end
+            self.name=name;
+
+            % check dimension of each face
+            fce_num=length(fce_list);
+            dimension=fce_list(1).dimension;
+            for fce_idx=2:fce_num
+                if fce_list(fce_idx).dimension ~= dimension
+                    error('Shell: dimension of each face is not equal');
                 end
             end
-            surf=[];
-            surf_idx=0;
+            self.face_list=fce_list;
+
+            % generate bounding box
+            bound_box=fce_list(1).bound_box;
+            for fce_idx=2:fce_num
+                bound_box(1,:)=min([bound_box(1,:);fce_list(fce_idx).bound_box(1,:)],[],1);
+                bound_box(2,:)=max([bound_box(2,:);fce_list(fce_idx).bound_box(2,:)],[],1);
+            end
+            self.bound_box=bound_box;
+            self.dimension=dimension;
+
+            % calculate topology of shell
+            self.calTopology(geom_torl);
         end
 
-        function addFace(self,fce_new)
+        function self=calTopology(self,geom_torl)
+            % calculate topology property of wire
+            %
+            fce_list=self.face_list;
+
+            fce_num=length(fce_list);
+            if fce_num > 1
+                % check whether face is connect
+                edg_list=[];vtx_list=[];
+                for fce_idx=1:fce_num
+                    edg_list=[edg_list;fce_list(fce_idx).wire_list(1).edge_list];
+                    vtx_list=[vtx_list;fce_list(fce_idx).wire_list(1).vertex_list];
+                end
+
+                % generate association between edge and vertex
+                vtx_num=size(vtx_list,1);
+                vtx_topo=repmat(struct('edge',[],'face',[]),vtx_num,1);
+
+                edg_num=size(edg_list,1);
+                edg_topo=repmat(struct('face',[],'map',[]),edg_num,1);
+            else
+                edg_list=[];
+                vtx_list=[];
+
+                % load all edge and vertex
+                wir_list=fce_list(1).wire_list;
+                for bou_idx=1:length(wir_list)
+                    edg_list=[edg_list;wir_list(bou_idx).edge_list];
+                    vtx_list=[vtx_list;wir_list(bou_idx).vertex_list];
+                end
+
+                % generate association between edge and vertex
+                vtx_num=size(vtx_list,1);
+                vtx_topo=repmat(struct('edge',1,'face',1),vtx_num,1);
+
+                edg_num=size(edg_list,1);
+                edg_topo=repmat(struct('face',1,'map',[0,1]),edg_num,1);
+            end
+
+            % check if shell is closed
+            if length([edg_topo.face])/edg_num == 2
+                clsd=true;
+            else
+                clsd=false;
+            end
+
+            self.face_list=fce_list;
+            self.edge_list=edg_list;
+            self.vertex_list=vtx_list;
+            self.closed=clsd;
+
+            topo.vertex=vtx_topo;
+            topo.edge=edg_topo;
+            self.topology=topo;
+        end
+
+        function self=addFace(self,fce)
             % add face into shell
             %
-            if ~iscell(fce_new),fce_new={fce_new};end
-            
-            for fce_idx=1:length(fce_new)
-                self.face_list=[self.face_list;fce_new(fce_idx)];
-                self.topo_list=[self.topo_list;zeros(1,1)];
-            end
+            self.face_list=[self.face_list;fce];
         end
 
-        function addTopo(self,fceA,fceB,idx)
-            % add new topology into shell
+        function [fce,fce_idx]=getFace(self,fce_name)
+            % load face from face_list base on input fce_name
             %
-            idxA=find(self.face_list == fceA);
-            idxB=find(self.face_list == fceB);
-            data=[idxA,idxB,idx];
-            self.topo_list=[self.topo_list;data];
-        end
-    end
-
-    % control Face
-    methods
-        function self=translate(self,tran_vctr)
-            for fce_idx=1:length(self.face_list)
-                self.face_list{fce_idx}.translate(tran_vctr);
+            fce=[];
+            fce_idx=[];
+            for fce_i=1:length(self.face_list)
+                fce_u=self.face_list(fce_i);
+                if strcmp(fce_u.name,fce_name)
+                    fce=[fce;fce_u];
+                    fce_idx=[fce_idx;fce_i];
+                end
             end
         end
 
-        function self=rotate(self,rotate_matrix)
-            for fce_idx=1:length(self.face_list)
-                self.face_list{fce_idx}.rotate(rotate_matrix);
-            end
-        end
-    end
-
-    % calculate point
-    methods
-        function [srf_list,U,V]=calGeom(self,u_param,v_param)
-            % calculate all face point
+        function fce_list=calGeom(self,u_param,v_param)
+            % calculate point on all face
             %
             if nargin < 3
                 v_param=[];
@@ -76,166 +134,118 @@ classdef Shell < handle
                 end
             end
 
-            fce_num=length(self.face_list);
-            srf_list=cell(1,fce_num);
-            U_list=cell(1,fce_num);
-            V_list=cell(1,fce_num);
-            for fce_idx=1:fce_num
-                fce=self.face_list{fce_idx};
-                [Pnt,U,V]=fce.calGeom(u_param,v_param);
-                srf_list{fce_idx}=Pnt;
-                U_list{fce_idx}=U;
-                V_list{fce_idx}=V;
-            end
+            if length(u_param) == 1 && u_param ~= fix(u_param)
+                % auto capture Points
 
-            % adjust U and V to satisfy topology tight
-            U=[];V=[];   
-            topo_num=size(self.topo_list,1);
-            for topo_idx=topo_num
-                data=self.topo_list(topo_idx,:);
+            else
+                % manual capture Points
+                fce_list=[];fce_num=length(self.face_list);
+                for fce_idx=1:fce_num
+                    fce=self.face_list(fce_idx);
+                    fce_list=[fce_list;{fce.calGeom(u_param,v_param)}];
+                end
             end
-
         end
 
-        function mesh_data=getMeshWGS(self,u_param,v_param)
-            % generate LaWGS mesh data
+        function [srf_hdl_list,ln_hdl_list,sctr_hdl]=displayModel(self,axe_hdl,u_param,v_param)
+            % display shell on axes
             %
-            if nargin < 3
+            if nargin < 4
                 v_param=[];
-                if nargin < 2
+                if nargin < 3
                     u_param=[];
-                end
-            end
-
-            fce_list=self.calGeom(u_param,v_param);
-            mesh_data=struct();
-            unknown_idx=1;fce_num=length(self.face_list);
-            for fce_idx=1:fce_num
-                fce=self.face_list{fce_idx};
-                if ~isempty(fce)
-                    Pnt=fce_list{fce_idx};
-                    srf.X=Pnt(:,:,1);
-                    srf.Y=Pnt(:,:,2);
-                    srf.Z=Pnt(:,:,3);
-                    if fce.reverse
-                        srf.X=flipud(srf.X);
-                        srf.Y=flipud(srf.Y);
-                        srf.Z=flipud(srf.Z);
-                    end
-                    srf.type='wgs';
-                    srf_name=fce.name;
-                    if isempty(srf_name)
-                        srf_name=['srf_',num2str(unknown_idx)];
-                        unknown_idx=unknown_idx+1;
-                    end
-                    mesh_data.(srf_name)=srf;
-                end
-            end
-        end
-    end
-
-    % parameterized function
-    methods
-        function coord=calCoord(self,point_list,fce_index_list)
-            % calculate all input point local coordinate
-            %
-            coord=struct();
-
-            fce_name_list=fieldnames(fce_index_list);
-            for fce_idx=1:length(fce_name_list)
-                % get surf
-                fce_name=fce_name_list{fce_idx};
-                fce=self.getFace(fce_name);
-                if isempty(fce)
-                    continue;
-                end
-                point_idx=fce_index_list.(fce_name);
-
-                % calculate coordinate
-                point=point_list(point_idx,1:3);
-                [U,V,~]=fce.calCoord(reshape(point,[],1,3));
-                coord.(fce_name).index=point_idx;
-                coord.(fce_name).U=U;
-                coord.(fce_name).V=V;
-            end
-
-        end
-
-        function mesh_data=calMeshPoint(self,coord)
-            % calculate all mesh point by input W coord
-            %
-            mesh_data=struct();
-
-            surf_name_list=fieldnames(coord);
-            for surf_idx=1:length(surf_name_list)
-                % get surface
-                surf_name=surf_name_list{surf_idx};
-                surf=self.getFace(surf_name);
-                if isempty(surf)
-                    continue;
-                end
-                point_idx=coord.(surf_name).index;
-                U=coord.(surf_name).U;
-                V=coord.(surf_name).V;
-
-                % calculate coordinate
-                Pnts=surf.calPoint(U,V);
-                mesh_data.(surf_name).type='scatter';
-                mesh_data.(surf_name).index=point_idx;
-                mesh_data.(surf_name).X=Pnts(:,:,1);
-                mesh_data.(surf_name).Y=Pnts(:,:,2);
-                mesh_data.(surf_name).Z=Pnts(:,:,3);
-            end
-
-        end
-    end
-
-    % visualizate function
-    methods
-        function plotGeom(self,axe_hdl,u_param,v_param,crv_option,ctrl_option)
-            % draw all surface of shell
-            % wrapper of plotGeom
-            %
-            if nargin < 6
-                ctrl_option=[];
-                if nargin < 5
-                    crv_option=[];
-                    if nargin < 4
-                        v_param=[];
-                        if nargin < 3
-                            u_param=[];
-                            if nargin < 2
-                                axe_hdl=[];
-                            end
-                        end
+                    if nargin < 2
+                        axe_hdl=[];
                     end
                 end
             end
-
             if isempty(axe_hdl),axe_hdl=axes(figure());end
 
             fce_num=length(self.face_list);
             for fce_idx=1:fce_num
-                fce=self.face_list{fce_idx};
-                if ~isempty(fce)
-                    fce.plotGeom(axe_hdl,u_param,v_param,crv_option,ctrl_option);
+                [Points,U,V]=self.face_list(fce_idx).calGeom(u_param,v_param);
+                srf_hdl_list(fce_idx)=surfacePoints(axe_hdl,Points,self.dimension);
+
+                % plot outer boundary
+                wir=self.face_list(fce_idx).wire_list(1);
+                if length(wir.edge_list) == 4
+                    Points=wir.edge_list(1).calPoint(U(1,:));
+                    ln_hdl_list{1}(1)=linePoints(axe_hdl,Points,self.dimension);
+                    Points=wir.edge_list(2).calPoint(V(:,1));
+                    ln_hdl_list{1}(2)=linePoints(axe_hdl,Points,self.dimension);
+                    Points=wir.edge_list(3).calPoint(U(1,end:-1:1));
+                    ln_hdl_list{1}(3)=linePoints(axe_hdl,Points,self.dimension);
+                    Points=wir.edge_list(4).calPoint(V(end:-1:1,1));
+                    ln_hdl_list{1}(4)=linePoints(axe_hdl,Points,self.dimension);
+                else
+                    for edg_idx=1:length(wir.edge_list)
+                        Points=self.face_list(fce_idx).wire_list(edg_idx).calGeom(u_param);
+                        ln_hdl_list{1}(edg_idx)=linePoints(axe_hdl,Points,self.dimension);
+                    end
+                end
+
+                % plot inner boundary
+                bou_num=length(self.face_list(fce_idx).wire_list);
+                for bou_idx=2:bou_num
+                    wir=self.face_list(fce_idx).wire_list(bou_idx);
+                    for edg_idx=1:length(wir.edge_list)
+                        Points=self.face_list(fce_idx).wire_list(edg_idx).calGeom(u_param);
+                        ln_hdl_list{bou_idx}(edg_idx)=linePoints(axe_hdl,Points,self.dimension);
+                    end
                 end
             end
-            
+            sctr_hdl=scatterPoints(axe_hdl,self.vertex_list,self.dimension);
+
+            if self.dimension == 2
+            else
+                zlabel('z');
+                view(3);
+            end
             xlabel('x');
             ylabel('y');
-            zlabel('z');
-            view(3);
 
-            % axis equal;
-            % x_range=xlim();
-            % y_range=ylim();
-            % z_range=zlim();
-            % center=[mean(x_range),mean(y_range),mean(z_range)];
-            % range=max([x_range(2)-x_range(1),y_range(2)-y_range(1),z_range(2)-z_range(1)])/2;
-            % xlim([center(1)-range,center(1)+range]);
-            % ylim([center(2)-range,center(2)+range]);
-            % zlim([center(3)-range,center(3)+range]);
+            function ln_hdl=linePoints(axe_hdl,Points,dimension)
+                % line point on different dimension
+                %
+                if dimension == 2
+                    ln_hdl=line(axe_hdl,Points(:,1),Points(:,2));
+                else
+                    ln_hdl=line(axe_hdl,Points(:,1),Points(:,2),Points(:,3));
+                end
+            end
+
+            function sctr_hdl=scatterPoints(axe_hdl,Points,dimension)
+                % scatter point on different dimension
+                %
+                hold on;
+                if dimension == 2
+                    sctr_hdl=scatter(axe_hdl,Points(:,1),Points(:,2));
+                else
+                    sctr_hdl=scatter3(axe_hdl,Points(:,1),Points(:,2),Points(:,3));
+                end
+                hold off;
+            end
+
+            function srf_hdl=surfacePoints(axe_hdl,Points,dimension)
+                % surface point on different dimension
+                %
+                srf_option=struct('LineStyle','none');
+                hold on;
+                if dimension == 2
+                    srf_hdl=surf(axe_hdl,Points(:,:,1),Points(:,:,2),srf_option);
+                else
+                    srf_hdl=surf(axe_hdl,Points(:,:,1),Points(:,:,2),Points(:,:,3),srf_option);
+                    zlabel('z');
+                    view(3);
+                end
+                hold off;
+            end
         end
+
+    end
+
+    % parameterized function
+    methods
+
     end
 end

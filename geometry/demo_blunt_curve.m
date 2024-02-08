@@ -21,15 +21,15 @@ close all hidden;
 % % P1=[-1.1,0.4];
 % % P2=[0,0.2];
 % 
-% crv=EdgeNURBS('',[P0;P1;P2]);
-% crv.plotGeom(gca());view(2);axis equal;
+% crv=Curve([P0;P1;P2]);
+% crv.displayGeom(gca());view(2);axis equal;
 % 
 % dP=-2*P0+2*P1;ddP=2*P0-4*P1+2*P2;
 % R=1/((dP(1)*ddP(2)-dP(2)*ddP(1))/norm(dP)^3)
 % 
 % hold on;
 % quiver(P_up(1),P_up(2),vctr_up(1),vctr_up(2));
-% crv.plotGeom(gca());view(2);axis equal;
+% crv.displayGeom(gca());view(2);axis equal;
 % hold off;
 
 %% cubic blunt
@@ -45,7 +45,7 @@ close all hidden;
 % hold on;
 % quiver(P_up(1),P_up(2),vctr_up(1),vctr_up(2));
 % quiver(P_low(1),P_low(2),vctr_low(1),vctr_low(2));
-% crv.plotGeom(gca());view(2);axis equal;
+% crv.displayGeom(gca());view(2);axis equal;
 % hold off;
 % 
 % function crv=getBluntEdge(vctr_low,vctr_up,P_low,P_up)
@@ -89,17 +89,17 @@ close all hidden;
 %     0,0,1];
 % P_up_list=(P_up_list*rotate_matrix'+[P_center,0]);
 % P_low_list=(P_low_list*rotate_matrix'+[P_center,0]);
-% crv_up=EdgeNURBS('',P_up_list);
-% crv_low=EdgeNURBS('',P_low_list);
+% crv_up=Curve(P_up_list);
+% crv_low=Curve(P_low_list);
 % 
 % if theta_low < theta_up
 %     P_ext=[P3_up,0;P_up,0];
-%     crv=GeomApp.JointEdge('',{crv_low,crv_up,EdgeNURBS('',P_ext)});
+%     crv=GeomApp.JointCurve([crv_low,crv_up,Curve(P_ext)]);
 % elseif theta_low > theta_up
 %     P_ext=[P_low,0;P3_low,0];
-%     crv=GeomApp.JointEdge('',{EdgeNURBS('',P_ext),crv_low,crv_up});
+%     crv=GeomApp.JointCurve([Curve(P_ext),crv_low,crv_up]);
 % else
-%     crv=GeomApp.JointEdge('',{crv_low,crv_up,[]});
+%     crv=GeomApp.JointCurve([crv_low,crv_up,[]]);
 % end
 % 
 % end
@@ -129,44 +129,40 @@ close all hidden;
 % P=[P_0;P_1;P_2;P_3];
 % end
 
-
 %% arc blunt
 
-% R=0.05;torl=1e-3;N=0.8;LX=1;LY=0.2;
-% crv=EdgeCST2D('',[N,N],[],LX,LY);
-% crv.addNURBS(cat(2,(0:0.2:1)',rand(6,1)-0.5))
-% fig_hdl=figure();
-% axe_hdl=axes(fig_hdl);axis equal;
-% crv.plotGeom(axe_hdl);
-% [k1,k2]=crv.calTangTorl(torl/N);
-% [h1,d1]=calBluntHD(R,k1);
-% [h2,d2]=calBluntHD(R,k2);
-% usb=d1/LX;ueb=1-d2/LX;
-% 
-% crv_blunt=EdgeCST2D('');
-% crv_blunt.shape_fcn=@(U) calPoint(U,crv,R,LX,usb,ueb,d1,d2,h1,h2);
-% crv_blunt.plotGeom(axe_hdl)
-% 
-% 
-% function Point=calPoint(U,crv,R,LX,usb,ueb,d1,d2,h1,h2)
-% Point=zeros(length(U),crv.dimension);
-% Point(:,1)=U*LX;
-% idx=find(U < usb);
-% if ~isempty(idx),Point(idx,2)=sqrt(R^2-(Point(idx,1)-R).^2+eps);end
-% idx=find(ueb < U);
-% if ~isempty(idx),Point(idx,2)=sqrt(R^2-(Point(idx,1)-(LX-R)).^2+eps);end
-% idx=find(usb <= U & U <= ueb);
-% if ~isempty(idx)
-%     u_loc=(U(idx)-usb)/(ueb-usb);L_loc=LX-d1-d2;
-%     Point(idx,:)=crv.calPoint(u_loc);
-%     Point(idx,1)=Point(idx,1)*L_loc+d1;
-%     Point(idx,2)=Point(idx,2)+h1*(1-u_loc)+h2*u_loc;
-% end
-% end
-% 
-% function [h,d]=calBluntHD(R,k)
-% h=R./sqrt(1+k.^2);
-% d=R-k.*R./sqrt(1+k.^2);
-% end
+R=0.05;torl=1e-3;N=0.8;LX=1;LY=0.2;
+crv=CurveCST([N,N],[],LX,LY);
+crv.addSpline(Curve(cat(2,(0:0.2:1)',rand(6,1)-0.5)))
+fig_hdl=figure();
+axe_hdl=axes(fig_hdl);axis equal;
+crv.displayGeom(axe_hdl);
+[k1,k2]=crv.calTangTorl(torl/N);
+[h1,d1]=calBluntHD(R,k1);
+[h2,d2]=calBluntHD(R,k2);
+usb=d1/LX;ueb=1-d2/LX;
 
+crv_blunt=CurveCST();
+crv_blunt.shape_fcn=@(U) calPoint(U,crv,R,LX,usb,ueb,d1,d2,h1,h2);
+crv_blunt.displayGeom(axe_hdl);
 
+function Point=calPoint(U,crv,R,LX,usb,ueb,d1,d2,h1,h2)
+Point=zeros(length(U),2);
+Point(:,1)=U*LX;
+idx=find(U < usb);
+if ~isempty(idx),Point(idx,2)=sqrt(R^2-(Point(idx,1)-R).^2+eps);end
+idx=find(ueb < U);
+if ~isempty(idx),Point(idx,2)=sqrt(R^2-(Point(idx,1)-(LX-R)).^2+eps);end
+idx=find(usb <= U & U <= ueb);
+if ~isempty(idx)
+    u_loc=(U(idx)-usb)/(ueb-usb);L_loc=LX-d1-d2;
+    Point(idx,:)=crv.calPoint(u_loc);
+    Point(idx,1)=Point(idx,1)*L_loc+d1;
+    Point(idx,2)=Point(idx,2)+h1*(1-u_loc)+h2*u_loc;
+end
+end
+
+function [h,d]=calBluntHD(R,k)
+h=R./sqrt(1+k.^2);
+d=R-k.*R./sqrt(1+k.^2);
+end

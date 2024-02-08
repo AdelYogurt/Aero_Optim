@@ -1,5 +1,5 @@
 function writeGeomStep(geom_list,step_filestr)
-% write step file
+% write topology entity into step file
 %
 if nargin < 2, step_filestr=[];end
 if isempty(step_filestr), step_filestr='geom.step';end
@@ -12,22 +12,74 @@ obj_idx=1;geom_num=length(geom_list);
 % write head of step file
 [str_head,obj_idx]=writeStepHead(obj_idx,step_filename);
 
-% write model
-str_geom=[];SHELL_BASED_SURFACE_MODEL_list=zeros(1,geom_num);
+% write entity
+str_entity='';WIRE=[];SHELL=[];
 for geom_idx=1:geom_num
     geom=geom_list{geom_idx};
-    if isa(geom,'Shell')
-        [str_new,SHELL_BASED_SURFACE_MODEL,obj_idx]=getOpenShell(geom,obj_idx);
+
+    % if isa(geom,'Edge')
+    %     % GEOMETRIC_CURVE_SET
+    %     [str_new,obj_idx,model_idx]=stepEdge(geom,obj_idx);
+    %     WIRE=[WIRE,model_idx];
+    % elseif isa(geom,'Wire')
+    %     % EDGE_BASED_WIREFRAME_MODEL
+    %     [str_new,obj_idx,model_idx]=stepLoop(geom,obj_idx);
+    %     WIRE=[WIRE,model_idx];
+    % elseif isa(geom,'Face')
+    %     % 
+    %     [str_new,obj_idx,model_idx]=stepFace(geom,obj_idx);
+    %     SHELL=[SHELL,model_idx];
+    % elseif isa(geom,'Shell')
+    %     % SHELL_BASED_SURFACE_MODEL
+    %     [str_new,obj_idx,model_idx]=stepShell(geom,obj_idx);
+    %     SHELL=[SHELL,model_idx];
+    % else
+    %     error('writeGeomStep: unknown topology entity');
+    % end
+
+    if isa(geom,'Edge') || isa(geom,'Wire')
+        % write wire
+        if isa(geom,'Edge'), geom=Wire(geom.name,geom);end
+        [str_new,obj_idx,model_idx]=stepLoop(geom,obj_idx);
+        WIRE=[WIRE,model_idx];
+    elseif isa(geom,'Face') || isa(geom,'Shell')
+        % write shell
+        if isa(geom,'Face'), geom=Shell(geom.name,geom);end
+        [str_new,obj_idx,model_idx]=stepShell(geom,obj_idx);
+        SHELL=[SHELL,model_idx];
+    else
+        error('writeGeomStep: unknown topology entity');
     end
-    str_geom=[str_geom,str_new,'\n'];
-    SHELL_BASED_SURFACE_MODEL_list(geom_idx)=SHELL_BASED_SURFACE_MODEL;
+    
+    str_entity=[str_entity,str_new,'\n'];
+end
+
+% write model
+if ~isempty(WIRE)
+    WIRE_MODEL=obj_idx;
+    format_out=['( ','#%d',repmat(', #%d',1,length(WIRE)-1),' )'];
+    str_wire=[sprintf('#%d = EDGE_BASED_WIREFRAME_MODEL ( ''NONE'', ',WIRE_MODEL),sprintf(format_out,WIRE),sprintf(' ) ;\n')];
+    obj_idx=obj_idx+1;
+else
+    WIRE_MODEL=[];
+    str_wire='';
+end
+
+if ~isempty(SHELL)
+    SHELL_MODEL=obj_idx;
+    format_out=['( ','#%d',repmat(', #%d',1,length(SHELL)-1),' )'];
+    str_shell=[sprintf('#%d = SHELL_BASED_SURFACE_MODEL ( ''NONE'', ',SHELL_MODEL),sprintf(format_out,SHELL),sprintf(' ) ;\n')];
+    obj_idx=obj_idx+1;
+else
+    SHELL_MODEL=[];
+    str_shell='';
 end
 
 % write end of step file
-[str_end,obj_idx]=writeStepEnd(obj_idx,step_filename,SHELL_BASED_SURFACE_MODEL_list);
+[str_end,obj_idx]=writeStepEnd(obj_idx,step_filename,WIRE_MODEL,SHELL_MODEL);
 
 % write into file
-str=[str_head,str_geom,str_end];
+str=[str_head,str_entity,str_wire,str_shell,str_end];
 step_file=fopen(step_filestr,'w');
 fprintf(step_file,str);
 fclose(step_file);
@@ -54,7 +106,7 @@ clear('step_file');
         str=[str,newline];
     end
 
-    function [str,obj_idx]=writeStepEnd(obj_idx,step_filename,model_index)
+    function [str,obj_idx]=writeStepEnd(obj_idx,step_filename,WIRE_MODEL,SHELL_MODEL)
         % write end of step file
         %
 
@@ -70,7 +122,12 @@ clear('step_file');
         str=[str,sprintf('#%d = PRODUCT_DEFINITION ( ''NONE'', '''', #%d, #%d ) ;\n',obj_idx,obj_idx-1,obj_idx-2)]; obj_idx=obj_idx+1;
         str=[str,newline];
         str=[str,sprintf('#%d = PRODUCT_DEFINITION_SHAPE ( ''NONE'', ''NONE'',  #%d ) ;\n',obj_idx,obj_idx-1)]; obj_idx=obj_idx+1;
-        str=[str,sprintf('#%d = MANIFOLD_SURFACE_SHAPE_REPRESENTATION ( ''test'', ( #%d, #%d ), #%d ) ;\n',obj_idx,model_index,4,9)]; obj_idx=obj_idx+1;
+        if ~isempty(WIRE_MODEL)
+            str=[str,sprintf('#%d = GEOMETRICALLY_BOUNDED_WIREFRAME_SHAPE_REPRESENTATION ( ''geom'', ( #%d, #%d ), #%d ) ;\n',obj_idx,WIRE_MODEL,4,9)]; obj_idx=obj_idx+1;
+        end
+        if ~isempty(SHELL_MODEL)
+            str=[str,sprintf('#%d = MANIFOLD_SURFACE_SHAPE_REPRESENTATION ( ''geom'', ( #%d, #%d ), #%d ) ;\n',obj_idx,SHELL_MODEL,4,9)]; obj_idx=obj_idx+1;
+        end
         str=[str,sprintf('#%d = SHAPE_DEFINITION_REPRESENTATION ( #%d, #%d ) ;\n',obj_idx,obj_idx-2,obj_idx-1)]; obj_idx=obj_idx+1;
 
         % write end
@@ -80,357 +137,322 @@ clear('step_file');
     end
 end
 
-function [str,SHELL_BASED_SURFACE_MODEL,obj_idx]=getOpenShell(shell,obj_idx)
+%% topology step
+
+function [str,obj_idx,VERTEX_POINT]=stepVertex(vtx,obj_idx)
+% generate vertex step str
+%
+% notice:
+% vertex should be point_num x 3 matrix
+%
+
+% write point
+CARTESIAN_POINT=obj_idx;
+[str_pnt,obj_idx]=stepPoint(vtx,obj_idx);
+Pnt_idx=CARTESIAN_POINT-1+(1:size(vtx,1));
+
+VERTEX_POINT=obj_idx-1+(1:size(vtx,1));
+out_data=[VERTEX_POINT;Pnt_idx];
+str_vtx=sprintf('#%d = VERTEX_POINT ( ''NONE'', #%d ) ;\n',out_data);
+obj_idx=obj_idx+size(vtx,1);
+
+% generate all
+str=[str_pnt,str_vtx];
+end
+
+function [str,obj_idx,ORIENTED_EDGE]=stepEdge(edg,obj_idx)
+% generate edge step str
+%
+
+% load properties
+name=edg.name;
+crv=edg.curve;
+topo=edg.topology;
+vtx_list=edg.vertex_list;
+
+% process properties
+if isempty(name), name='NONE';end
+vtx_list=vtx_list(topo.vertex,:);
+
+% write curve
+[str_crv,obj_idx]=stepCurve(crv,obj_idx);
+CURVE=obj_idx-1;
+
+% write vertex
+[str_vtx,obj_idx,VERTEX_POINT]=stepVertex(vtx_list,obj_idx);
+
+% write edge
+EDGE_CURVE=obj_idx;
+str_edg=sprintf('#%d = EDGE_CURVE ( ''NONE'', #%d, #%d, #%d, .T. ) ;\n',EDGE_CURVE,VERTEX_POINT(1),VERTEX_POINT(2),CURVE);
+obj_idx=obj_idx+1;
+
+% write oriented edg
+ORIENTED_EDGE=obj_idx;
+str_ori=sprintf('#%d = ORIENTED_EDGE ( ''%s'', *, *, #%d, .F. ) ;\n',ORIENTED_EDGE,name,EDGE_CURVE);
+obj_idx=obj_idx+1;
+
+% generate all
+str=[str_crv,str_vtx,str_edg,str_ori];
+end
+
+function [str,obj_idx,EDGE_LOOP]=stepLoop(wir,obj_idx)
+% generate loop step str
+%
+
+% load properties
+name=wir.name;
+edg_list=wir.edge_list;
+topo=wir.topology;
+
+% process properties
+if isempty(name), name='NONE';end
+
+% write edge
+str_edg='';edg_num=length(edg_list);
+ORIENTED_EDGE=zeros(1,edg_num);
+for edg_idx=1:edg_num
+    [str,obj_idx,ORIENTED_EDGE(edg_idx)]=stepEdge(edg_list(edg_idx),obj_idx);
+    str_edg=[str_edg,str,'\n'];
+end
+
+% write loop
+EDGE_LOOP=obj_idx;
+format_out=['( ','#%d',repmat(', #%d',1,edg_num-1),' )'];
+str_lop=[sprintf('#%d = EDGE_LOOP ( ''%s'', ',EDGE_LOOP,name),sprintf(format_out,ORIENTED_EDGE),' ) ;\n'];
+obj_idx=obj_idx+1;
+
+% generate all
+str=[str_edg,str_lop];
+end
+
+function [str,obj_idx,ADVANCED_FACE]=stepFace(fce,obj_idx)
+% generate face step str
+%
+
+% load properties
+name=fce.name;
+srf=fce.surface;
+topo=fce.topology;
+wire_list=fce.wire_list;
+
+% process properties
+if isempty(name), name='NONE';end
+
+% write surface
+[str_srf,obj_idx]=stepSurface(srf,obj_idx);
+SURFACE=obj_idx-1;
+
+% write edge loop
+str_lop='';wir_num=length(wire_list);
+EDGE_LOOP=zeros(1,wir_num);
+for wir_idx=1:wir_num
+    [str,obj_idx,EDGE_LOOP(wir_idx)]=stepLoop(wire_list(wir_idx),obj_idx);
+    str_lop=[str_lop;str];
+end
+
+% generate FACE_OUTER_BOUND
+FACE_OUTER_BOUND=obj_idx;
+str_otr_bou=sprintf('#%d = FACE_OUTER_BOUND ( ''NONE'', #%d, .T. ) ;\n',FACE_OUTER_BOUND,EDGE_LOOP(1));
+obj_idx=obj_idx+1;
+
+% generate FACE_BOUND
+if wir_num > 1
+    FACE_BOUND=zeros(1,wir_num-1);
+    str_bou='';
+    for wir_idx=1:wir_num
+        FACE_BOUND(wir_idx)=obj_idx;
+        str_bou=[str_bou,sprintf('#%d = FACE_BOUND ( ''NONE'', #%d, .T. ) ;\n',FACE_BOUND(wir_idx),EDGE_LOOP(1+wir_idx))];
+        obj_idx=obj_idx+1;
+    end
+else
+    FACE_BOUND=[];
+    str_bou='';
+end
+
+% generate ADVANCED_FACE
+ADVANCED_FACE=obj_idx;
+BOUND=[FACE_OUTER_BOUND,FACE_BOUND];
+format_out=['( ','#%d',repmat(', #%d',1,wir_num-1),' )'];
+str_fce=[sprintf('#%d = ADVANCED_FACE ( ''%s'', ',ADVANCED_FACE,name),sprintf(format_out,BOUND),sprintf(', #%d, .F. ) ;\n',SURFACE)];
+obj_idx=obj_idx+1;
+
+% generate all
+str=[str_srf,str_lop,str_otr_bou,str_bou,str_fce];
+end
+
+function [str,obj_idx,SHELL]=stepShell(shl,obj_idx)
 % write surface into step file
 %
-surf_num=length(shell.face_list);
-if surf_num == 0
-    str=[];SHELL_BASED_SURFACE_MODEL=[];
-    return;
-end
+
+% load properties
+name=shl.name;
+fce_list=shl.face_list;
+topo=shl.topology;
+clsd=shl.closed;
+
+% process properties
+if isempty(name), name='NONE';end
 
 % write face
-str_face=[];ADVANCED_FACE_list=zeros(1,surf_num);
-for surf_idx=1:surf_num
-    fce=shell.face_list{surf_idx};
-    if ~isa(fce,'FaceCST')
-        if all(fce.Weights == 1)
-            [str_new,ADVANCED_FACE,obj_idx]=bsplineFaceStep(fce,obj_idx);
-        else
-            [str_new,ADVANCED_FACE,obj_idx]=NURBSFaceStep(fce,obj_idx);
-        end
-    else
-        fce=fce.getNURBS();
-        [str_new,ADVANCED_FACE,obj_idx]=bsplineFaceStep(fce,obj_idx);
-    end
-    str_face=[str_face,str_new,'\n'];
-    ADVANCED_FACE_list(surf_idx)=ADVANCED_FACE;
+str_fce='';fce_num=length(fce_list);
+ADVANCED_FACE=zeros(1,fce_num);
+for fce_idx=1:fce_num
+    [str,obj_idx,ADVANCED_FACE(fce_idx)]=stepEdge(fce_list(fce_idx),obj_idx);
+    str_fce=[str_fce,str,'\n'];
 end
 
-% write OPEN_SHELL
-OPEN_SHELL=obj_idx;
-str_shell=[num2str(obj_idx,'#%d ='),' OPEN_SHELL',...
-    ' ( ',...
-    '''NONE''',', ',...
-    '( ',num2str(ADVANCED_FACE_list(1),'#%d'),num2str(ADVANCED_FACE_list(2:end),', #%d'),' )',...
-    ' ) ;\n']; obj_idx=obj_idx+1;
-
-% write model
-SHELL_BASED_SURFACE_MODEL=obj_idx;
-str_model=[num2str(obj_idx,'#%d ='),' SHELL_BASED_SURFACE_MODEL',...
-    ' ( ',...
-    '''NONE''',', ',...
-    '( ',num2str(OPEN_SHELL,'#%d'),' )',...
-    ' ) ;\n']; obj_idx=obj_idx+1;
-
-str=sprintf([str_face,str_shell,str_model]);
-
+% write shell
+SHELL=obj_idx;
+format_out=['( ','#%d',repmat(', #%d',1,fce_num-1),' )'];
+if clsd
+str_shell=[sprintf('#%d = CLOSED_SHELL ( ''%s'', ',SHELL,name),sprintf(format_out,ADVANCED_FACE),' ) ;\n'];
+else
+str_shell=[sprintf('#%d = OPEN_SHELL ( ''%s'', ',SHELL,name),sprintf(format_out,ADVANCED_FACE),' ) ;\n'];
 end
-
-function [str,ADVANCED_FACE,obj_idx]=bsplineFaceStep(fce,obj_idx)
-% write BSpline into step file
-%
-if nargin < 2,obj_idx=1;end
-name=fce.name;
-if isempty(name),name='NONE';end
-
-[v_num,u_num,~]=size(fce.Poles);
-
-% generate CARTESIAN_POINT
-CARTESIAN_POINT=obj_idx;
-Poles=fce.Poles;
-Poles=reshape(Poles,v_num*u_num,3);
-str_point=stepPoint(obj_idx,Poles); obj_idx=obj_idx+v_num*u_num;
-
-% generate B_SPLINE_CURVE_WITH_KNOTS
-B_SPLINE_CURVE_WITH_KNOTS=obj_idx;
-str_curve=[];
-str_curve=[str_curve,stepCurve(obj_idx,((0:1:(u_num-1))*v_num+1) +CARTESIAN_POINT-1,...
-    fce.UDegree,fce.UMults,fce.UKnots)]; obj_idx=obj_idx+1;
-str_curve=[str_curve,stepCurve(obj_idx,((v_num*u_num-v_num+1):1:(v_num*u_num)) +CARTESIAN_POINT-1,...
-    fce.VDegree,fce.VMults,fce.VKnots)]; obj_idx=obj_idx+1;
-str_curve=[str_curve,stepCurve(obj_idx,((u_num:-1:1)*v_num) +CARTESIAN_POINT-1,...
-    fce.UDegree,fliplr(fce.UMults),fliplr(1-fce.UKnots))]; obj_idx=obj_idx+1;
-str_curve=[str_curve,stepCurve(obj_idx,(v_num:-1:1) +CARTESIAN_POINT-1,...
-    fce.VDegree,fliplr(fce.VMults),fliplr(1-fce.VKnots))]; obj_idx=obj_idx+1;
-
-% generate VERTEX_POINT
-VERTEX_POINT=obj_idx;
-str_vertex=[];
-str_vertex=[str_vertex,stepVertex(obj_idx,1 +CARTESIAN_POINT-1)]; obj_idx=obj_idx+1;
-str_vertex=[str_vertex,stepVertex(obj_idx,v_num*u_num-v_num+1 +CARTESIAN_POINT-1)]; obj_idx=obj_idx+1;
-str_vertex=[str_vertex,stepVertex(obj_idx,v_num*u_num +CARTESIAN_POINT-1)]; obj_idx=obj_idx+1;
-str_vertex=[str_vertex,stepVertex(obj_idx,v_num +CARTESIAN_POINT-1)]; obj_idx=obj_idx+1;
-
-% generate EDGE_CURVE
-EDGE_CURVE=obj_idx;
-str_edge=[];
-str_edge=[str_edge,stepEdge(obj_idx,VERTEX_POINT,VERTEX_POINT+1,B_SPLINE_CURVE_WITH_KNOTS)]; obj_idx=obj_idx+1;
-str_edge=[str_edge,stepEdge(obj_idx,VERTEX_POINT+1,VERTEX_POINT+2,B_SPLINE_CURVE_WITH_KNOTS+1)]; obj_idx=obj_idx+1;
-str_edge=[str_edge,stepEdge(obj_idx,VERTEX_POINT+2,VERTEX_POINT+3,B_SPLINE_CURVE_WITH_KNOTS+2)]; obj_idx=obj_idx+1;
-str_edge=[str_edge,stepEdge(obj_idx,VERTEX_POINT+3,VERTEX_POINT,B_SPLINE_CURVE_WITH_KNOTS+3)]; obj_idx=obj_idx+1;
-
-% generate ORIENTED_EDGE
-ORIENTED_EDGE=obj_idx;
-str_oriented=[];
-str_oriented=[str_oriented,stepOriented(obj_idx,EDGE_CURVE)]; obj_idx=obj_idx+1;
-str_oriented=[str_oriented,stepOriented(obj_idx,EDGE_CURVE+1)]; obj_idx=obj_idx+1;
-str_oriented=[str_oriented,stepOriented(obj_idx,EDGE_CURVE+2)]; obj_idx=obj_idx+1;
-str_oriented=[str_oriented,stepOriented(obj_idx,EDGE_CURVE+3)]; obj_idx=obj_idx+1;
-
-% generate EDGE_LOOP
-EDGE_LOOP=obj_idx;
-str_loop=[num2str(obj_idx,'#%d ='),' EDGE_LOOP',...
-    ' ( ',...
-    '''NONE''',', ',...
-    '( ',num2str(ORIENTED_EDGE,'#%d'),', ',...
-    num2str(ORIENTED_EDGE+1,'#%d'),', ',...
-    num2str(ORIENTED_EDGE+2,'#%d'),', ',...
-    num2str(ORIENTED_EDGE+3,'#%d'),') ',...
-    ' ) ;\n']; obj_idx=obj_idx+1;
-
-% generate FACE_OUTER_BOUND
-FACE_OUTER_BOUND=obj_idx;
-str_outer=[num2str(obj_idx,'#%d ='),' FACE_OUTER_BOUND',...
-    ' ( ',...
-    '''NONE''',', ',...
-    num2str(EDGE_LOOP,'#%d'),', ',...
-    '.T.',...
-    ' ) ;\n']; obj_idx=obj_idx+1;
-
-% generate B_SPLINE_SURFACE_WITH_KNOTS
-B_SPLINE_SURFACE_WITH_KNOTS=obj_idx;
-point_index=CARTESIAN_POINT-1+reshape((1:v_num*u_num),v_num,u_num);
-str_surface=stepSurface(obj_idx,name,point_index,fce.UDegree,fce.VDegree,fce.UMults,fce.VMults,fce.UKnots,fce.VKnots); obj_idx=obj_idx+1;
-
-% generate ADVANCED_FACE
-ADVANCED_FACE=obj_idx;
-str_face=[num2str(obj_idx,'#%d ='),' ADVANCED_FACE',...
-    ' ( ',...
-    '''',name,'''',', ',...
-    '( ',num2str(FACE_OUTER_BOUND,'#%d'),' )',', '...
-    num2str(B_SPLINE_SURFACE_WITH_KNOTS,'#%d'),', ',...
-    '.T.',...
-    ' ) ;\n']; obj_idx=obj_idx+1;
+obj_idx=obj_idx+1;
 
 % generate all
-str=sprintf([str_point,'\n',str_curve,'\n',str_vertex,'\n',...
-    str_edge,'\n',str_oriented,'\n',str_loop,'\n',str_outer,'\n',...
-    str_surface,'\n',str_face]);
+str=[str_face,str_shell];
 end
 
-function [str,ADVANCED_FACE,obj_idx]=NURBSFaceStep(fce,obj_idx)
-% write BSpline into step file
+%% geometry step
+
+function [str,obj_idx]=stepPoint(pnt,obj_idx)
+% generate point step str
 %
-if nargin < 2,obj_idx=1;end
-name=fce.name;
-if isempty(name),name='NONE';end
-
-u_num=size(fce.Poles,2);
-v_num=size(fce.Poles,1);
-
-% generate CARTESIAN_POINT
-CARTESIAN_POINT=obj_idx;
-Poles=fce.Poles;
-Poles=reshape(Poles,v_num*u_num,3);
-str_point=stepPoint(obj_idx,Poles);obj_idx=obj_idx+v_num*u_num;
-
-% generate B_SPLINE_CURVE_WITH_KNOTS
-B_SPLINE_CURVE_WITH_KNOTS=obj_idx;
-str_curve=[];
-str_curve=[str_curve,stepCurveRational(obj_idx,((0:1:(u_num-1))*v_num+1) +CARTESIAN_POINT-1,...
-    fce.UDegree,fce.UMults,fce.UKnots,fce.Weights(1,:))]; obj_idx=obj_idx+1;
-str_curve=[str_curve,stepCurveRational(obj_idx,((v_num*u_num-v_num+1):1:(v_num*u_num)) +CARTESIAN_POINT-1,...
-    fce.VDegree,fce.VMults,fce.VKnots,fce.Weights(:,end))]; obj_idx=obj_idx+1;
-str_curve=[str_curve,stepCurveRational(obj_idx,((u_num:-1:1)*v_num) +CARTESIAN_POINT-1,...
-    fce.UDegree,fliplr(fce.UMults),fliplr(1-fce.UKnots),fce.Weights(end,end:-1:1))]; obj_idx=obj_idx+1;
-str_curve=[str_curve,stepCurveRational(obj_idx,(v_num:-1:1) +CARTESIAN_POINT-1,...
-    fce.VDegree,fliplr(fce.VMults),fliplr(1-fce.VKnots),fce.Weights(end:-1:1,1))]; obj_idx=obj_idx+1;
-
-% generate VERTEX_POINT
-VERTEX_POINT=obj_idx;
-str_vertex=[];
-str_vertex=[str_vertex,stepVertex(obj_idx,1 +CARTESIAN_POINT-1)]; obj_idx=obj_idx+1;
-str_vertex=[str_vertex,stepVertex(obj_idx,v_num*u_num-v_num+1 +CARTESIAN_POINT-1)]; obj_idx=obj_idx+1;
-str_vertex=[str_vertex,stepVertex(obj_idx,v_num*u_num +CARTESIAN_POINT-1)]; obj_idx=obj_idx+1;
-str_vertex=[str_vertex,stepVertex(obj_idx,v_num +CARTESIAN_POINT-1)]; obj_idx=obj_idx+1;
-
-% generate EDGE_CURVE
-EDGE_CURVE=obj_idx;
-str_edge=[];
-str_edge=[str_edge,stepEdge(obj_idx,VERTEX_POINT,VERTEX_POINT+1,B_SPLINE_CURVE_WITH_KNOTS)]; obj_idx=obj_idx+1;
-str_edge=[str_edge,stepEdge(obj_idx,VERTEX_POINT+1,VERTEX_POINT+2,B_SPLINE_CURVE_WITH_KNOTS+1)]; obj_idx=obj_idx+1;
-str_edge=[str_edge,stepEdge(obj_idx,VERTEX_POINT+2,VERTEX_POINT+3,B_SPLINE_CURVE_WITH_KNOTS+2)]; obj_idx=obj_idx+1;
-str_edge=[str_edge,stepEdge(obj_idx,VERTEX_POINT+3,VERTEX_POINT,B_SPLINE_CURVE_WITH_KNOTS+3)]; obj_idx=obj_idx+1;
-
-% generate ORIENTED_EDGE
-ORIENTED_EDGE=obj_idx;
-str_oriented=[];
-str_oriented=[str_oriented,stepOriented(obj_idx,EDGE_CURVE)]; obj_idx=obj_idx+1;
-str_oriented=[str_oriented,stepOriented(obj_idx,EDGE_CURVE+1)]; obj_idx=obj_idx+1;
-str_oriented=[str_oriented,stepOriented(obj_idx,EDGE_CURVE+2)]; obj_idx=obj_idx+1;
-str_oriented=[str_oriented,stepOriented(obj_idx,EDGE_CURVE+3)]; obj_idx=obj_idx+1;
-
-% generate EDGE_LOOP
-EDGE_LOOP=obj_idx;
-str_loop=[num2str(obj_idx,'#%d ='),' EDGE_LOOP',...
-    ' ( ',...
-    '''NONE''',', ',...
-    '( ',num2str(ORIENTED_EDGE,'#%d'),', ',...
-    num2str(ORIENTED_EDGE+1,'#%d'),', ',...
-    num2str(ORIENTED_EDGE+2,'#%d'),', ',...
-    num2str(ORIENTED_EDGE+3,'#%d'),') ',...
-    ' ) ;\n']; obj_idx=obj_idx+1;
-
-% generate FACE_OUTER_BOUND
-FACE_OUTER_BOUND=obj_idx;
-str_outer=[num2str(obj_idx,'#%d ='),' FACE_OUTER_BOUND',...
-    ' ( ',...
-    '''NONE''',', ',...
-    num2str(EDGE_LOOP,'#%d'),', ',...
-    '.T.',...
-    ' ) ;\n']; obj_idx=obj_idx+1;
-
-% generate B_SPLINE_SURFACE_WITH_KNOTS
-B_SPLINE_SURFACE_WITH_KNOTS=obj_idx;
-point_index=CARTESIAN_POINT-1+reshape((1:v_num*u_num),v_num,u_num);
-str_surface=stepSurfaceRational(obj_idx,name,point_index,fce.UDegree,fce.VDegree,fce.UMults,fce.VMults,fce.UKnots,fce.VKnots,fce.Weights); obj_idx=obj_idx+1;
-
-% generate ADVANCED_FACE
-ADVANCED_FACE=obj_idx;
-str_face=[num2str(obj_idx,'#%d ='),' ADVANCED_FACE',...
-    ' ( ',...
-    '''',name,'''',', ',...
-    '( ',num2str(FACE_OUTER_BOUND,'#%d'),' )',', '...
-    num2str(B_SPLINE_SURFACE_WITH_KNOTS,'#%d'),', ',...
-    '.T.',...
-    ' ) ;\n']; obj_idx=obj_idx+1;
-
-% generate all
-str=sprintf([str_point,'\n',str_curve,'\n',str_vertex,'\n',...
-    str_edge,'\n',str_oriented,'\n',str_loop,'\n',str_outer,'\n',...
-    str_surface,'\n',str_face]);
-end
-
-function str_point=stepPoint(obj_idx,point)
 % notice:
-% point should be point_nunm x 3 matrix
+% point should be point_num x 3 matrix
 %
-obj_idx=obj_idx-1+(1:size(point,1));
-data=[obj_idx;point'];
-str_point=sprintf('#%d = CARTESIAN_POINT ( ''NONE'', ( %.16f, %.16f, %.16f ) ) ;\n',data);
+out_data=[obj_idx-1+(1:size(pnt,1));pnt'];
+str=sprintf('#%d = CARTESIAN_POINT ( ''NONE'', ( %.16f, %.16f, %.16f ) ) ;\n',out_data);
+obj_idx=obj_idx+size(pnt,1);
 end
 
-function str_curve=stepCurve(obj_idx,point_index,Degree,Mults,Knots)
-str_curve=[num2str(obj_idx,'#%d ='),' B_SPLINE_CURVE_WITH_KNOTS',...
-    ' ( ',...
-    '''NONE''',', ',...
-    num2str(Degree,'%d'),', \n',...
-    '( ',num2str(point_index(1),'#%d'),num2str(point_index(2:end),', #%d'),' ),\n',...
-    '.UNSPECIFIED., .F., .F.,\n',...
-    '( ',num2str(Mults(1),'%d'),num2str(Mults(2:end),', %d'),' ),\n',...
-    '( ',num2str(Knots(1),'%.16f'),num2str(Knots(2:end),', %.16f'),' ),\n',...
-    '.UNSPECIFIED.',...
-    ' ) ;\n'];
+function [str,obj_idx]=stepCurve(crv,obj_idx)
+% generate curve step str
+%
+if ~isa(crv,'Curve')
+    error('stepCurve: only support BSpline curve');
 end
 
-function str_curve=stepCurveRational(obj_idx,point_index,Degree,Mults,Knots,Weights)
-str_curve=[num2str(obj_idx,'#%d ='),' (\n'];Weights=Weights(:)';
+% load properties
+Poles=crv.Poles;
+Degree=crv.Degree;
+Mults=crv.Mults;
+Knots=crv.Knots;
+Weights=crv.Weights;
 
-% B_SPLINE_CURVE
-str_curve=[str_curve,'B_SPLINE_CURVE ( ',...
-    num2str(Degree,'%d'),', ',...
-    '( ',num2str(point_index(1),'#%d'),num2str(point_index(2:end),', #%d'),' ),\n',...
-    '.UNSPECIFIED., .F., .F. )\n'];
+% write point
+CARTESIAN_POINT=obj_idx;
+[str,obj_idx]=stepPoint(Poles,obj_idx);
+Pnt_idx=CARTESIAN_POINT-1+(1:size(Poles,1));
 
-% B_SPLINE_CURVE_WITH_KNOTS
-str_curve=[str_curve,'B_SPLINE_CURVE_WITH_KNOTS ( ( ',num2str(Mults(1),'%d'),num2str(Mults(2:end),', %d'),' ), ',...
-    '( ',num2str(Knots(1),'%.16f'),num2str(Knots(2:end),', %.16f'),' ),\n',...
-    '.UNSPECIFIED. )\n'];
+if all(Weights == 1)
+    % unrational
+    str=[str,num2str(obj_idx,'#%d ='),' B_SPLINE_CURVE_WITH_KNOTS',...
+        ' ( ',...
+        '''NONE''',', ',...
+        num2str(Degree,'%d'),', \n',...
+        '( ',num2str(Pnt_idx(1),'#%d'),num2str(Pnt_idx(2:end),', #%d'),' ),\n',...
+        '.UNSPECIFIED., .F., .F.,\n',...
+        '( ',num2str(Mults(1),'%d'),num2str(Mults(2:end),', %d'),' ),\n',...
+        '( ',num2str(Knots(1),'%.16f'),num2str(Knots(2:end),', %.16f'),' ),\n',...
+        '.UNSPECIFIED.',...
+        ' ) ;\n']; obj_idx=obj_idx+1;
+else
+    % rational
+    str=[str,num2str(obj_idx,'#%d ='),' (\n'];
 
-% RATIONAL_B_SPLINE_CURVE
-str_curve=[str_curve,'RATIONAL_B_SPLINE_CURVE ( (',num2str(Weights(1),' %.16f'),num2str(Weights(2:end),', %.16f'),' ) )\n'];
+    % B_SPLINE_CURVE
+    str=[str,'B_SPLINE_CURVE ( ',...
+        num2str(Degree,'%d'),', ',...
+        '( ',num2str(Pnt_idx(1),'#%d'),num2str(Pnt_idx(2:end),', #%d'),' ),\n',...
+        '.UNSPECIFIED., .F., .F. )\n'];
 
-str_curve=[str_curve,') ;\n'];
+    % B_SPLINE_CURVE_WITH_KNOTS
+    str=[str,'B_SPLINE_CURVE_WITH_KNOTS ( ( ',num2str(Mults(1),'%d'),num2str(Mults(2:end),', %d'),' ), ',...
+        '( ',num2str(Knots(1),'%.16f'),num2str(Knots(2:end),', %.16f'),' ),\n',...
+        '.UNSPECIFIED. )\n'];
+
+    % RATIONAL_B_SPLINE_CURVE
+    Weights=Weights(:)';
+    str=[str,'RATIONAL_B_SPLINE_CURVE ( (',num2str(Weights(1),' %.16f'),num2str(Weights(2:end),', %.16f'),' ) )\n'];
+
+    str=[str,') ;\n']; obj_idx=obj_idx+1;
+end
+str=sprintf(str);
 end
 
-function str_vertex=stepVertex(obj_idx,point_index)
-str_vertex=[num2str(obj_idx,'#%d ='),' VERTEX_POINT',...
-    ' ( ',...
-    '''NONE''',', ',...
-    num2str(point_index,'#%d'),...
-    ' ) ;\n'];
+function [str,obj_idx]=stepSurface(srf,obj_idx)
+% generate surface step str
+%
+if ~isa(srf,'Surface')
+    error('stepSurface: only support BSpline surface');
 end
 
-function str_edge=stepEdge(obj_idx,start_vertex,end_vertex,edge_index)
-str_edge=[num2str(obj_idx,'#%d ='),' EDGE_CURVE',...
-    ' ( ',...
-    '''NONE''',', ',...
-    num2str(start_vertex,'#%d'),', ',...
-    num2str(end_vertex,'#%d'),', ',...
-    num2str(edge_index,'#%d'),', ',...
-    '.T.',...
-    ' ) ;\n'];
+% load properties
+Poles=srf.Poles;
+UDegree=srf.UDegree;
+VDegree=srf.VDegree;
+UMults=srf.UMults;
+VMults=srf.VMults;
+UKnots=srf.UKnots;
+VKnots=srf.VKnots;
+Weights=srf.Weights;
 
+% generate CARTESIAN_POINT
+[v_num,u_num,~]=size(Poles);
+CARTESIAN_POINT=obj_idx;
+Poles=reshape(Poles,v_num*u_num,3);
+[str,obj_idx]=stepPoint(Poles,obj_idx);
+Pnt_idx=CARTESIAN_POINT-1+(1:v_num*u_num);
+
+if all(Weights == 1)
+    % unrational
+    str=[str,num2str(obj_idx,'#%d ='),' B_SPLINE_SURFACE_WITH_KNOTS',...
+        ' ( ',...
+        '''NONE''',', ',...
+        num2str(UDegree,'%d'),', ',num2str(VDegree,'%d'),', \n'];
+    str=[str,'('];
+    format_out=['( ','#%d',repmat(', #%d',1,v_num-1),' ),\n'];
+    str=[str,sprintf(format_out,(Pnt_idx))];
+    str=[str(1:end-2),'),\n'];
+    str=[str,'.UNSPECIFIED.',', ','.F.',', ','.F.',', ','.F.',',\n',...
+        '( ',num2str(UMults(1),'%d'),num2str(UMults(2:end),', %d'),' ),\n',...
+        '( ',num2str(VMults(1),'%d'),num2str(VMults(2:end),', %d'),' ),\n',...
+        '( ',num2str(UKnots(1),'%.16f'),num2str(UKnots(2:end),', %.16f'),' ),\n',...
+        '( ',num2str(VKnots(1),'%.16f'),num2str(VKnots(2:end),', %.16f'),' ),\n',...
+        '.UNSPECIFIED.',...
+        ') ;\n']; obj_idx=obj_idx+1;
+else
+    % rational
+    str=[str,num2str(obj_idx,'#%d ='),' (\n'];
+
+    % B_SPLINE_SURFACE
+    str=[str,'B_SPLINE_SURFACE ( ',...
+        '''NONE''',', ',...
+        num2str(UDegree,'%d'),', ',num2str(VDegree,'%d'),', \n'];
+    str=[str,'('];
+    format_out=['( ','#%d',repmat(', #%d',1,v_num-1),' ),\n'];
+    str=[str,sprintf(format_out,(Pnt_idx))];
+    str=[str(1:end-2),'),\n','.UNSPECIFIED.',', ','.F.',', ','.F.',', ','.F.',' )\n'];
+
+    % B_SPLINE_SURFACE_WITH_KNOTS
+    str=[str,'B_SPLINE_SURFACE_WITH_KNOTS ( \n',...
+        '( ',num2str(UMults(1),'%d'),num2str(UMults(2:end),', %d'),' ),\n',...
+        '( ',num2str(VMults(1),'%d'),num2str(VMults(2:end),', %d'),' ),\n',...
+        '( ',num2str(UKnots(1),'%.16f'),num2str(UKnots(2:end),', %.16f'),' ),\n',...
+        '( ',num2str(VKnots(1),'%.16f'),num2str(VKnots(2:end),', %.16f'),' ),\n',...
+        '.UNSPECIFIED. )\n'];
+
+    % RATIONAL_B_SPLINE_SURFACE
+    str=[str,'RATIONAL_B_SPLINE_SURFACE ( \n'];
+    str=[str,'('];
+    format_out=['( ','%.16f',repmat(', %.16f',1,v_num-1),' ),\n'];
+    str=[str,sprintf(format_out,(Weights))];
+    str=[str(1:end-2),' ) )\n'];
+
+    str=[str,') ;\n']; obj_idx=obj_idx+1;
 end
-
-function str_oriented=stepOriented(obj_idx,edge_index)
-str_oriented=[num2str(obj_idx,'#%d ='),' ORIENTED_EDGE',...
-    ' ( ',...
-    '''NONE''',', ',...
-    '*',', ','*',', ',...
-    num2str(edge_index,'#%d'),', ',...
-    '.T.',...
-    ' ) ;\n'];
-end
-
-function str_surface=stepSurface(obj_idx,name,point_index,UDegree,VDegree,UMults,VMults,UKnots,VKnots)
-[v_num,~]=size(point_index);
-
-str_surface=[num2str(obj_idx,'#%d ='),' B_SPLINE_SURFACE_WITH_KNOTS',...
-    ' ( ',...
-    '''',name,'''',', ',...
-    num2str(UDegree,'%d'),', ',num2str(VDegree,'%d'),', \n'];
-str_surface=[str_surface,'('];
-out_format=['( ','#%d',repmat(', #%d',1,v_num-1),' ),\n'];
-str_surface=[str_surface,sprintf(out_format,(point_index))];
-str_surface=[str_surface(1:end-2),'),\n'];
-str_surface=[str_surface,'.UNSPECIFIED.',', ','.F.',', ','.F.',', ','.F.',',\n',...
-    '( ',num2str(UMults(1),'%d'),num2str(UMults(2:end),', %d'),' ),\n',...
-    '( ',num2str(VMults(1),'%d'),num2str(VMults(2:end),', %d'),' ),\n',...
-    '( ',num2str(UKnots(1),'%.16f'),num2str(UKnots(2:end),', %.16f'),' ),\n',...
-    '( ',num2str(VKnots(1),'%.16f'),num2str(VKnots(2:end),', %.16f'),' ),\n',...
-    '.UNSPECIFIED.',...
-    ') ;\n'];
-end
-
-function str_surface=stepSurfaceRational(obj_idx,name,point_index,UDegree,VDegree,UMults,VMults,UKnots,VKnots,Weights)
-[v_num,~]=size(point_index);
-str_surface=[num2str(obj_idx,'#%d ='),' (\n'];
-
-% B_SPLINE_SURFACE
-str_surface=[str_surface,'B_SPLINE_SURFACE ( ',...
-    '''',name,'''',', ',...
-    num2str(UDegree,'%d'),', ',num2str(VDegree,'%d'),', \n'];
-str_surface=[str_surface,'('];
-out_format=['( ','#%d',repmat(', #%d',1,v_num-1),' ),\n'];
-str_surface=[str_surface,sprintf(out_format,(point_index))];
-str_surface=[str_surface(1:end-2),'),\n','.UNSPECIFIED.',', ','.F.',', ','.F.',', ','.F.',' )\n'];
-
-% B_SPLINE_SURFACE_WITH_KNOTS
-str_surface=[str_surface,'B_SPLINE_SURFACE_WITH_KNOTS ( \n',...
-    '( ',num2str(UMults(1),'%d'),num2str(UMults(2:end),', %d'),' ),\n',...
-    '( ',num2str(VMults(1),'%d'),num2str(VMults(2:end),', %d'),' ),\n',...
-    '( ',num2str(UKnots(1),'%.16f'),num2str(UKnots(2:end),', %.16f'),' ),\n',...
-    '( ',num2str(VKnots(1),'%.16f'),num2str(VKnots(2:end),', %.16f'),' ),\n',...
-    '.UNSPECIFIED. )\n'];
-
-% RATIONAL_B_SPLINE_SURFACE
-str_surface=[str_surface,'RATIONAL_B_SPLINE_SURFACE ( \n'];
-str_surface=[str_surface,'('];
-out_format=['( ','%.16f',repmat(', %.16f',1,v_num-1),' ),\n'];
-str_surface=[str_surface,sprintf(out_format,(Weights))];
-str_surface=[str_surface(1:end-2),' ) )\n'];
-
-str_surface=[str_surface,') ;\n'];
+str=sprintf(str);
 end

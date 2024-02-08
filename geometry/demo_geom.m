@@ -2,44 +2,34 @@ clc;
 clear;
 close all hidden;
 
-%% NURBS edge
+%% Spline Curve
 
 % Degree=3;group_num=3;
 % Points=[0,0,0;(0.5:0.5:group_num)',repmat([1;0],group_num,1),repmat([1;0],group_num,1)];
 % axe_hdl=axes(figure());
 % scatter3(axe_hdl,Points(:,1),Points(:,2),Points(:,3),'Marker','*','MarkerEdgeColor',[0.9290 0.6940 0.1250]);
-% crv=EdgeNURBS('',Points,Degree);
-% crv=GeomApp.VertexToEdge('',Points,Degree);
-% crv=EdgeNURBS('',[1,0;1,1;0,1],[],[],[],[1,sqrt(2)/2,1]); % arc
-% crv.plotGeom(axe_hdl);
+% crv=Curve(Points,Degree);
+% crv=GeomApp.interpPointToCurve(Points,Degree);
+% crv=Curve([1,0;1,1;0,1],[],[],[],[1,sqrt(2)/2,1]); % arc
+% crv.displayGeom(axe_hdl);
+% crv.displayPoles(axe_hdl);
 % axis equal;
 
-%% CST2D edge
+%% CST2D Curve
 
-% LX=1;LY=0.06;C_par_Y=[0.5,1];sym=false;
+% LX=1;LY=0.06;C_par_Y=[0.8,1];sym=false;
 % Degree=3;pole_num=5;
 % ctrl_X=linspace(0,1,pole_num)';ctrl_Y=rand(pole_num,1);
 % axe_hdl=axes(figure());
-% crv=EdgeCST2D('',C_par_Y,sym,LX,LY);
-% crv.addNURBS([ctrl_X,ctrl_Y],Degree);
-% crv.plotGeom(axe_hdl);
-% crv=crv.getNURBS();
-% crv.plotGeom(axe_hdl);
-% axis equal;
-
-%% BCST2D edge
-
-% LX=1;LY=0.3;C_par_Y=[1,1];sym=true;
-% Degree=3;pole_num=5;
-% ctrl_X=linspace(0,1,pole_num)';ctrl_Y=rand(pole_num,1)-0.5;
-% axe_hdl=axes(figure());
-% crv=EdgeBCST2D('',C_par_Y,sym,LX,LY);
-% crv.addNURBS([ctrl_X,ctrl_Y],Degree);
-% crv.plotGeom(axe_hdl);
-% crv.addBlunt(1,0.05);
-% crv.plotGeom(axe_hdl);
-% crv=crv.getNURBS();
-% crv.plotGeom(axe_hdl);
+% crv=CurveCST(C_par_Y,sym,LX,LY);
+% crv.addSpline(Curve([ctrl_X,ctrl_Y],Degree));
+% 
+% crv.displayGeom(axe_hdl);
+% crv.displayPoles(axe_hdl);
+% 
+% crv=crv.convertSpline();
+% crv.displayGeom(axe_hdl,struct('Color','g','LineStyle','--'));
+% crv.displayPoles(axe_hdl,struct('Color','k','LineStyle',':','Marker','s'));
 % axis equal;
 
 %% fit airfoil with CST2D
@@ -59,10 +49,10 @@ close all hidden;
 % LX=1;LY=1;C_par=[0.5,1];sym=false;
 % Degree=4;pole_num=5;
 % 
-% crv_up=EdgeCST2D('',C_par,sym,LX,LY);
-% crv_low=EdgeCST2D('',C_par,sym,LX,-LY);
-% crv_up.fitNURBS(airfoil_up,Degree,pole_num,airfoil_up(:,1));
-% crv_low.fitNURBS(airfoil_low,Degree,pole_num,airfoil_low(:,1));
+% crv_up=CurveCST(C_par,sym,LX,LY);
+% crv_low=CurveCST(C_par,sym,LX,-LY);
+% crv_up.fitSpline(airfoil_up,Degree,pole_num,airfoil_up(:,1));
+% crv_low.fitSpline(airfoil_low,Degree,pole_num,airfoil_low(:,1));
 % 
 % crv_up.optimClass();
 % crv_low.optimClass();
@@ -70,59 +60,43 @@ close all hidden;
 % axe_hdl=axes(figure());
 % line(axe_hdl,airfoil_up(:,1),airfoil_up(:,2),'LineStyle','none','Marker','o','MarkerEdgeColor',[0.8500 0.3250 0.0980])
 % line(axe_hdl,airfoil_low(:,1),airfoil_low(:,2),'LineStyle','none','Marker','o','MarkerEdgeColor',[0.8500 0.3250 0.0980])
-% crv_up.plotGeom(axe_hdl);
-% crv_low.plotGeom(axe_hdl);
+% crv_up.displayGeom(axe_hdl);
+% crv_low.displayGeom(axe_hdl);
 % axis equal;
 % 
 % writematrix(crv_up.Poles,'CSTshape_up.txt')
 % writematrix(crv_low.Poles,'CSTshape_low.txt')
 
-%% NURBS Face
+%% Spline Surface
 
 % UDegree=3;VDegree=3;point_num=5;
 % [point_X,point_Y]=meshgrid(linspace(0,1,point_num),linspace(0,1,point_num));point_Z=rands(point_num,point_num)*0.1+0.5;
 % axe_hdl=axes(figure());
 % surface(axe_hdl,point_X,point_Y,point_Z,'Marker','*','MarkerEdgeColor','r','LineStyle','none','FaceAlpha',0);
-% srf=FaceNURBS('',cat(3,point_X,point_Y,point_Z),UDegree,VDegree);
-% srf=GeomApp.VertexToFace('',cat(3,point_X,point_Y,point_Z),UDegree,VDegree);
-% srf.plotGeom(axe_hdl,11,11);
+% srf=Surface(cat(3,point_X,point_Y,point_Z),UDegree,VDegree);
+% srf=GeomApp.interpPointToSurface(cat(3,point_X,point_Y,point_Z),UDegree,VDegree);
+% srf.displayGeom(axe_hdl);
+% srf.displayPoles(axe_hdl);
 % axis equal;
 
-%% CST Face
+%% CST Surface
 
 % LX=2;LY=1/2;LZ=0.3;
 % C_par_X=[0,0];C_par_Y=[0.5,0];C_par_ZV=[15,15];C_par_ZU=[0.5,0];sym_x=false;sym_y=true;
-% srf_up=FaceCST('',C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y,LX,LY,LZ);
-% srf_low=FaceCST('',C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y,LX,-LY,LZ);
+% srf_up=SurfaceCST(C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y,LX,LY,LZ);
+% srf_low=SurfaceCST(C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y,LX,-LY,LZ);
 % axe_hdl=axes(figure());
-% srf_up.plotGeom(axe_hdl);
-% srf_low.plotGeom(axe_hdl);
-% srf_up=srf_up.getNURBS([],[],[],[],11,11);
-% srf_low=srf_low.getNURBS([],[],[],[],11,11);
-% srf_up.plotGeom(axe_hdl);
-% srf_low.plotGeom(axe_hdl);
+% srf_up.displayGeom(axe_hdl);
+% srf_low.displayGeom(axe_hdl);
+% srf_up=srf_up.convertSpline();
+% srf_low=srf_low.convertSpline();
+% srf_up.displayGeom(axe_hdl,struct('FaceColor','g','FaceAlpha',0.5,'LineStyle','none'));
+% srf_up.displayPoles(axe_hdl);
+% srf_low.displayGeom(axe_hdl,struct('FaceColor','g','FaceAlpha',0.5,'LineStyle','none'));
+% srf_low.displayPoles(axe_hdl);
 % axis equal
 
-%% Coons Face
-
-% crv_u0=EdgeNURBS('',[0,0,0.5;0,1,2;0,0,0]');
-% crv_u1=EdgeNURBS('',[0,0.5,1;0,1,2.5;2.5,2,2]');
-% crv_0v=EdgeNURBS('',[0,0,0;0,1,0;0,1,2.5]');
-% crv_1v=EdgeNURBS('',[0.5,0.5,1;2,1.5,2.5;0,1,2]');
-% 
-% axe_hdl=axes(figure());
-% axis equal;view(3);
-% 
-% crv_u0.plotGeom(axe_hdl);
-% crv_1v.plotGeom(axe_hdl);
-% crv_u1.plotGeom(axe_hdl);
-% crv_0v.plotGeom(axe_hdl);
-% 
-% srf=FaceCoons('',@(u) crv_u0.calPoint(u),@(u) crv_u1.calPoint(u),...
-%     @(v) crv_0v.calPoint(v),@(v) crv_1v.calPoint(v));
-% srf.plotGeom(axe_hdl,[],[],struct('LineStyle','none','FaceAlpha',0.5));
-
-%% mapping generate Face
+%% mapping generate Surface
 
 % axe_hdl=axes(figure());
 % axis equal;view(3);
@@ -131,38 +105,41 @@ close all hidden;
 % line_u1=[0,0.5,1;0,1,2.5;2.5,2,2]';
 % line_v0=[0,0,0;0,1,0;0,1,2.5]';
 % line_v1=[0.5,0.5,1;2,1.5,2.5;0,1,2]';
-% edge_u0=EdgeNURBS('',line_u0);
-% edge_u1=EdgeNURBS('',line_u1);
-% edge_0v=EdgeNURBS('',line_v0);
-% edge_1v=EdgeNURBS('',line_v1);
-% edge_u0.plotGeom(axe_hdl);
-% edge_1v.plotGeom(axe_hdl);
-% edge_u1.plotGeom(axe_hdl);
-% edge_0v.plotGeom(axe_hdl);
+% edge_u0=Curve(line_u0);
+% edge_u1=Curve(line_u1);
+% edge_0v=Curve(line_v0);
+% edge_1v=Curve(line_v1);
+% edge_u0.displayGeom(axe_hdl);
+% edge_1v.displayGeom(axe_hdl);
+% edge_u1.displayGeom(axe_hdl);
+% edge_0v.displayGeom(axe_hdl);
 % 
-% Point=GeomApp.MapGrid(line_u0,line_u1,line_v0,line_v1);
-% srf=FaceNURBS('',Point);
-% srf.plotGeom(axe_hdl,[],[],struct('LineStyle','none','FaceAlpha',0.5));
+% Poles=GeomApp.MapGrid(line_u0,line_u1,line_v0,line_v1);
+% srf=Surface(Poles);
+% srf.displayGeom(axe_hdl,struct('LineStyle','none','FaceAlpha',0.5));
+% srf.displayPoles(axe_hdl);
 
 %% Fit 3D wing
 
 % load('wing/wing_RAE2822_NACA4412.mat');
 % UDegree=3;VDegree=3;u_pole_num=4;v_pole_num=8;
 % C_par_X=[0,0];C_par_Y=[0,0];C_par_ZV=[0,0];C_par_ZU=[0.5,1];sym_x=false;sym_y=false;
-% srf_up=FaceCST('',C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y);
-% srf_low=FaceCST('',C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y);
+% srf_up=SurfaceCST(C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y);
+% srf_low=SurfaceCST(C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y);
 % 
 % U_node_up=X_up(1,:)/max(X_up(1,:));
 % V_node_up=Y_up(:,1)/max(Y_up(:,1));
 % U_node_low=X_low(1,:)/max(X_low(1,:));
 % V_node_low=Y_low(:,1)/max(Y_low(:,1));
 % 
-% srf_up.fitNURBS(cat(3,X_up,Y_up,Z_up),UDegree,VDegree,u_pole_num,v_pole_num,U_node_up,V_node_up);
-% srf_low.fitNURBS(cat(3,X_low,Y_low,Z_low),UDegree,VDegree,u_pole_num,v_pole_num,U_node_low,V_node_low);
+% srf_up.fitSpline(cat(3,X_up,Y_up,Z_up),UDegree,VDegree,u_pole_num,v_pole_num,U_node_up,V_node_up);
+% srf_low.fitSpline(cat(3,X_low,Y_low,Z_low),UDegree,VDegree,u_pole_num,v_pole_num,U_node_low,V_node_low);
 % 
 % axe_hdl=axes(figure());
-% srf_up.plotGeom(axe_hdl,20,20);
-% srf_low.plotGeom(axe_hdl,20,20);
+% srf_up.displayGeom(axe_hdl);
+% srf_up.displayPoles(axe_hdl);
+% srf_low.displayGeom(axe_hdl);
+% srf_low.displayPoles(axe_hdl);
 % axis equal
 
 %% generate 3D wing
@@ -232,8 +209,8 @@ close all hidden;
 % u_num=size(airfoil_data,1)/2;
 % airfoil_up=airfoil_data(1:u_num,:);airfoil_low=airfoil_data(u_num+1:end,:);
 % 
-% crv_up=EdgeCST2D('',LX,LY,C_par,sym);
-% crv_low=EdgeCST2D('',LX,LY,C_par,sym);
+% crv_up=CurveCST(LX,LY,C_par,sym);
+% crv_low=CurveCST(LX,LY,C_par,sym);
 % crv_up.addShapeBSpline(airfoil_up(:,1),airfoil_up(:,2),Degree,[],[],pole_num,airfoil_up(:,1));
 % crv_low.addShapeBSpline(airfoil_low(:,1),airfoil_low(:,2),Degree,[],[],pole_num,airfoil_low(:,1));
 % end

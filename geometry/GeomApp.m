@@ -1,10 +1,9 @@
 classdef GeomApp
     methods(Static)
-        function [edg,U_node]=VertexToEdge(name,Nodes,Degree,pole_num,U_node,Derivs)
+        function [crv,U_node]=interpPointToCurve(Nodes,Degree,pole_num,U_node,Derivs)
             % generate BSpline curve by defined fitting points
             %
             % input:
-            % name:
             % Nodes (matrix): fit point, node_num x dimension matrix
             % Degree (optional):
             % Mults (optional):
@@ -19,13 +18,13 @@ classdef GeomApp
             % notice:
             % if input Degree is empty, Degree default is pole_num-1, which is Bezier curve
             %
-            if nargin < 6
+            if nargin < 5
                 Derivs=[];
-                if nargin < 5
+                if nargin < 4
                     U_node=[];
-                    if nargin < 4
+                    if nargin < 3
                         pole_num=[];
-                        if nargin < 3
+                        if nargin < 2
                             Degree=[];
                         end
                     end
@@ -40,41 +39,16 @@ classdef GeomApp
             if isempty(pole_num),pole_num=node_num+deriv_num;end
             if isempty(Degree),Degree=pole_num-1;end
             if pole_num > node_num+deriv_num
-                error('GeomApp.VertexToEdge: pole_num more than node_num')
+                error('GeomApp.interpPointToCurve: pole_num more than node_num')
             end
-            % default value of knots vector
+            % default value of U_node vector
             if isempty(U_node)
-                % % modified sine length parameterization method
-                % vctr_list=Nodes(2:end,:)-Nodes(1:end-1,:);
-                % len_list=vecnorm(vctr_list,2,2);
-                % vctr_list=vctr_list./len_list;
-                % 
-                % % calculate angle min(pi-theta,pi/2);
-                % theta_list=zeros(node_num-2,1);
-                % for theta_idx=1:node_num-2
-                %     cos_theta=vctr_list(theta_idx,:)*vctr_list(theta_idx+1,:)';
-                %     if cos_theta > 1,theta=0;
-                %     elseif cos_theta < -1,theta=pi;
-                %     else,theta=acos(cos_theta);
-                %     end
-                %     theta_list(theta_idx)=min(pi-theta,pi/2);
-                % end
-                % 
-                % % calcuate curvature
-                % curv_list=zeros(node_num-1,1);
-                % curv_list(1)=1+3*(theta_list(1)*len_list(1)/(len_list(1)+len_list(2)));
-                % for curv_idx=2:node_num-2
-                %     curv_list(curv_idx)=1+3/2*...
-                %         (theta_list(curv_idx-1)*len_list(curv_idx-1)/(len_list(curv_idx)+len_list(curv_idx-1))+...
-                %         theta_list(curv_idx)*len_list(curv_idx+1)/(len_list(curv_idx)+len_list(curv_idx+1)));
-                % end
-                % curv_list(end)=1+3*(theta_list(end)*len_list(end)/(len_list(end)+len_list(end-1)));
-
                 U_node=vecnorm(Nodes(2:end,:)-Nodes(1:end-1,:),2,2);
-                U_node=[0;cumsum(U_node)];U_node=U_node/U_node(end);
+                U_node=[0;cumsum(U_node)];
             end
-            U_node=U_node(:);
+            U_node=(U_node(:)-min(U_node))/(max(U_node)-min(U_node));
             U_node_knots=U_node;
+            % process derivs
             if node_num ~= 0
                 U_node_knots=[U_node;U_node(all(~isnan(Derivs),2))];
                 U_node_knots=sort(U_node_knots);
@@ -82,36 +56,27 @@ classdef GeomApp
             U_node_knots=interp1(linspace(0,1,length(U_node_knots)),U_node_knots,linspace(0,1,pole_num));
 
             if ~isempty(Derivs) && size(Derivs,1) ~= node_num
-                error('GeomApp.VertexToEdge: Derivs matrix do not equal to node_num');
+                error('GeomApp.interpPointToCurve: Derivs matrix do not equal to node_num');
             end
 
             % reference:
             % [1] 施法中. 计算机辅助几何设计与非均匀有理B样条[M]. 208-281.
             % [2] https://blog.csdn.net/he_nan/article/details/107134271
             Mults=[Degree+1,ones(1,pole_num-Degree-1),Degree+1];
-            % Knots=linspace(0,1,node_num-(Degree-deriv_num)+1);
-            % for j=2:node_num-Degree
             Knots=linspace(0,1,pole_num-Degree+1);
             for j=2:pole_num-Degree
                 Knots(j)=mean(U_node_knots(j:j+Degree-1));
             end
             % modify
             Knots=interp1(linspace(0,1,length(Knots)),Knots,linspace(0,1,pole_num-Degree+1));
-            % c=(node_num)/(pole_num-Degree);
-            % for j=1:pole_num-Degree-1
-            %     i=floor(j*c);
-            %     a=(j*c-i);
-            %     Knots(j+1)=(1-a)*u_node(i)+a*u_node(i+1);
-            % end
             u_list=baseKnotVec(Mults,Knots);
 
             % base on node point list inverse calculate control point list
             fit_matrix=zeros(node_num+deriv_num,pole_num);
-            for node_idx=1:node_num
-                u=U_node(node_idx);
-                for ctrl_idx=1:pole_num
-                    fit_matrix(node_idx,ctrl_idx)=baseFcnN(u_list,u,ctrl_idx,Degree);
-                end
+            [N_list,idx_srt,idx_end]=baseFcnN(U_node,Degree,u_list);
+            for deg_idx=1:Degree+1
+                idx=sub2ind([node_num+deriv_num,pole_num],(1:(node_num+deriv_num))',idx_srt+(deg_idx-1));
+                fit_matrix(idx)=N_list(:,deg_idx);
             end
 
             % process derivative
@@ -137,17 +102,17 @@ classdef GeomApp
             if deriv_num == 0, Poles=fit_matrix\Nodes;
             else, Poles=fit_matrix\[Nodes;Derivs(all(~isnan(Derivs),2),:)];end
 
+            % adjust bound Poles
             Poles(1,:)=Nodes(1,:);
             Poles(end,:)=Nodes(end,:);
 
-            edg=EdgeNURBS(name,Poles,Degree,Mults,Knots);
+            crv=Curve(Poles,Degree,Mults,Knots);
         end
 
-        function fce=VertexToFace(name,Nodes,UDegree,VDegree,u_pole_num,v_pole_num,U_node,V_node)
+        function [srf,U_node,V_node]=interpPointToSurface(Nodes,UDegree,VDegree,u_pole_num,v_pole_num,U_node,V_node)
             % generate BSpline curve by defined fitting points
             %
             % input:
-            % name:
             % Nodes (matrix): fit point,u_node_num x v_node_num x dimension matrix
             % Degree (optional):
             % Mults (optional):
@@ -158,22 +123,22 @@ classdef GeomApp
             % V_node (optional):
             %
             % output:
-            % FaceNURBS
+            % Surface
             %
             % notice:
             % if input Degree is empty,Degree default is pole_num-1,which is Bezier curve
             %
-            if nargin < 8
+            if nargin < 7
                 V_node=[];
-                if nargin < 7
+                if nargin < 6
                     U_node=[];
-                    if nargin < 6
+                    if nargin < 5
                         v_pole_num=[];
-                        if nargin < 5
+                        if nargin < 4
                             u_pole_num=[];
-                            if nargin < 4
+                            if nargin < 3
                                 VDegree=[];
-                                if nargin < 3
+                                if nargin < 2
                                     UDegree=[];
                                 end
                             end
@@ -186,26 +151,26 @@ classdef GeomApp
             if isempty(u_pole_num),u_pole_num=u_node_num;end
             if isempty(v_pole_num),v_pole_num=v_node_num;end
             if u_pole_num > u_node_num || v_pole_num > v_node_num
-                error('GeomApp.VertexToEdge: pole_num more than node_num')
+                error('GeomApp.interpPointToSurface: pole_num more than node_num')
             end
 
-            % default value
+            % default value of U_node
             if isempty(U_node)
                 U_node=vecnorm(Nodes(:,2:end,:)-Nodes(:,1:end-1,:),2,3);
-                U_node=mean(U_node,1);
-                U_node=[0;cumsum(U_node')];U_node=U_node/U_node(end);
+                U_node=mean(U_node,1);U_node=[0;cumsum(U_node')];
             end
-            U_node=U_node(:);
+            U_node=(U_node(:)-min(U_node))/(max(U_node)-min(U_node));
             U_node_knots=interp1(linspace(0,1,length(U_node)),U_node,linspace(0,1,u_pole_num));
 
+            % default value of V_node
             if isempty(V_node)
                 V_node=vecnorm(Nodes(2:end,:,:)-Nodes(1:end-1,:,:),2,3);
-                V_node=mean(V_node,2);
-                V_node=[0;cumsum(V_node)];V_node=V_node/V_node(end);
+                V_node=mean(V_node,2);V_node=[0;cumsum(V_node)];
             end
-            V_node=V_node(:);
+            V_node=(V_node(:)-min(V_node))/(max(V_node)-min(V_node));
             V_node_knots=interp1(linspace(0,1,length(V_node)),V_node,linspace(0,1,v_pole_num));
             
+            % calculate u_list
             UMults=[UDegree+1,ones(1,u_pole_num-UDegree-1),UDegree+1];
             UKnots=linspace(0,1,u_pole_num-UDegree+1);
             for j=2:u_pole_num-UDegree
@@ -215,6 +180,7 @@ classdef GeomApp
             UKnots=interp1(linspace(0,1,length(UKnots)),UKnots,linspace(0,1,u_pole_num-UDegree+1));
             u_list=baseKnotVec(UMults,UKnots);
 
+            % calculate v_list
             VMults=[VDegree+1,ones(1,v_pole_num-VDegree-1),VDegree+1];
             VKnots=linspace(0,1,v_pole_num-VDegree+1);
             for j=2:v_pole_num-VDegree
@@ -225,47 +191,45 @@ classdef GeomApp
             v_list=baseKnotVec(VMults,VKnots);
 
             % base on node point list inverse calculate control point list
-            matrix_v=zeros(v_node_num,v_pole_num);
-            for node_idx=1:v_node_num
-                v=V_node(node_idx);
-                for ctrl_idx=1:v_pole_num
-                    matrix_v(node_idx,ctrl_idx)=baseFcnN(v_list,v,ctrl_idx,VDegree);
-                end
+            v_fit_matrix=zeros(v_node_num,v_pole_num);
+            [N_list,idx_srt,idx_end]=baseFcnN(V_node,VDegree,v_list);
+            for deg_idx=1:VDegree+1
+                idx=sub2ind([v_node_num,v_pole_num],(1:(v_node_num))',idx_srt+(deg_idx-1));
+                v_fit_matrix(idx)=N_list(:,deg_idx);
             end
-            matrix_u=zeros(u_pole_num,u_node_num);
-            for node_idx=1:u_node_num
-                u=U_node(node_idx);
-                for ctrl_idx=1:u_pole_num
-                    matrix_u(ctrl_idx,node_idx)=baseFcnN(u_list,u,ctrl_idx,UDegree);
-                end
+            u_fit_matrix=zeros(u_node_num,u_pole_num);
+            [N_list,idx_srt,idx_end]=baseFcnN(U_node,UDegree,u_list);
+            for deg_idx=1:UDegree+1
+                idx=sub2ind([u_node_num,u_pole_num],(1:(u_node_num))',idx_srt+(deg_idx-1));
+                u_fit_matrix(idx)=N_list(:,deg_idx);
             end
-            Poles=pagemrdivide(pagemldivide(matrix_v,Nodes),matrix_u);
+            u_fit_matrix=u_fit_matrix';
+            Poles=pagemrdivide(pagemldivide(v_fit_matrix,Nodes),u_fit_matrix);
 
-            % adjust bound poles
-            Poles_u0=pagemrdivide(pagemldivide(matrix_v(1,1),Nodes(1,:,:)),matrix_u);
-            Poles_u1=pagemrdivide(pagemldivide(matrix_v(end,end),Nodes(end,:,:)),matrix_u);
-            Poles_0v=pagemrdivide(pagemldivide(matrix_v,Nodes(:,1,:)),matrix_u(1,1));
-            Poles_1v=pagemrdivide(pagemldivide(matrix_v,Nodes(:,end,:)),matrix_u(end,end));
-
-            Poles(1,:,:)=Poles_u0;
-            Poles(end,:,:)=Poles_u1;
-            Poles(:,1,:)=Poles_0v;
-            Poles(:,end,:)=Poles_1v;
+            % adjust bound Poles
+            Poles(1,:,:)=pagemrdivide(pagemldivide(v_fit_matrix(1,1),Nodes(1,:,:)),u_fit_matrix);
+            Poles(end,:,:)=pagemrdivide(pagemldivide(v_fit_matrix(end,end),Nodes(end,:,:)),u_fit_matrix);
+            Poles(:,1,:)=pagemrdivide(pagemldivide(v_fit_matrix,Nodes(:,1,:)),u_fit_matrix(1,1));
+            Poles(:,end,:)=pagemrdivide(pagemldivide(v_fit_matrix,Nodes(:,end,:)),u_fit_matrix(end,end));
 
             Poles(1,1,:)=Nodes(1,1,:);
             Poles(1,end,:)=Nodes(1,end,:);
             Poles(end,1,:)=Nodes(end,1,:);
             Poles(end,end,:)=Nodes(end,end,:);
 
-            fce=FaceNURBS(name,Poles,UDegree,VDegree,UMults,VMults,UKnots,VKnots);
+            srf=Surface(Poles,UDegree,VDegree,UMults,VMults,UKnots,VKnots);
         end
 
-        function fce=EdgeToFace(name,edg_u0,edg_u1,edg_0v,edg_1v)
+        function srf=interpCurveToSurface()
+
+        end
+
+        function srf=boundEdgeToFace(edg_u0,edg_u1,edg_0v,edg_1v)
             % mapping edge to generate face
             %
-            if nargin < 5
+            if nargin < 4
                 edg_1v=[];
-                if nargin < 4
+                if nargin < 3
                     edg_0v=[];
                 end
             end
@@ -302,7 +266,7 @@ classdef GeomApp
                         
                         % generate new ctrl
                         Ctrl_1v=[Ctrl_u0(end,:);Ctrl_u1(end,:)];
-                        edg_1v=EdgeNURBS('',Ctrl_1v(:,1:end-1),[],[],[],Ctrl_1v(:,end));
+                        edg_1v=Curve(Ctrl_1v(:,1:end-1),[],[],[],Ctrl_1v(:,end));
                         [~,edg_1v]=GeomApp.matchEdge(edg_v,edg_1v);
                         Ctrl_1v=[edg_1v.Poles,edg_1v.Weights];
                     elseif ~isempty(edg_1v)
@@ -310,7 +274,7 @@ classdef GeomApp
                         
                         % generate new ctrl
                         Ctrl_0v=[Ctrl_u0(1,:);Ctrl_u1(1,:)];
-                        edg_0v=EdgeNURBS('',Ctrl_0v(:,1:end-1),[],[],[],Ctrl_0v(:,end));
+                        edg_0v=Curve(Ctrl_0v(:,1:end-1),[],[],[],Ctrl_0v(:,end));
                         [~,edg_0v]=GeomApp.matchEdge(edg_v,edg_0v);
                         Ctrl_0v=[edg_0v.Poles,edg_0v.Weights];
                     end
@@ -325,7 +289,7 @@ classdef GeomApp
 
                         % generate new ctrl
                         Ctrl_u1=[Ctrl_u0(end,:);Ctrl_u1(end,:)];
-                        edg_u1=EdgeNURBS('',Ctrl_u1(:,1:end-1),[],[],[],Ctrl_u1(:,end));
+                        edg_u1=Curve(Ctrl_u1(:,1:end-1),[],[],[],Ctrl_u1(:,end));
                         [~,edg_u1]=GeomApp.matchEdge(edg_u,edg_u1);
                         Ctrl_u1=[edg_u1.Poles,edg_u1.Weights];
                     elseif ~isempty(edg_u1)
@@ -333,7 +297,7 @@ classdef GeomApp
 
                         % generate new ctrl
                         Ctrl_u0=[Ctrl_u0(1,:);Ctrl_u1(1,:)];
-                        edg_u0=EdgeNURBS('',Ctrl_u0(:,1:end-1),[],[],[],Ctrl_u0(:,end));
+                        edg_u0=Curve(Ctrl_u0(:,1:end-1),[],[],[],Ctrl_u0(:,end));
                         [~,edg_u0]=GeomApp.matchEdge(edg_u,edg_u0);
                         Ctrl_u0=[edg_u0.Poles,edg_u0.Weights];
                     end
@@ -348,18 +312,6 @@ classdef GeomApp
             V_pole=interp1(linspace(0,1,v_pole_num-VDegree+1),v_list(VDegree+1:v_pole_num+1),linspace(0,1,v_pole_num));
             [U,V]=meshgrid(U_pole,V_pole);
             % Ctrl=GeomApp.MapGrid(Ctrl_u0,Ctrl_u1,Ctrl_0v,Ctrl_1v,U_pole,V_pole);
-
-%             UPoles=cat(3,[Ctrl_u0(:,1)';Ctrl_u1(:,1)'],[Ctrl_u0(:,2)';Ctrl_u1(:,2)'],[Ctrl_u0(:,3)';Ctrl_u1(:,3)']);
-%             UWeights=[Ctrl_u0(:,4)';Ctrl_u1(:,4)'];
-%             Ufce=FaceNURBS('',UPoles,UDegree,[],UMults,[],UKnots,[],UWeights);
-%             
-%             VPoles=cat(3,[Ctrl_0v(:,1);Ctrl_1v(:,1)],[Ctrl_0v(:,2);Ctrl_1v(:,2)],[Ctrl_0v(:,3);Ctrl_1v(:,3)]);
-%             VWeights=[Ctrl_0v(:,4),Ctrl_1v(:,4)];
-%             Vfce=FaceNURBS('',VPoles,[],VDegree,[],VMults,[],VKnots,VWeights);
-% 
-%             UVPoles=cat(3,[Ctrl_0v(:,1);Ctrl_1v(:,1)],[Ctrl_0v(:,2);Ctrl_1v(:,2)],[Ctrl_0v(:,3);Ctrl_1v(:,3)]);
-%             UVWeights=[Ctrl_0v(:,4),Ctrl_1v(:,4)];
-%             UVfce=FaceNURBS('',VPoles,[],VDegree,[],VMults,[],VKnots,VWeights);
 
             % generata U, V and UV direction Poles
             Ctrl_u0=reshape(Ctrl_u0,1,size(Ctrl_u0,1),size(Ctrl_u0,2));
@@ -379,7 +331,7 @@ classdef GeomApp
             Poles=Ctrl(:,:,1:end-1);
             Weights=Ctrl(:,:,end);
 
-            fce=FaceNURBS(name,Poles,UDegree,VDegree,UMults,VMults,UKnots,VKnots,Weights);
+            srf=Surface(Poles,UDegree,VDegree,UMults,VMults,UKnots,VKnots,Weights);
         end
     end
 
@@ -419,7 +371,7 @@ classdef GeomApp
         end
 
         function [Ctrl_new,U_new]=insertKnot(deg,Ctrl,U,U_ins)
-            % insert knot to NURBS
+            % insert knot to Spline
             %
 
             % allocate memory
@@ -478,7 +430,7 @@ classdef GeomApp
     end
 
     methods(Static)
-        function edg=JointEdge(name,edg_list,geom_torl)
+        function crv=JointCurve(crv_list,geom_torl)
             % connect BSpline curve into one curve
             %
             if nargin < 3,geom_torl=[];end
@@ -487,27 +439,30 @@ classdef GeomApp
 
             % search max Degree
             Degree=0;
-            edg_idx=1;
-            while edg_idx <= length(edg_list)
-                edg_curr=edg_list{edg_idx};
-                if isempty(edg_curr)
-                    edg_list(edg_idx)=[];
+            crv_idx=1;
+            while crv_idx <= length(crv_list)
+                crv_curr=crv_list(crv_idx);
+                if isempty(crv_curr)
+                    crv_list(crv_idx)=[];
                 else
-                    if Degree < edg_curr.Degree
-                        Degree=edg_curr.Degree;
+                    if Degree < crv_curr.Degree
+                        Degree=crv_curr.Degree;
                     end
                 end
-                edg_idx=edg_idx+1;
+                crv_idx=crv_idx+1;
             end
-            edg_num=length(edg_list);
+            crv_num=length(crv_list);
 
             % load all Poles to correct line order
             line_list={};
-            for edg_idx=1:edg_num
-                line_list=[line_list,{[edg_list{edg_idx}.Poles,edg_list{edg_idx}.Weights]}];
+            for crv_idx=1:crv_num
+                line_list=[line_list,{[crv_list(crv_idx).Poles,crv_list(crv_idx).Weights]}];
             end
             [~,map_list,order_list]=GeomApp.correctLine(line_list,geom_torl);
-            edg_list=edg_list(map_list);
+            crv_list=crv_list(map_list);
+            for crv_idx=1:crv_num
+                if order_list(crv_idx),crv_list(crv_idx).reverse();end
+            end
 
             % increase Degree of edg and load data
             Poles=[];
@@ -515,20 +470,19 @@ classdef GeomApp
             Knots=[];
             Weights=[];
             total_length=0;
-            for edg_idx=1:edg_num
+            for crv_idx=1:crv_num
                 % load edge
-                edg=edg_list{edg_idx};
-                if order_list(edg_idx),edg.reverse();end
+                crv=crv_list(crv_idx);
 
-                edg.addDegree(Degree);
-                Mults_new=edg.Mults;
+                crv.addDegree(Degree);
+                Mults_new=crv.Mults;
                 Mults_new(1)=Mults_new(1)-1;
-                Weights_new=edg.Weights;
-                edg_length=sum(vecnorm(diff(edg.Poles),2,2));
+                Weights_new=crv.Weights;
+                edg_length=sum(vecnorm(diff(crv.Poles),2,2));
 
-                Poles=[Poles(1:end-1,:);edg.Poles];
+                Poles=[Poles(1:end-1,:);crv.Poles];
                 Mults=[Mults(1:end-1),Mults_new];
-                Knots=[Knots(1:end-1),edg.Knots*edg_length+total_length];
+                Knots=[Knots(1:end-1),crv.Knots*edg_length+total_length];
                 Weights=[Weights(1:end-1);Weights_new/Weights_new(1)];
 
                 Weights=Weights/Weights(end);
@@ -540,15 +494,15 @@ classdef GeomApp
             Knots=Knots/total_length;
             Knots=Knots/max(Knots);
 
-            edg=EdgeNURBS(name,Poles,Degree,Mults,Knots,Weights);
+            crv=Curve(Poles,Degree,Mults,Knots,Weights);
         end
 
-        function [edg_1,edg_2,Degree,Mults,Knots]=matchEdge(edg_1,edg_2)
-            Degree=max(edg_1.Degree,edg_2.Degree);
-            edg_1.addDegree(Degree);
-            edg_2.addDegree(Degree);
-            U1=edg_1.u_list;
-            U2=edg_2.u_list;
+        function [crv_1,crv_2,Degree,Mults,Knots]=matchCurve(crv_1,crv_2)
+            Degree=max(crv_1.Degree,crv_2.Degree);
+            crv_1.addDegree(Degree);
+            crv_2.addDegree(Degree);
+            U1=crv_1.u_list;
+            U2=crv_2.u_list;
 
             % merge the knot vectors of u
             UC=unique([U1,U2]);
@@ -562,10 +516,10 @@ classdef GeomApp
                 U2_ins=[U2_ins,UC(i)*ones(1,m-i2)];
             end
 
-            if ~isempty(U1_ins),edg_1.insertKnot(U1_ins);end
-            if ~isempty(U2_ins),edg_2.insertKnot(U2_ins);end
-            Mults=edg_1.Mults;
-            Knots=edg_1.Knots;
+            if ~isempty(U1_ins),crv_1.insertKnot(U1_ins);end
+            if ~isempty(U2_ins),crv_2.insertKnot(U2_ins);end
+            Mults=crv_1.Mults;
+            Knots=crv_1.Knots;
         end
 
         function Point=MapGrid(line_u0,line_u1,line_0v,line_1v,u_list,v_list)
@@ -646,13 +600,13 @@ classdef GeomApp
             end
         end
 
-        function [line_list,map_list,order_list]=correctLine(line_list,geom_torl)
+        function [line_list,map_list,reverse_list]=correctLine(line_list,geom_torl)
             % correct line point order
             % order should be anti clockwise and start from first line
             %
             line_num=length(line_list);
             map_list=1:line_num;
-            order_list=false(line_num,1);
+            reverse_list=false(line_num,1);
 
             % start from first line
             for line_idx=1:line_num-1
@@ -671,7 +625,15 @@ classdef GeomApp
                     dist=vecnorm((line_curr(end,:)-vertex_list),2,2);
                     overlap_idx=find(dist < geom_torl,1);
                     if ~any(overlap_idx)
-                        error('GeomApp.correctLine: line not connect');
+                        if line_idx == 1
+                            % check if reverse first line can save
+                            line_list{1}=flipud(line_list{1});
+                            [line_list,map_list,reverse_list]=GeomApp.correctLine(line_list,geom_torl);
+                            reverse_list(1)=true;
+                            return;
+                        else
+                            error('GeomApp.correctLine: line not connect');
+                        end
                     end
                     exchange_idx=ceil(overlap_idx/2)+line_idx;
 
@@ -684,7 +646,7 @@ classdef GeomApp
                     % reorder point in line order
                     if mod(overlap_idx,2) == 0
                         line_list{line_idx+1}=flipud(line_list{line_idx+1});
-                        order_list(line_idx+1)=true;
+                        reverse_list(line_idx+1)=true;
                     end
                 end
             end

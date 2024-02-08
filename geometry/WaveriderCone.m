@@ -1,4 +1,4 @@
-classdef WaveriderCone < Shell
+classdef WaveriderCone < Face
     % generate a cone guide waverider by streamline trace
     %
 
@@ -25,7 +25,7 @@ classdef WaveriderCone < Shell
                 lead_edge_fcn,R_0,L_total,W_total)
             % lead_edge_fcn is YOZ plane function
             %
-            self=self@Shell(name);
+            self=self@Face(name);
 
             self.beta=beta;
             self.lead_edge_fcn=lead_edge_fcn;
@@ -312,7 +312,7 @@ classdef WaveriderCone < Shell
 
         end
 
-        function plotGeom(self,axes_handle,U_num,V_par,W_num)
+        function displayGeom(self,axes_handle,U_num,V_par,W_num)
             % show all surface of shell
             %
             if isempty(axes_handle),axes_handle=axes(figure());end
