@@ -4,8 +4,8 @@ classdef Edge < handle
     properties
         name=''; % name of edge
         curve; % Curve handle
-        outer_bound=[]; % boundary of outer
         vertex_list=[]; % vertex list of boundary
+        outer_bound=[]; % boundary of outer
     end
 
     properties
@@ -17,20 +17,32 @@ classdef Edge < handle
 
     % define edge
     methods
-        function self=Edge(name,crv,otr_bou)
+        function self=Edge(name,crv,vtx_list)
             % generate edge entity
             %
-            if nargin < 3, otr_bou=[];end
-            if isempty(otr_bou)
-                if isa(crv,'Curve'), otr_bou=[min(crv.Knots),max(crv.Knots)];
-                elseif isa(crv,'CurveCST'), otr_bou=[0,1];end
-            end
+            if nargin < 3, vtx_list=[];end
             self.name=name;
             self.curve=crv;
+
+            if isempty(vtx_list)
+                if isa(crv,'Curve'), otr_bou=[min(crv.Knots),max(crv.Knots)];
+                elseif isa(crv,'CurveCST'), otr_bou=[0,1];end
+                vtx_list=crv.calPoint(otr_bou);
+            else
+                % project vertex list to get outer_bound
+                if size(vtx_list,2) ~= 2
+                    error('Edge: only can have a pair of vertex');
+                end
+                [~,otr_bou]=crv.projectPoint(vtx_list);
+                if otr_bou(2) < otr_bou(1)
+                    otr_bou=otr_bou(end:-1:1);
+                    vtx_list=vtx_list(end:-1:1,:);
+                end
+            end
+            self.vertex_list=vtx_list;
             self.outer_bound=otr_bou;
 
             topo.vertex=[1,2];
-            self.vertex_list=crv.calPoint(otr_bou);
             self.topology=topo;
 
             U_x=linspace(otr_bou(1),otr_bou(2),101);
@@ -69,10 +81,12 @@ classdef Edge < handle
             up_bou=self.outer_bound(2);
             if length(u_param) == 1 && u_param ~= fix(u_param)
                 % auto capture Points
-                value_torl=u_param;min_level=4;max_level=16;
+                value_torl=u_param;min_level=1;max_level=16;
                 dim=self.dimension;
 
-                [U,Points,~]=GeomApp.meshAdapt1D(@(x) self.curve.calPoint(x),low_bou,up_bou,value_torl,min_level,max_level,dim);
+                [U,Points,~]=GeomApp.meshAdapt1D(@(x) self.curve.calPoint(x),low_bou,up_bou,value_torl,min_level,max_level);
+                [U,map]=sort(U);
+                Points=Points(map,:);
             else
                 % manual capture Points
                 if length(u_param) == 1, u_param=linspace(low_bou,up_bou,u_param);end

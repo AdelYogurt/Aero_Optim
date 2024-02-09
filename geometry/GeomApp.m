@@ -169,7 +169,7 @@ classdef GeomApp
             end
             V_node=(V_node(:)-min(V_node))/(max(V_node)-min(V_node));
             V_node_knots=interp1(linspace(0,1,length(V_node)),V_node,linspace(0,1,v_pole_num));
-            
+
             % calculate u_list
             UMults=[UDegree+1,ones(1,u_pole_num-UDegree-1),UDegree+1];
             UKnots=linspace(0,1,u_pole_num-UDegree+1);
@@ -263,7 +263,7 @@ classdef GeomApp
 
                     if ~isempty(edg_0v)
                         Ctrl_0v=[edg_0v.Poles,edg_0v.Weights];
-                        
+
                         % generate new ctrl
                         Ctrl_1v=[Ctrl_u0(end,:);Ctrl_u1(end,:)];
                         edg_1v=Curve(Ctrl_1v(:,1:end-1),[],[],[],Ctrl_1v(:,end));
@@ -271,7 +271,7 @@ classdef GeomApp
                         Ctrl_1v=[edg_1v.Poles,edg_1v.Weights];
                     elseif ~isempty(edg_1v)
                         Ctrl_1v=[edg_1v.Poles,edg_1v.Weights];
-                        
+
                         % generate new ctrl
                         Ctrl_0v=[Ctrl_u0(1,:);Ctrl_u1(1,:)];
                         edg_0v=Curve(Ctrl_0v(:,1:end-1),[],[],[],Ctrl_0v(:,end));
@@ -654,25 +654,25 @@ classdef GeomApp
     end
 
     methods(Static)
-        function [U,Fval,node_list]=meshAdapt1D(fcn,low_bou,up_bou,torl,min_level,max_level,fval_num)
+        function [x_list,fval_list,node_list]=meshAdapt1D(fcn,low_bou,up_bou,torl,min_level,max_level)
             % Binary-tree
-            % adapt capture function value
+            % adapt capture 1 dimemsion function value
             % ensure error of linear interplation will less than torl
             %
-            if nargin < 7,fval_num=1;end
 
             % node_list which is a matrix store all node
-            % a node is a array,contain level,index_1,index_2,index_c,node_index_1,node_index_2
+            % a node is a array, contain level, index_1, index_2, index_c, node_index_1, node_index_2
             % place:
             % 1-c-2
             % cell:
             % 1-2
-            % if children node is empty,left_index or right_index will be zero
-            list_add_num=50; % node_list will be extend only when node_list is not enough
+            % if children node is empty, left_index or right_index will be zero
+            list_add_num=32; % node_list will be extend only when node_list is not enough
             node_list=zeros(list_add_num,6,'int64');
 
-            % data_list use to sort all float data include coodinate,function value
-            data_list=zeros(list_add_num,fval_num+1);
+            % data_list use to sort all float data include coodinate, function value
+            fval_num=numel(fcn((low_bou+up_bou)/2));
+            data_list=zeros(list_add_num+1,fval_num+1);
 
             % add vertex of cell into data_list first
             data_list(1,:)=[low_bou,fcn(low_bou)];
@@ -681,15 +681,19 @@ classdef GeomApp
             % create base root
             node_list(1,:)=[0,1,2,0,0,0];
 
-            node_num=createNodeTree(1,2); % create node tree from root
+            [node_num,data_num]=createNodeTree(1,2); % create node tree from root
             node_list=node_list(1:node_num,:);
-            [U,Fval]=traversalInorder(1); % from small to large get list
+            data_list=data_list(1:data_num,:);
 
-            % add boundary info
-            U=[data_list(1,1);U;data_list(2,1)];
-            Fval=[data_list(1,2:end);Fval;data_list(2,2:end)];
+            % [x_list,fval_list]=traversalInorder(1); % from small to large get list
+            % % add boundary info
+            % x_list=[data_list(1,1);x_list;data_list(2,1)];
+            % fval_list=[data_list(1,2:end);fval_list;data_list(2,2:end)];
 
-            function node_num=createNodeTree(root_idx,data_num)
+            x_list=data_list(:,1);
+            fval_list=data_list(:,2:end);
+
+            function [node_num,data_num]=createNodeTree(root_idx,data_num)
                 % create node tree from root
                 %
                 stack=root_idx;
@@ -697,13 +701,13 @@ classdef GeomApp
 
                 while ~isempty(stack)
                     % current node information
-                    node_idx=stack(1);
+                    node_idx=stack(end);
                     node=node_list(node_idx,:);
-                    stack=stack(2:end);
+                    stack=stack(1:end-1);
 
                     if node(1) < max_level
                         % judge if linear predict if accptable
-                        % if not,create children cell
+                        % if not, create children cell
                         %
                         coord_c=(data_list(node(2),1)+data_list(node(3),1))/2;
                         fval_c=fcn(coord_c);
@@ -729,8 +733,8 @@ classdef GeomApp
                         node([5,6])=node_new_idx;
                         node_num=node_num+2;
 
-                        if any(abs(fval_c-fval_c_pred) > torl) || node(1) <= min_level
-                            % add to stack
+                        if any(abs(fval_c-fval_c_pred) > torl) || node(1) < min_level-1
+                            % add to stack for refine gird
                             stack=[stack,node_new_idx];
                             node_list(node_idx,:)=node;
                         end
@@ -769,16 +773,16 @@ classdef GeomApp
             end
         end
 
-        function [U,V,Fval,node_list]=meshAdapt2DUV(fcn,low_bou,up_bou,torl,min_level,max_level,fval_num)
-            % 2D Omni-Tree
+        function [X,Fval,node_list,U,V]=meshAdapt2D(fcn,low_bou,up_bou,torl,min_level,max_level,mode,matrix)
+            % Quad-tree (or Omni-Tree)
             % adapt capture 2 dimemsion function value
             % ensure error of linear interplation will less than torl
             %
-            if nargin < 7,fval_num=1;end
+            if nargin < 8, matrix=false;if nargin < 7, mode='';end;end
 
             % node_list which is a matrix store all node
-            % a node is a array,contain:
-            % level,idx_1-8(index of data_list),idx_c,node_index_1-4
+            % a node is a array, contain:
+            % level, idx_1-8(index of data_list), idx_c, children_index_1-4
             % place:
             % 3-8-4 or 3-4 or 3-8-4
             % 1-5-2    6-7    6-c-7
@@ -786,11 +790,12 @@ classdef GeomApp
             % node:
             % 1-2 or 3 or 3-4
             %        1    1-2
-            % if children node is empty,left_index or right_index will be zero
-            list_add_num=50; % list will be extend only when list is not enough
+            % if children node is empty, left_index or right_index will be zero
+            list_add_num=32; % list will be extend only when list is not enough
             node_list=zeros(list_add_num,14,'int64');
-            % data_list use to sort all float data include coodinate,function value
-            data_list=zeros(list_add_num,fval_num+2);
+            % data_list use to sort all float data include coodinate, function value
+            fval_num=numel(fcn((low_bou+up_bou)/2));
+            data_list=zeros(list_add_num+1,fval_num+2);
 
             % add vertex of cell into data_list first
             bou_1=[low_bou(1),low_bou(2)];
@@ -806,34 +811,49 @@ classdef GeomApp
             node_list(1,:)=[0,1,2,3,4,0,0,0,0,0,0,0,0,0];
 
             % create node tree from root
-            [node_num,data_num]=createNodeTree(1,4);
+            if isempty(mode), mode='omni';end
+            switch mode
+                case 'quad'
+                    [node_num,data_num]=createNodeTreeQuad(1,4); % Quad tree
+                case 'omni'
+                    [node_num,data_num]=createNodeTreeOmni(1,4); % Omni tree
+            end
             node_list=node_list(1:node_num,:);
             data_list=data_list(1:data_num,:);
 
-            % generate U and V
-            [u_list,~,u_idx]=unique(data_list(:,1));
-            [v_list,~,v_idx]=unique(data_list(:,2));
-            idx_list=[u_idx,v_idx];
+            if matrix
+                % convert list to matrix
 
-            [U,V]=meshgrid(u_list,v_list);
+                % generate U and V
+                [u_list,~,u_idx]=unique(data_list(:,1));
+                [v_list,~,v_idx]=unique(data_list(:,2));
 
-            % local data to Fval
-            Fval=nan(length(v_list),length(u_list),fval_num);
+                [U,V]=meshgrid(u_list,v_list);
 
-            for data_index=1:data_num
-                if all([idx_list(data_index,2),idx_list(data_index,1)] ~= 0)
-                    Fval(idx_list(data_index,2),idx_list(data_index,1),:)=data_list(data_index,3:end);
+                % local data to Fval
+                Fval=nan(length(v_list),length(u_list),fval_num);
+
+                idx=sub2ind([length(v_list),length(u_list)],v_idx,u_idx);
+                for fval_idx=1:fval_num
+                    Fval(idx+(fval_idx-1)*(length(v_list)*length(u_list)))=data_list(:,fval_idx+2);
                 end
+
+                % fit nan data
+                idx=find(isnan(Fval(:,:,1)));
+                Fval_sub=fcn([U(idx),V(idx)]);
+                for fval_idx=1:fval_num
+                    Fval(idx+(fval_idx-1)*(length(v_list)*length(u_list)))=Fval_sub(:,fval_idx);
+                end
+
+                X=[];
+            else
+                X=data_list(:,1:2);
+                Fval=data_list(:,3:end);
+                U=[];
+                V=[];
             end
 
-            % fit nan data
-            idx=find(isnan(Fval(:,:,1)));
-            Fval_sub=fcn([U(idx),V(idx)]);
-            for favl_idx=1:fval_num
-                Fval(idx+(favl_idx-1)*(length(v_list)*length(u_list)))=Fval_sub(:,favl_idx);
-            end
-
-            function [node_num,data_num]=createNodeTree(root_idx,data_num)
+            function [node_num,data_num]=createNodeTreeQuad(root_idx,data_num)
                 % create quad tree
                 %
                 stack=root_idx;
@@ -841,40 +861,143 @@ classdef GeomApp
 
                 while ~isempty(stack)
                     % current node information
-                    node_idx=stack(1);
+                    node_idx=stack(end);
                     node=node_list(node_idx,:);
-                    stack=stack(2:end);
+                    stack=stack(1:end-1);
 
                     if node(1) < max_level
                         % judge if linear predict if accptable
-                        % if not,create children cell
+                        % if not, create children cell
                         %
                         [coord_c,coord_5,coord_6,coord_7,coord_8,...
                             fval_c,fval_5,fval_6,fval_7,fval_8]=calCell(node(2),node(3),node(4),node(5));
                         [fval_pred_c,fval_pred_5,fval_pred_6,...
                             fval_pred_7,fval_pred_8]=calCellPred(node(2),node(3),node(4),node(5));
 
+                        % add 5 data into data_list
+                        data_new_idx=data_num+(1:5);
+                        if data_num+5 > size(data_list,1)
+                            data_list=[data_list;zeros(list_add_num,fval_num+2)];
+                        end
+                        data_list(data_new_idx,:)=[
+                            coord_5,fval_5;
+                            coord_6,fval_6;
+                            coord_7,fval_7;
+                            coord_8,fval_8;
+                            coord_c,fval_c;];
+                        node(6:10)=data_new_idx;
+                        data_num=data_num+5;
+
+                        % add 4 new node to node_list
+                        node_new_idx=node_num+(1:4);
+                        if node_num+4 > size(node_list,1)
+                            node_list=[node_list;zeros(list_add_num,14)];
+                        end
+                        node_list(node_new_idx,:)=[...
+                            node(1)+1,node(2),node(6),node(7),node(10),0,0,0,0,0,0,0,0,0;
+                            node(1)+1,node(6),node(3),node(10),node(8),0,0,0,0,0,0,0,0,0;
+                            node(1)+1,node(7),node(10),node(4),node(9),0,0,0,0,0,0,0,0,0;
+                            node(1)+1,node(10),node(8),node(9),node(5),0,0,0,0,0,0,0,0,0;];
+                        node(11:14)=node_new_idx;
+                        node_num=node_num+4;
+
+                        if any(abs(fval_c-fval_pred_c) > torl) ||...
+                                any(abs(fval_5-fval_pred_5) > torl) || any(abs(fval_8-fval_pred_8) > torl) ||...
+                                any(abs(fval_6-fval_pred_6) > torl) || any(abs(fval_7-fval_pred_7) > torl) || node(1) < min_level-1
+                            % add to stack to refine grid
+                            stack=[stack,node_new_idx];
+                            node_list(node_idx,:)=node;
+                        end
+                    end
+                end
+            end
+
+            function [node_num,data_num]=createNodeTreeOmni(root_idx,data_num)
+                % create quad tree
+                %
+                stack=root_idx;
+                node_num=root_idx;
+
+                while ~isempty(stack)
+                    % current node information
+                    node_idx=stack(end);
+                    node=node_list(node_idx,:);
+                    stack=stack(1:end-1);
+
+                    if node(1) < max_level
+                        % judge if linear predict if accptable
+                        % if not, create children cell
+                        %
+                        [coord_c,coord_5,coord_6,coord_7,coord_8,...
+                            fval_c,fval_5,fval_6,fval_7,fval_8]=calCell(node(2),node(3),node(4),node(5));
+                        [~,fval_pred_5,fval_pred_6,...
+                            fval_pred_7,fval_pred_8]=calCellPred(node(2),node(3),node(4),node(5));
+
                         % check u direction
                         if any(abs(fval_5-fval_pred_5) > torl) || any(abs(fval_8-fval_pred_8) > torl)
-                            add_u_flag=true(1);
+                            add_u_flag=true;
                         else
-                            add_u_flag=false(1);
+                            add_u_flag=false;
                         end
 
                         % check v direction
                         if any(abs(fval_6-fval_pred_6) > torl) || any(abs(fval_7-fval_pred_7) > torl)
-                            add_v_flag=true(1);
+                            add_v_flag=true;
                         else
-                            add_v_flag=false(1);
+                            add_v_flag=false;
                         end
 
-%                         % check center place
-%                         if any(abs(fval_c-fval_pred_c) > torl)
-%                             add_u_flag=true(1);
-%                             add_v_flag=true(1);
-%                         end
+                        if node(1) < min_level-1
+                            add_u_flag=true;
+                            add_v_flag=true;
+                        end
 
-                        if (add_u_flag && add_v_flag) || node(1) < min_level
+                        if add_u_flag && ~add_v_flag
+                            % add 2 data into data_list
+                            data_new_idx=data_num+(1:2);
+                            if data_num+2 > size(data_list,1)
+                                data_list=[data_list;zeros(list_add_num,fval_num+2)];
+                            end
+                            data_list(data_new_idx,:)=[
+                                coord_5,fval_5;
+                                coord_8,fval_8;];
+                            node([6,9])=data_new_idx;
+                            data_num=data_num+2;
+
+                            % add 2 new node to node_list
+                            node_new_idx=node_num+(1:2);
+                            if node_num+2 > size(node_list,1)
+                                node_list=[node_list;zeros(list_add_num,14)];
+                            end
+                            node_list(node_new_idx,:)=[...
+                                node(1)+1,node(2),node(6),node(4),node(9),0,0,0,0,0,0,0,0,0;
+                                node(1)+1,node(6),node(3),node(9),node(5),0,0,0,0,0,0,0,0,0;];
+                            node([11,12])=node_new_idx;
+                            node_num=node_num+2;
+
+                        elseif add_v_flag && ~add_u_flag
+                            % add 2 data into data_list
+                            data_new_idx=data_num+(1:2);
+                            if data_num+2 > size(data_list,1)
+                                data_list=[data_list;zeros(list_add_num,fval_num+2)];
+                            end
+                            data_list(data_new_idx,:)=[
+                                coord_6,fval_6;
+                                coord_7,fval_7;];
+                            node([7,8])=data_new_idx;
+                            data_num=data_num+2;
+
+                            % add 2 new node to node_list
+                            node_new_idx=node_num+(1:2);
+                            if node_num+2 > size(node_list,1)
+                                node_list=[node_list;zeros(list_add_num,14)];
+                            end
+                            node_list(node_num+(1:2),:)=[...
+                                node(1)+1,node(2),node(3),node(7),node(8),0,0,0,0,0,0,0,0,0;
+                                node(1)+1,node(7),node(8),node(4),node(5),0,0,0,0,0,0,0,0,0;];
+                            node([11,13])=node_new_idx;
+                            node_num=node_num+2;
+                        else
                             % add 5 data into data_list
                             data_new_idx=data_num+(1:5);
                             if data_num+5 > size(data_list,1)
@@ -902,53 +1025,9 @@ classdef GeomApp
                             node(11:14)=node_new_idx;
                             node_num=node_num+4;
 
-                        elseif add_u_flag
-                            % add 2 data into data_list
-                            data_new_idx=data_num+(1:2);
-                            if data_num+2 > size(data_list,1)
-                                data_list=[data_list;zeros(list_add_num,fval_num+2)];
+                            if ~add_u_flag && ~add_v_flag
+                                node_new_idx=[];
                             end
-                            data_list(data_new_idx,:)=[
-                                coord_5,fval_5;
-                                coord_8,fval_8;];
-                            node([6,9])=data_new_idx;
-                            data_num=data_num+2;
-
-                            % add 2 new node to node_list
-                            node_new_idx=node_num+(1:2);
-                            if node_num+2 > size(node_list,1)
-                                node_list=[node_list;zeros(list_add_num,14)];
-                            end
-                            node_list(node_new_idx,:)=[...
-                                node(1)+1,node(2),node(6),node(4),node(9),0,0,0,0,0,0,0,0,0;
-                                node(1)+1,node(6),node(3),node(9),node(5),0,0,0,0,0,0,0,0,0;];
-                            node([11,12])=node_new_idx;
-                            node_num=node_num+2;
-
-                        elseif add_v_flag
-                            % add 2 data into data_list
-                            data_new_idx=data_num+(1:2);
-                            if data_num+2 > size(data_list,1)
-                                data_list=[data_list;zeros(list_add_num,fval_num+2)];
-                            end
-                            data_list(data_new_idx,:)=[
-                                coord_6,fval_6;
-                                coord_7,fval_7;];
-                            node([7,8])=data_new_idx;
-                            data_num=data_num+2;
-
-                            % add 2 new node to node_list
-                            node_new_idx=node_num+(1:2);
-                            if node_num+2 > size(node_list,1)
-                                node_list=[node_list;zeros(list_add_num,14)];
-                            end
-                            node_list(node_num+(1:2),:)=[...
-                                node(1)+1,node(2),node(3),node(7),node(8),0,0,0,0,0,0,0,0,0;
-                                node(1)+1,node(7),node(8),node(4),node(5),0,0,0,0,0,0,0,0,0;];
-                            node([11,13])=node_new_idx;
-                            node_num=node_num+2;
-                        else
-                            node_new_idx=[];
                         end
 
                         % add to stack
@@ -960,7 +1039,7 @@ classdef GeomApp
 
             function [coord_c,coord_5,coord_6,coord_7,coord_8,...
                     fval_c,fval_5,fval_6,fval_7,fval_8]=calCell(vidx_1,vidx_2,vidx_3,vidx_4)
-                % calculate index of c,5,6,7,8 place function value
+                % calculate index of c, 5, 6, 7, 8 place function value
                 % abbreviation:
                 % vidx: vertex index
                 %
@@ -979,7 +1058,7 @@ classdef GeomApp
 
             function [fval_pred_c,fval_pred_5,fval_pred_6,...
                     fval_pred_7,fval_pred_8]=calCellPred(vidx_1,vidx_2,vidx_3,vidx_4)
-                % calculate index of c,5,6,7,8 place linear predict function value
+                % calculate index of c, 5, 6, 7, 8 place linear predict function value
                 %
                 fval_pred_c=(data_list(vidx_1,3:end)+data_list(vidx_2,3:end)+data_list(vidx_3,3:end)+data_list(vidx_4,3:end))/4;
                 fval_pred_5=(data_list(vidx_1,3:end)+data_list(vidx_2,3:end))/2;

@@ -168,17 +168,23 @@ classdef Wire < handle
             self.vertex_list=self.vertex_list(end:-1:1,:);
         end
 
-        function edg_list=calGeom(self,u_param)
+        function [Points_list,U_list]=calGeom(self,u_param)
             % calculate point on all curve
             %
             if nargin < 2
                 u_param=[];
             end
 
-            edg_list=[];edg_num=length(self.edge_list);
+            % using bound box to auto calculate capture precision
+            if isempty(u_param), u_param=2^-5*mean(self.bound_box(2,:)-self.bound_box(1,:));end
+
+            edg_num=length(self.edge_list);
+            Points_list=cell(edg_num,1);
+            U_list=cell(edg_num,1);
             for edg_idx=1:edg_num
-                edg=self.edge_list(edg_idx);
-                edg_list=[edg_list,{edg.calGeom(u_param)}];
+                [Pnts,U]=self.edge_list(edg_idx).calGeom(u_param);
+                Points_list{edg_idx}=Pnts;
+                U_list{edg_idx}=U;
             end
         end
 
@@ -193,12 +199,13 @@ classdef Wire < handle
             end
             if isempty(axe_hdl),axe_hdl=gca();end
 
+            % calculate point on curve
+            [Points_list]=self.calGeom(u_param);
+
             % plot edge
             edg_num=length(self.edge_list);
             for edg_idx=1:edg_num
-                % calculate point on curve
-                Points=self.edge_list(edg_idx).calGeom(u_param);
-                ln_hdl_list(edg_idx)=linePoints(axe_hdl,Points,self.dimension);
+                ln_hdl_list(edg_idx)=linePoints(axe_hdl,Points_list{edg_idx},self.dimension);
             end
             sctr_hdl=scatterPoints(axe_hdl,self.vertex_list,self.dimension);
 
