@@ -13,11 +13,11 @@ classdef AirfoilGeom < handle
             % while Degree equal to control point number -1,...
             % BSpline will be the same as Bezier curve
             %
-            airfoil_low=EdgeCST2D('AIRFOIL_LOW',C_par_low,false,1,-1);
-            airfoil_up=EdgeCST2D('AIRFOIL_UP',C_par_up,false,1,1);
+            airfoil_low=CurveCST(C_par_low,false,1,-1);
+            airfoil_up=CurveCST(C_par_up,false,1,1);
 
-            airfoil_low.addNURBS(Poles_low);
-            airfoil_up.addNURBS(Poles_up);
+            airfoil_low.addSpline(Poles_low);
+            airfoil_up.addSpline(Poles_up);
 
             self.edge_list={airfoil_low,airfoil_up};
         end
@@ -101,7 +101,7 @@ classdef AirfoilGeom < handle
 
         end
 
-        function plotGeom(self,axe_hdl,U_param,draw_option)
+        function displayGeom(self,axe_hdl,U_param,draw_option)
             % draw curve on figure handle
             %
             if nargin < 4
