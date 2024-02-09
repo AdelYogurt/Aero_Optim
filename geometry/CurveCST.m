@@ -9,7 +9,7 @@ classdef CurveCST < handle
     % Representation Method - "CST" [C]. 45th AIAA Aerospace Sciences
     % Meeting and Exhibit, Reno, Nevada, U.S.A.
     %
-    properties
+    properties % CST parameter
         sym; % if true, U_class will start from 0.5 to 1
 
         C_par; % origin parameter, default is [0.0, 0.0]
@@ -19,20 +19,17 @@ classdef CurveCST < handle
         shape_fcn; % (U), default are LX, LY, output are SX, SY
     end
 
-    % basical curve parameter
-    properties
+    properties % basical curve parameter
         deform_fcn=[]; % deform parameter: deform_fcn(U), only y direction
         rotate_matrix=[]; % rotate parameter
         translate=[]; % translate parameter
     end
 
-    % fit point set parameter
-    properties
+    properties % fit point set parameter
         fit_data;
     end
 
-    % define curve
-    methods
+    methods % define curve
         function self=CurveCST(C_par,sym,LX,LY)
             % generate 2D CST curve by LX, LY, C_par
             % X=LX*class_fcn(u)*shape_fcn(u)
@@ -83,7 +80,7 @@ classdef CurveCST < handle
             self.shape_fcn=@(U) self.spline.calPoint(U);
         end
 
-        function Point=calPoint(self,U_x)
+        function Points=calPoint(self,U_x)
             % calculate point on curve
             %
             U_x=U_x(:);U_class=U_x;
@@ -95,8 +92,31 @@ classdef CurveCST < handle
             % calculate shape
             SPoint=self.shape_fcn(U_x);
 
-            Point=SPoint.*CPoint;
-            Point=self.axisLocalToGlobal(Point,U_x);
+            Points=SPoint.*CPoint;
+            Points=self.axisLocalToGlobal(Points,U_x);
+        end
+        
+        function [Points,dPoints_dU]=calGradient(self,U_x,step)
+            % use differ to calculate gradient
+            %
+            if nargin < 3 || isempty(step),step=100*eps;end
+
+            dim=numel(self.calPoint(0));
+            U_x=U_x(:);
+
+            Points=self.calPoint(U_x);
+
+            Points_UF=self.calPoint(min(U_x+step,1));
+            Points_UB=self.calPoint(max(U_x-step,0));
+            Bool_U=(U_x+step) > 1;
+            Bool_D=(U_x-step) < 0;
+            Bool(:,1)=Bool_U;Bool(:,2)=Bool_D;
+            Bool_C=~any(Bool,2);
+            dPoints_dU=zeros(size(U_x,1),dim); % allocate memory
+            dPoints_dU(Bool_C,:)=(Points_UF(Bool_C,:)-Points_UB(Bool_C,:))/2/step;
+            dPoints_dU(Bool_U,:)=(Points(Bool_U,:)-Points_UB(Bool_U,:))/step;
+            dPoints_dU(Bool_D,:)=(Points_UF(Bool_D,:)-Points(Bool_D,:))/step;
+            dPoints_dU=real(dPoints_dU);
         end
 
         function [k1,k2,x1,x2]=calTangTorl(self,torl)
@@ -280,8 +300,7 @@ classdef CurveCST < handle
         end
     end
 
-    % add spline shape function
-    methods
+    methods % add spline shape function
         function addSpline(self,spline)
             % add spline as shape function
             %
@@ -431,8 +450,7 @@ classdef CurveCST < handle
         end
     end
 
-    % deform, rotate, translate
-    methods
+    methods % deform, rotate, translate
         function self=addDeform(self,deform_fcn_Y)
             % base on local coordinate deform curve
             %
@@ -504,28 +522,83 @@ classdef CurveCST < handle
         end
 
     end
-
-    % coordination
-    methods
-        function dPoint_dU=calGradient(self,U,step)
-            % use differ to calculate gradient
+    
+    methods % calculate coord
+        function U=calCoordinate(self,Points,geom_torl)
+            % base on X, Y, Z calculate local coordinate in curve
             %
-            if nargin < 3 || isempty(step),step=100*eps;end
+            if nargin < 3, geom_torl=[];end
+            if isempty(geom_torl), geom_torl=sqrt(eps);end
 
-            U=U(:);
-            Point=self.calPoint(U);
+            % find point to start
+            U=findNearest(self,Points,20);
 
-            Point_UF=self.calPoint(U+step);
-            Point_UB=self.calPoint(U-step);
-            Bool_U=(U+step) > 1;
-            Bool_D=(U-step) < 0;
-            Bool(:,1)=Bool_U;Bool(:,2)=Bool_D;
-            Bool_C=~any(Bool,2);
-            dPoint_dU=zeros(size(U,1),dim); % allocate memory
-            dPoint_dU(Bool_C,:)=(Point_UF(Bool_C,:)-Point_UB(Bool_C,:))/2/step;
-            dPoint_dU(Bool_U,:)=(Point(Bool_U,:)-Point_UB(Bool_U,:))/step;
-            dPoint_dU(Bool_D,:)=(Point_UF(Bool_D,:)-Point(Bool_D,:))/step;
-            dPoint_dU=real(dPoint_dU);
+            % use project function to adjust parameter
+            U=self.projectPoint(Points,geom_torl,U);
         end
+
+        function U=projectPoint(self,Points_init,geom_torl,U)
+            % adjust U by Jacobian transformation
+            % also can project point to curve
+            %
+            if nargin < 4
+                U=[];
+                if nargin < 3
+                    geom_torl=[];
+                end
+            end
+
+            % find point to start
+            if isempty(U)
+                U=findNearest(self,Points_init,20);
+            end
+            [num,~]=size(Points_init);U=U(:);
+
+            iter=0;iter_max=50;
+            done=false;idx=1:num;
+            while ~done
+                [Points,dPoints_dU]=self.calGradient(U(idx));
+                dPoint=Points_init(idx,:)-Points;
+
+                RU_RU=sum(dPoints_dU.^2,2);
+                RU_D=sum(dPoints_dU.*dPoint,2);
+
+                dU=RU_D./RU_RU;
+                dU(isnan(dU) | isinf(dU))=0;
+
+                U(idx)=U(idx)+dU;
+                U=max(U,0);U=min(U,1);
+
+                idx=find(sum(abs(dPoint),2) > geom_torl);
+
+                % Points_inv=self.calPoint(U);
+                % scatter(Points_inv(:,1),Points_inv(:,2));
+
+                iter=iter+1;
+                if isempty(idx) || iter >= iter_max
+                    done=true;
+                end
+            end
+        end
+
+        function U=findNearest(self,Points,param)
+            % find nearest U in grid
+            %
+            if nargin < 3, param=[];end
+            if isempty(param), param=20;end
+            num=size(Points,1);
+
+            % generate rough mesh to initialize pre coord
+            U_base=((0:(param-1))+(1:param))/2/param;
+            Point_base=self.calPoint(U_base);
+            U=zeros(num,1);
+            for p_idx=1:num
+                point=Points(p_idx,:);
+                dis_abs=sum(abs(Point_base-point),2);
+                [~,idx]=min(dis_abs,[],"all");
+                U(p_idx)=U_base(idx(1));
+            end
+        end
+    
     end
 end

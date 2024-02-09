@@ -9,7 +9,7 @@ classdef SurfaceCST < handle
     % Representation Method - "CST" [C]. 45th AIAA Aerospace Sciences
     % Meeting and Exhibit, Reno, Nevada, U.S.A.
     %
-    properties
+    properties % CST parameter
         sym_x; % if true, U_class fcn will start from 0.5 to 1
         sym_y; % if true, V_class fcn will start from 0.5 to 1
 
@@ -29,8 +29,7 @@ classdef SurfaceCST < handle
         shape_fcn; % (U, V), default are LX, LY, LZ, output are SX, SY, SZ
     end
 
-    % basical surface parameter
-    properties
+    properties % basical surface parameter
         deform_fcn_X=[]; % deform parameter: deform_fcn_X(U,V)
         deform_fcn_Y=[]; % deform parameter: deform_fcn_Y(U,V)
         deform_fcn_Z=[]; % deform parameter: deform_fcn_Z(U,V)
@@ -38,13 +37,11 @@ classdef SurfaceCST < handle
         translate=[]; % translate parameter
     end
 
-    % fit point set parameter
-    properties
+    properties % fit point set parameter
         fit_data;
     end
 
-    % define surface
-    methods
+    methods % define surface
         function self=SurfaceCST(C_par_X,C_par_Y,C_par_ZV,C_par_ZU,sym_x,sym_y,LX,LY,LZ)
             % generate 3D CST surface by LX, LY, LZ, C_par_X, C_par_Y, C_par_ZU, C_par_ZV
             % class_fcn(u,v)=[class_fcn_X(v),class_fcn_Y(u),class_fcn_ZV(u,v).*class_fcn_ZU(u,v)]
@@ -139,10 +136,10 @@ classdef SurfaceCST < handle
             self.shape_fcn=@(U,V) self.spline.calPoint(U,V);
         end
 
-        function Point=calPoint(self,U,V)
+        function Points=calPoint(self,U_x,V_x)
             % calculate point on curve
             %
-            U_class=U;V_class=V;
+            U_class=U_x;V_class=V_x;
             if self.sym_y,V_class=(V_class/2)+0.5;end
             if self.sym_x,U_class=(U_class/2)+0.5;end
 
@@ -150,10 +147,49 @@ classdef SurfaceCST < handle
             CPoint=self.class_fcn(U_class,V_class);
 
             % calculate shape
-            SPoint=self.shape_fcn(U,V);
+            SPoint=self.shape_fcn(U_x,V_x);
 
-            Point=SPoint.*CPoint;
-            Point=self.axisLocalToGlobal(Point,U,V);
+            Points=SPoint.*CPoint;
+            Points=self.axisLocalToGlobal(Points,U_x,V_x);
+        end
+        
+        function [Points,dPoints_dU,dPoints_dV]=calGradient(self,U_x,V_x,step)
+            % use differ to calculate gradient
+            %
+            if nargin < 4 || isempty(step),step=100*eps;end
+
+            dim=numel(self.calPoint(0,0));
+            [v_num,u_num]=size(U_x);U_x=U_x(:);V_x=V_x(:);
+
+            Points=self.calPoint(U_x,V_x);Points=reshape(Points,[],dim);
+
+            Point_UF=self.calPoint(min(U_x+step,1),V_x);Point_UF=reshape(Point_UF,[],dim);
+            Point_UB=self.calPoint(max(U_x-step,0),V_x);Point_UB=reshape(Point_UB,[],dim);
+            Bool_U=(U_x+step) >= 1;
+            Bool_D=(U_x-step) <= 0;
+            Bool(:,1)=Bool_U;Bool(:,2)=Bool_D;
+            Bool_C=~any(Bool,2);
+            dPoints_dU=zeros(v_num*u_num,dim); % allocate memory
+            dPoints_dU(Bool_C,:)=(Point_UF(Bool_C,:)-Point_UB(Bool_C,:))/2/step;
+            dPoints_dU(Bool_U,:)=(Points(Bool_U,:)-Point_UB(Bool_U,:))/step;
+            dPoints_dU(Bool_D,:)=(Point_UF(Bool_D,:)-Points(Bool_D,:))/step;
+            dPoints_dU=real(dPoints_dU);
+            dPoints_dU=reshape(dPoints_dU,v_num,u_num,dim);
+
+            Point_VF=self.calPoint(U_x,min(V_x+step,1));Point_VF=reshape(Point_VF,[],dim);
+            Point_VB=self.calPoint(U_x,max(V_x-step,0));Point_VB=reshape(Point_VB,[],dim);
+            Bool_U=(V_x+step) >= 1;
+            Bool_D=(V_x-step) <= 0;
+            Bool(:,1)=Bool_U;Bool(:,2)=Bool_D;
+            Bool_C=~any(Bool,2);
+            dPoints_dV=zeros(v_num*u_num,dim); % allocate memory
+            dPoints_dV(Bool_C,:)=(Point_VF(Bool_C,:)-Point_VB(Bool_C,:))/2/step;
+            dPoints_dV(Bool_U,:)=(Points(Bool_U,:)-Point_VB(Bool_U,:))/step;
+            dPoints_dV(Bool_D,:)=(Point_VF(Bool_D,:)-Points(Bool_D,:))/step;
+            dPoints_dV=real(dPoints_dV);
+            dPoints_dV=reshape(dPoints_dV,v_num,u_num,dim);
+
+            Points=reshape(Points,v_num,u_num,dim);
         end
 
         function srf=convertSpline(self)
@@ -242,7 +278,7 @@ classdef SurfaceCST < handle
             ylabel('y');
             zlabel('z');
         end
-    
+
         function crv=getBoundCurve(self,idx)
             switch idx
                 case 1
@@ -257,8 +293,7 @@ classdef SurfaceCST < handle
         end
     end
 
-    % add spline shape function
-    methods
+    methods % add spline shape function
         function addSpline(self,spline)
             % add Spline as shape function
             %
@@ -277,7 +312,7 @@ classdef SurfaceCST < handle
                 warning('SurfaceCST.addSpline: UKnots of spline will be rescale to [0.0, 1.0]')
                 spline.UKnots=(spline.UKnots-min(spline.UKnots))/(max(spline.UKnots)-min(spline.UKnots));
             end
-                        if  min(spline.VKnots) ~= 0.0 || max(spline.VKnots) ~= 1.0
+            if  min(spline.VKnots) ~= 0.0 || max(spline.VKnots) ~= 1.0
                 warning('SurfaceCST.addSpline: VKnots of spline will be rescale to [0.0, 1.0]')
                 spline.VKnots=(spline.VKnots-min(spline.VKnots))/(max(spline.VKnots)-min(spline.VKnots));
             end
@@ -364,7 +399,7 @@ classdef SurfaceCST < handle
                 u_fit_matrix(idx)=N_list(:,deg_idx);
             end
             u_fit_matrix=u_fit_matrix';
-            
+
             % add class coefficient
             V_class=V_node;
             if self.sym_y,V_class=(V_node/2)+0.5;end
@@ -398,8 +433,7 @@ classdef SurfaceCST < handle
         end
     end
 
-    % deform, rotate, translate
-    methods
+    methods % deform, rotate, translate
         function self=addDeform(self,deform_fcn_X,deform_fcn_Y,deform_fcn_Z)
             % base on local coordinate deform surface
             %
@@ -515,60 +549,52 @@ classdef SurfaceCST < handle
 
     end
 
-    % calculate coord
-    methods
-        function [U,V,Point]=calCoord(self,Point)
+    methods % calculate coord
+        function [U,V]=calCoordinate(self,Points,geom_torl)
             % base on X, Y, Z calculate local coordinate in surface
             %
-            Point0=Point;geo_torl=sqrt(eps);
-            v_num=size(Point,1);u_num=size(Point,2);
+            if nargin < 3, geom_torl=[];end
+            if isempty(geom_torl), geom_torl=sqrt(eps);end
 
-            % generate rough mesh to initialize pre coord
-            [U_base,V_base]=meshgrid(linspace(0.05,0.95,10),linspace(0.05,0.95,10));
-            [Point_base]=self.calPoint(U_base,V_base);
-            U=zeros(size(Point,1),size(Point,2));
-            V=zeros(size(Point,1),size(Point,2));
-            for v_idx=1:v_num
-                for u_idx=1:u_num
-                    point=Point(v_idx,u_idx,:);
-                    dis_abs=sum(abs(Point_base-point),3);
-                    [~,idx]=min(dis_abs,[],"all");
-                    U(v_idx,u_idx)=U_base(idx(1));
-                    V(v_idx,u_idx)=V_base(idx(1));
+            % find point to start
+            [U,V]=findNearest(self,Points,20);
+
+            % use project function to adjust parameter
+            [U,V]=self.projectPoint(Points,geom_torl,U,V);
+        end
+
+        function [U,V]=projectPoint(self,Points_init,geom_torl,U,V)
+            % adjust U, V by Jacobian transformation
+            % also can project point to surface
+            %
+            if nargin < 5
+                U=[];V=[];
+                if nargin < 3
+                    geom_torl=[];
                 end
             end
 
-            % use project function to adjust parameter
-            [Point,U,V]=self.calProject(Point0,U,V,geo_torl);
-        end
+            % find point to start
+            if isempty(U) && isempty(V)
+                [U,V]=findNearest(self,Points_init,20);
+            end
 
-        function [Point,U,V]=calProject(self,Point0,U,V,geo_torl)
-            % adjust u, v by Jacobian transformation
-            % also can project point to surface
-            %
-            if nargin < 7,geo_torl=100*eps;end
+            [v_num,u_num,~]=size(Points_init);
+            num=u_num*v_num;
+            Points_init=reshape(Points_init,num,[]);U=U(:);V=V(:);
 
+            % iteration
             iter=0;iter_max=50;
+            done=false;idx=1:v_num*u_num;
+            while ~done
+                [Points,dPoints_dU,dPoints_dV]=self.calGradient(U(idx),V(idx));
+                dPoint=reshape(Points_init(idx,:),length(idx),1,[])-Points;
 
-            [v_num,u_num,~]=size(Point0);
-            Point0=reshape(Point0,[],1,3);U=U(:);V=V(:);
-            
-            Point=self.calPoint(U,V);
-            dPoint=Point0-Point;
-            idx=find(sum(abs(dPoint),3) > geo_torl);
-            % scatter3(Point(:,:,1),Point(:,:,2),Point(:,:,3));
-            while ~isempty(idx) && iter < iter_max
-                [dPoint_dU,dPoint_dV]=self.calGradient(U(idx),V(idx));
-
-                RU_RU=sum(dPoint_dU.^2,3);
-                RV_RV=sum(dPoint_dV.^2,3);
-                RU_RV=sum(dPoint_dU.*dPoint_dV,3);
-                RU_D=0;RV_D=0;
-                for d_idx=1:size(self.Poles,3)
-                    dpoint=dPoint(:,:,d_idx);
-                    RU_D=RU_D+dPoint_dU(:,:,d_idx).*dpoint(idx);
-                    RV_D=RV_D+dPoint_dV(:,:,d_idx).*dpoint(idx);
-                end
+                RU_RU=sum(dPoints_dU.^2,3);
+                RV_RV=sum(dPoints_dV.^2,3);
+                RU_RV=sum(dPoints_dU.*dPoints_dV,3);
+                RU_D=sum(dPoints_dU.*dPoint,3);
+                RV_D=sum(dPoints_dV.*dPoint,3);
                 RRRR_RR=RU_RU.*RV_RV-(RU_RV).^2;
                 dU=(RU_D.*RV_RV-RV_D.*RU_RV)./RRRR_RR;
                 dV=(RV_D.*RU_RU-RU_D.*RU_RV)./RRRR_RR;
@@ -580,54 +606,44 @@ classdef SurfaceCST < handle
                 U=max(U,0);U=min(U,1);
                 V=max(V,0);V=min(V,1);
 
-                iter=iter+1;
+                idx=find(sum(abs(dPoint),3) > geom_torl);
 
-                Point=self.calPoint(U,V);
-                dPoint=Point0-Point;
-                idx=find(sum(abs(dPoint),3) > geo_torl);
-                % scatter3(Point(:,:,1),Point(:,:,2),Point(:,:,3));
+                % Points_inv=self.calPoint(U,V);
+                % scatter3(Points_inv(:,:,1),Points_inv(:,:,2),Points_inv(:,:,3));
+
+                iter=iter+1;
+                if isempty(idx) || iter >= iter_max
+                    done=true;
+                end
             end
 
-            Point=reshape(Point,v_num,u_num,size(self.Poles,3));
             U=reshape(U,v_num,u_num);
             V=reshape(V,v_num,u_num);
         end
 
-        function [dPoint_dU,dPoint_dV]=calGradient(self,U,V,step)
-            % use differ to calculate gradient
+        function [U,V]=findNearest(self,Points,param)
+            % find nearest U, V in grid
             %
-            if nargin < 4 || isempty(step),step=100*eps;end
+            if nargin < 3, param=[];end
+            if isempty(param), param=20;end
+            [v_num,u_num,~]=size(Points);
 
-            dim=numel(self.calPoint(0,0));
-            [v_num,u_num]=size(U);U=U(:);V=V(:);
-
-            Point=self.calPoint(U,V);Point=reshape(Point,[],dim);
-
-            Point_UF=self.calPoint(min(U+step,1),V);Point_UF=reshape(Point_UF,[],dim);
-            Point_UB=self.calPoint(max(U-step,0),V);Point_UB=reshape(Point_UB,[],dim);
-            Bool_U=(U+step) >= 1;
-            Bool_D=(U-step) <= 0;
-            Bool(:,1)=Bool_U;Bool(:,2)=Bool_D;
-            Bool_C=~any(Bool,2);
-            dPoint_dU=zeros(v_num*u_num,dim); % allocate memory
-            dPoint_dU(Bool_C,:)=(Point_UF(Bool_C,:)-Point_UB(Bool_C,:))/2/step;
-            dPoint_dU(Bool_U,:)=(Point(Bool_U,:)-Point_UB(Bool_U,:))/step;
-            dPoint_dU(Bool_D,:)=(Point_UF(Bool_D,:)-Point(Bool_D,:))/step;
-            dPoint_dU=real(dPoint_dU);
-            dPoint_dU=reshape(dPoint_dU,v_num,u_num,dim);
-
-            Point_VF=self.calPoint(U,min(V+step,1));Point_VF=reshape(Point_VF,[],dim);
-            Point_VB=self.calPoint(U,max(V-step,0));Point_VB=reshape(Point_VB,[],dim);
-            Bool_U=(V+step) >= 1;
-            Bool_D=(V-step) <= 0;
-            Bool(:,1)=Bool_U;Bool(:,2)=Bool_D;
-            Bool_C=~any(Bool,2);
-            dPoint_dV=zeros(v_num*u_num,dim); % allocate memory
-            dPoint_dV(Bool_C,:)=(Point_VF(Bool_C,:)-Point_VB(Bool_C,:))/2/step;
-            dPoint_dV(Bool_U,:)=(Point(Bool_U,:)-Point_VB(Bool_U,:))/step;
-            dPoint_dV(Bool_D,:)=(Point_VF(Bool_D,:)-Point(Bool_D,:))/step;
-            dPoint_dV=real(dPoint_dV);
-            dPoint_dV=reshape(dPoint_dV,v_num,u_num,dim);
+            % generate rough mesh to initialize pre coord
+            sample_grid=((0:(param-1))+(1:param))/2/param;
+            [U_base,V_base]=meshgrid(sample_grid,sample_grid);
+            Point_base=self.calPoint(U_base,V_base);
+            U=zeros(v_num,u_num);
+            V=zeros(v_num,u_num);
+            for v_idx=1:v_num
+                for u_idx=1:u_num
+                    point=Points(v_idx,u_idx,:);
+                    dis_abs=sum(abs(Point_base-point),3);
+                    [~,idx]=min(dis_abs,[],"all");
+                    U(v_idx,u_idx)=U_base(idx(1));
+                    V(v_idx,u_idx)=V_base(idx(1));
+                end
+            end
         end
+
     end
 end

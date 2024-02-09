@@ -1,5 +1,5 @@
 classdef GeomApp
-    methods(Static)
+    methods(Static) % generate function
         function [crv,U_node]=interpPointToCurve(Nodes,Degree,pole_num,U_node,Derivs)
             % generate BSpline curve by defined fitting points
             %
@@ -13,10 +13,11 @@ classdef GeomApp
             % Derivs (optional): derivative of Nodes. Set nan if der is free
             %
             % output:
-            % EdgeNURBS
+            % crv (Curve): Spline curve
+            % U_node (matrix): local parameter of interpolated point
             %
             % notice:
-            % if input Degree is empty, Degree default is pole_num-1, which is Bezier curve
+            % Input Degree default is pole_num-1, which is Bezier curve
             %
             if nargin < 5
                 Derivs=[];
@@ -123,10 +124,12 @@ classdef GeomApp
             % V_node (optional):
             %
             % output:
-            % Surface
+            % srf (surface): Spline surface
+            % U_node (matrix): local parameter of interpolated point
+            % V_node (matrix): local parameter of interpolated point
             %
             % notice:
-            % if input Degree is empty,Degree default is pole_num-1,which is Bezier curve
+            % Input Degree default is pole_num-1, which is Bezier surface
             %
             if nargin < 7
                 V_node=[];
@@ -335,57 +338,57 @@ classdef GeomApp
         end
     end
 
-    methods(Static)
-        function [Ctrl_new,Mults_new]=addDegree(deg,Ctrl,Mults,Knots,deg_tar)
+    methods(Static) % BSpline function
+        function [Ctrls_new,Deg_new,Mults_new]=addDegree(Ctrls,Deg,Mults,Knots,Deg_tar)
             % increase curve degree
             %
-            if deg_tar <= deg
-                Ctrl_new=Ctrl;
+            if Deg_tar <= Deg
+                Ctrls_new=Ctrls;
                 Mults_new=Mults;
                 return;
             end
 
             U=baseKnotVec(Mults,Knots);
-            for deg_temp=deg+1:deg_tar
+            for deg_temp=Deg+1:Deg_tar
                 % add repeat node
-                Deg_new=deg+1;
+                Deg_new=Deg+1;
                 Mults_new=Mults+1;
                 U_new=baseKnotVec(Mults_new,Knots);
 
                 % calculate new ctrl
-                matrix=zeros(size(Ctrl,1)+length(Knots)-1,size(Ctrl,1));
-                for j=1:size(Ctrl,1)+length(Knots)-1
-                    for i=1:size(Ctrl,1)
-                        matrix(j,i)=baseFcnL(U,U_new,i,j,deg);
+                matrix=zeros(size(Ctrls,1)+length(Knots)-1,size(Ctrls,1));
+                for j=1:size(Ctrls,1)+length(Knots)-1
+                    for i=1:size(Ctrls,1)
+                        matrix(j,i)=baseFcnL(U,U_new,i,j,Deg);
                     end
                 end
                 matrix=1/Deg_new*matrix;
-                Ctrl_new=(matrix*Ctrl);
+                Ctrls_new=(matrix*Ctrls);
 
                 % sort old curve data
-                Ctrl=Ctrl_new;
-                deg=Deg_new;
+                Ctrls=Ctrls_new;
+                Deg=Deg_new;
                 Mults=Mults_new;
                 U=U_new;
             end
         end
 
-        function [Ctrl_new,U_new]=insertKnot(deg,Ctrl,U,U_ins)
+        function [Ctrls_new,Deg_new,U_new]=insertKnot(Ctrls,Deg,U,U_ins)
             % insert knot to Spline
             %
 
             % allocate memory
-            [ctrl_num,dim]=size(Ctrl);
+            [ctrl_num,dim]=size(Ctrls);
             U_ins =sort(U_ins);
             nu=length(U_ins);
             u_num=length(U);
             ctrl_num_new=ctrl_num+nu;
-            Ctrl_new=zeros(ctrl_num_new,dim);
+            Ctrls_new=zeros(ctrl_num_new,dim);
             U_new=zeros(1,u_num+nu);
 
             n=ctrl_num-1;
             r=nu-1;
-            m=n+deg+1;
+            m=n+Deg+1;
 
             % locate add knots position
             if (U_ins(1) == U(ctrl_num+1)),a=ctrl_num-1;
@@ -394,42 +397,63 @@ classdef GeomApp
             else,b=find(U_ins(r+1) >= U,1,'last')-1;end
             b=b+1;
 
-            Ctrl_new(1:a-deg+1,:)=Ctrl(1:a-deg+1,:);
-            Ctrl_new(b+nu:ctrl_num+nu,:)=Ctrl(b:ctrl_num,:);
+            Ctrls_new(1:a-Deg+1,:)=Ctrls(1:a-Deg+1,:);
+            Ctrls_new(b+nu:ctrl_num+nu,:)=Ctrls(b:ctrl_num,:);
+
+            Deg_new=Deg;
 
             U_new(1:a+1)=U(1:a+1);
-            U_new(b+deg+nu+1:m+nu+1)=U(b+deg+1:m+1);
+            U_new(b+Deg+nu+1:m+nu+1)=U(b+Deg+1:m+1);
 
-            ii=b+deg-1;
+            ii=b+Deg-1;
             ss=ii+nu;
 
             % calculate new ctrl point
             for jj=r:-1:0
                 ind=(a+1):ii;
                 ind=ind(U_ins(jj+1)<=U(ind+1));
-                Ctrl_new(ind+ss-ii-deg,:)=Ctrl(ind-deg,:);
+                Ctrls_new(ind+ss-ii-Deg,:)=Ctrls(ind-Deg,:);
                 U_new(ind+ss-ii+1)=U(ind+1);
                 ii=ii-length(ind);
                 ss=ss-length(ind);
-                Ctrl_new(ss-deg,:)=Ctrl_new(ss-deg+1,:);
-                for l=1:deg
-                    ind=ss-deg+l;
+                Ctrls_new(ss-Deg,:)=Ctrls_new(ss-Deg+1,:);
+                for l=1:Deg
+                    ind=ss-Deg+l;
                     alfa=U_new(ss+l+1)-U_ins(jj+1);
                     if abs(alfa) == 0
-                        Ctrl_new(ind,:)=Ctrl_new(ind+1,:);
+                        Ctrls_new(ind,:)=Ctrls_new(ind+1,:);
                     else
-                        alfa=alfa/(U_new(ss+l+1)-U(ii-deg+l+1));
-                        tmp=(1-alfa)*Ctrl_new(ind+1,:);
-                        Ctrl_new(ind,:)=alfa*Ctrl_new(ind,:)+tmp;
+                        alfa=alfa/(U_new(ss+l+1)-U(ii-Deg+l+1));
+                        tmp=(1-alfa)*Ctrls_new(ind+1,:);
+                        Ctrls_new(ind,:)=alfa*Ctrls_new(ind,:)+tmp;
                     end
                 end
                 U_new(ss+1)=U_ins(jj+1);
                 ss=ss-1;
             end
         end
+    
+        function [Ctrls_new,Deg_new,Mults_new]=calGradient(Ctrls,Deg,Mults,Knots)
+            % generate BSpline derivative curve
+            %
+            [ctrl_num,dim]=size(Ctrls);
+            u_list=baseKnotVec(Mults,Knots);
+
+            Ctrls_new=zeros(ctrl_num-1,dim);
+            Deg_new=Deg-1;
+
+            for ctrl_idx=0:ctrl_num-2
+                deriv=Deg / (u_list(ctrl_idx+Deg+2)-u_list(ctrl_idx+2));
+                Ctrls_new(ctrl_idx+1,:)=deriv*(Ctrls(ctrl_idx+2,:)-Ctrls(ctrl_idx+1,:));
+            end
+
+            Mults_new=Mults;
+            Mults_new(1)=Mults_new(1)-1;
+            Mults_new(end)=Mults_new(end)-1;
+        end
     end
 
-    methods(Static)
+    methods(Static) % geometry function
         function crv=JointCurve(crv_list,geom_torl)
             % connect BSpline curve into one curve
             %
@@ -653,7 +677,7 @@ classdef GeomApp
         end
     end
 
-    methods(Static)
+    methods(Static) % mesh function
         function [x_list,fval_list,node_list]=meshAdapt1D(fcn,low_bou,up_bou,torl,min_level,max_level)
             % Binary-tree
             % adapt capture 1 dimemsion function value

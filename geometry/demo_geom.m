@@ -17,7 +17,7 @@ close all hidden;
 
 %% CST2D Curve
 
-% LX=1;LY=0.06;C_par_Y=[0.8,1];sym=false;
+% LX=1;LY=0.06;C_par_Y=[0.5,1];sym=false;
 % Degree=3;pole_num=5;
 % ctrl_X=linspace(0,1,pole_num)';ctrl_Y=rand(pole_num,1);
 % axe_hdl=axes(figure());
@@ -75,6 +75,7 @@ close all hidden;
 % surface(axe_hdl,point_X,point_Y,point_Z,'Marker','*','MarkerEdgeColor','r','LineStyle','none','FaceAlpha',0);
 % srf=Surface(cat(3,point_X,point_Y,point_Z),UDegree,VDegree);
 % srf=GeomApp.interpPointToSurface(cat(3,point_X,point_Y,point_Z),UDegree,VDegree);
+% srf=Surface(cat(3,[1,1,0;1,1,0;0,0,0],[0,1,1;0,1,1;0,0,0],[0,0,0;1,1,1;1,1,1]),[],[],[],[],[],[],[1,sqrt(2)/2,1;sqrt(2)/2,0.5,sqrt(2)/2;1,sqrt(2)/2,1]); % sphere
 % srf.displayGeom(axe_hdl);
 % srf.displayPoles(axe_hdl);
 % axis equal;
