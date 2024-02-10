@@ -227,82 +227,98 @@ classdef GeomApp
 
         end
 
-        function srf=boundEdgeToFace(edg_u0,edg_u1,edg_0v,edg_1v)
+        function srf=boundCurveToSurface(crv_u0,crv_u1,crv_0v,crv_1v,geom_torl)
             % mapping edge to generate face
             %
-            if nargin < 4
-                edg_1v=[];
-                if nargin < 3
-                    edg_0v=[];
+            if nargin < 5
+                geom_torl=[];
+                if nargin < 4
+                    crv_1v=[];
+                    if nargin < 3
+                        crv_0v=[];
+                    end
                 end
             end
+            if isempty(geom_torl), geom_torl=1e-6;end
 
-            if (~isempty(edg_u0) && ~isempty(edg_u1)) || (~isempty(edg_0v) && ~isempty(edg_1v))
-                if ~isempty(edg_u0) && ~isempty(edg_u1)
-                    [edg_u0,edg_u1,UDegree,UMults,UKnots]=GeomApp.matchEdge(edg_u0,edg_u1);
-                    Ctrl_u0=[edg_u0.Poles,edg_u0.Weights];
-                    Ctrl_u1=[edg_u1.Poles,edg_u1.Weights];
+            if (~isempty(crv_u0) && ~isempty(crv_u1)) || (~isempty(crv_0v) && ~isempty(crv_1v))
+                if ~isempty(crv_u0) && ~isempty(crv_u1)
+                    [crv_u0,crv_u1,UDegree,UMults,UKnots]=GeomApp.matchCurve(crv_u0,crv_u1);
+                    if isempty(crv_u0.Weights), Ctrl_u0=[crv_u0.Poles,ones(size(crv_u0.Poles,1),1)];
+                    else, Ctrl_u0=[crv_u0.Poles,crv_u0.Weights];end
+                    if isempty(crv_u1.Weights), Ctrl_u1=[crv_u1.Poles,ones(size(crv_u1.Poles,1),1)];
+                    else, Ctrl_u1=[crv_u1.Poles,crv_u1.Weights];end
                 end
 
-                if ~isempty(edg_0v) && ~isempty(edg_1v)
-                    [edg_0v,edg_1v,VDegree,VMults,VKnots]=GeomApp.matchEdge(edg_0v,edg_1v);
-                    Ctrl_0v=[edg_0v.Poles,edg_0v.Weights];
-                    Ctrl_1v=[edg_1v.Poles,edg_1v.Weights];
+                if ~isempty(crv_0v) && ~isempty(crv_1v)
+                    [crv_0v,crv_1v,VDegree,VMults,VKnots]=GeomApp.matchCurve(crv_0v,crv_1v);
+                    if isempty(crv_0v.Weights), Ctrl_0v=[crv_0v.Poles,ones(size(crv_0v.Poles,1),1)];
+                    else, Ctrl_0v=[crv_0v.Poles,crv_0v.Weights];end
+                    if isempty(crv_1v.Weights), Ctrl_1v=[crv_1v.Poles,ones(size(crv_1v.Poles,1),1)];
+                    else, Ctrl_1v=[crv_1v.Poles,crv_1v.Weights];end
                 end
 
-                if isempty(edg_0v) && isempty(edg_1v)
+                if isempty(crv_0v) && isempty(crv_1v)
                     Ctrl_0v=[Ctrl_u0(1,:);Ctrl_u1(1,:)];
                     Ctrl_1v=[Ctrl_u0(end,:);Ctrl_u1(end,:)];
                     VDegree=1;VMults=[2,2];VKnots=[0,1];
-                elseif isempty(edg_u0) && isempty(edg_u1)
+                elseif isempty(crv_u0) && isempty(crv_u1)
                     Ctrl_u0=[Ctrl_0v(1,:);Ctrl_1v(1,:)];
                     Ctrl_u1=[Ctrl_0v(end,:);Ctrl_1v(end,:)];
                     UDegree=1;UMults=[2,2];UKnots=[0,1];
-                elseif isempty(edg_0v) || isempty(edg_1v)
-                    edg_v=[edg_0v,edg_1v];
+                elseif isempty(crv_0v) || isempty(crv_1v)
+                    edg_v=[crv_0v,crv_1v];
                     VDegree=edg_v.Degree;
                     VMults=edg_v.Mults;
                     VKnots=edg_v.Knots;
 
-                    if ~isempty(edg_0v)
-                        Ctrl_0v=[edg_0v.Poles,edg_0v.Weights];
+                    if ~isempty(crv_0v)
+                        if isempty(crv_0v.Weights), Ctrl_0v=[crv_0v.Poles,ones(size(crv_0v.Poles,1),1)];
+                        else, Ctrl_0v=[crv_0v.Poles,crv_0v.Weights];end
 
                         % generate new ctrl
                         Ctrl_1v=[Ctrl_u0(end,:);Ctrl_u1(end,:)];
-                        edg_1v=Curve(Ctrl_1v(:,1:end-1),[],[],[],Ctrl_1v(:,end));
-                        [~,edg_1v]=GeomApp.matchEdge(edg_v,edg_1v);
-                        Ctrl_1v=[edg_1v.Poles,edg_1v.Weights];
-                    elseif ~isempty(edg_1v)
-                        Ctrl_1v=[edg_1v.Poles,edg_1v.Weights];
+                        crv_1v=Curve(Ctrl_1v(:,1:end-1),[],[],[],Ctrl_1v(:,end));
+                        [~,crv_1v]=GeomApp.matchCurve(edg_v,crv_1v);
+                        if isempty(crv_1v.Weights), Ctrl_1v=[crv_1v.Poles,ones(size(crv_1v.Poles,1),1)];
+                        else, Ctrl_1v=[crv_1v.Poles,crv_1v.Weights];end
+                    elseif ~isempty(crv_1v)
+                        if isempty(crv_1v.Weights), Ctrl_1v=[crv_1v.Poles,ones(size(crv_1v.Poles,1),1)];
+                        else, Ctrl_1v=[crv_1v.Poles,crv_1v.Weights];end
 
                         % generate new ctrl
                         Ctrl_0v=[Ctrl_u0(1,:);Ctrl_u1(1,:)];
-                        edg_0v=Curve(Ctrl_0v(:,1:end-1),[],[],[],Ctrl_0v(:,end));
-                        [~,edg_0v]=GeomApp.matchEdge(edg_v,edg_0v);
-                        Ctrl_0v=[edg_0v.Poles,edg_0v.Weights];
+                        crv_0v=Curve(Ctrl_0v(:,1:end-1),[],[],[],Ctrl_0v(:,end));
+                        [~,crv_0v]=GeomApp.matchCurve(edg_v,crv_0v);
+                        if isempty(crv_0v.Weights), Ctrl_0v=[crv_0v.Poles,ones(size(crv_0v.Poles,1),1)];
+                        else, Ctrl_0v=[crv_0v.Poles,crv_0v.Weights];end
                     end
-                elseif isempty(edg_u0) || isempty(edg_u1)
-                    edg_u=[edg_u0,edg_u1];
+                elseif isempty(crv_u0) || isempty(crv_u1)
+                    edg_u=[crv_u0,crv_u1];
                     UDegree=edg_u.Degree;
                     UMults=edg_u.Mults;
                     UKnots=edg_u.Knots;
 
-                    if ~isempty(edg_u0)
-                        Ctrl_u0=[edg_u0.Poles,edg_u0.Weights];
+                    if ~isempty(crv_u0)
+                        if isempty(crv_u0.Weights), Ctrl_u0=[crv_u0.Poles,ones(size(crv_u0.Poles,1),1)];
+                        else, Ctrl_u0=[crv_u0.Poles,crv_u0.Weights];end
 
                         % generate new ctrl
                         Ctrl_u1=[Ctrl_u0(end,:);Ctrl_u1(end,:)];
-                        edg_u1=Curve(Ctrl_u1(:,1:end-1),[],[],[],Ctrl_u1(:,end));
-                        [~,edg_u1]=GeomApp.matchEdge(edg_u,edg_u1);
-                        Ctrl_u1=[edg_u1.Poles,edg_u1.Weights];
-                    elseif ~isempty(edg_u1)
-                        Ctrl_u1=[edg_u1.Poles,edg_u1.Weights];
+                        crv_u1=Curve(Ctrl_u1(:,1:end-1),[],[],[],Ctrl_u1(:,end));
+                        [~,crv_u1]=GeomApp.matchCurve(edg_u,crv_u1);
+                        if isempty(crv_u1.Weights), Ctrl_u1=[crv_u1.Poles,ones(size(crv_u1.Poles,1),1)];
+                        else, Ctrl_u1=[crv_u1.Poles,crv_u1.Weights];end
+                    elseif ~isempty(crv_u1)
+                        if isempty(crv_u1.Weights), Ctrl_u1=[crv_u1.Poles,ones(size(crv_u1.Poles,1),1)];
+                        else, Ctrl_u1=[crv_u1.Poles,crv_u1.Weights];end
 
                         % generate new ctrl
                         Ctrl_u0=[Ctrl_u0(1,:);Ctrl_u1(1,:)];
-                        edg_u0=Curve(Ctrl_u0(:,1:end-1),[],[],[],Ctrl_u0(:,end));
-                        [~,edg_u0]=GeomApp.matchEdge(edg_u,edg_u0);
-                        Ctrl_u0=[edg_u0.Poles,edg_u0.Weights];
+                        crv_u0=Curve(Ctrl_u0(:,1:end-1),[],[],[],Ctrl_u0(:,end));
+                        [~,crv_u0]=GeomApp.matchCurve(edg_u,crv_u0);
+                        if isempty(crv_u0.Weights), Ctrl_u0=[crv_u0.Poles,ones(size(crv_u0.Poles,1),1)];
+                        else, Ctrl_u0=[crv_u0.Poles,crv_u0.Weights];end
                     end
                 end
             else
@@ -332,7 +348,7 @@ classdef GeomApp
             Ctrl=U_Ctrl+V_Ctrl-UV_Ctrl;
 
             Poles=Ctrl(:,:,1:end-1);
-            Weights=Ctrl(:,:,end);
+            Weights=Ctrl(:,:,end);if all(Weights == 1), Weights=[];end
 
             srf=Surface(Poles,UDegree,VDegree,UMults,VMults,UKnots,VKnots,Weights);
         end
@@ -673,6 +689,120 @@ classdef GeomApp
                         reverse_list(line_idx+1)=true;
                     end
                 end
+            end
+        end
+    
+        function crv=circle(radius,sang,eang,ax)
+            % generate circle
+            %
+            if nargin < 4
+                ax=[];
+                if nargin < 3
+                    eang=[];
+                    if nargin < 2
+                        sang=[];
+                        if nargin < 1
+                            radius=1;
+                        end
+                    end
+                end
+            end
+            
+            if isempty(ax), ax=[0,0];end
+            if isempty(sang), sang=0;end
+            if isempty(eang), eang=2*pi;end
+
+            sweep=eang-sang;       % sweep angle of arc
+            if sweep < 0
+                sweep=2*pi+sweep;
+            end
+
+            if abs(sweep) <= pi/2
+                narcs=1;                % number of arc segments
+                Mults=[3,3];
+                Knots=[0,1];
+            elseif abs(sweep) <= pi
+                narcs=2;
+                Mults=[3,2,3];
+                Knots=[0,0.5,1];
+            elseif abs(sweep) <= 3*pi/2
+                narcs=3;
+                Mults=[3,2,2,3];
+                Knots=[0,1/3,2/3,1];
+            else
+                narcs=4;
+                Mults=[3,2,2,2,3];
+                Knots=[0,1/4,2/4,3/4,1];
+            end
+
+            dsweep=sweep/(2*narcs);     % arc segment sweep angle/2
+
+            % determine middle control point and weight
+            wm=cos(dsweep);
+            x =radius*wm;
+            y =radius*sin(dsweep);
+            xm=x+y*tan(dsweep);
+
+            % arc segment control points
+            ctrlpt=[
+                x,      -y, 0,  1;
+                wm*xm,  0,  0,  wm;
+                x,      y,  0,  1;];
+
+            % build up complete arc from rotated segments
+            Poles=zeros(2*narcs+1,4);   % nurbs control points of arc
+            xx=vecrotz(sang+dsweep);
+            Poles(1:3,:)=ctrlpt*xx';     % rotate to start angle
+            xx=vecrotz(2*dsweep);
+            for n=2:narcs
+                m=2*n+[0 1];
+                Poles(m,:)=Poles(m-2,:)*xx';
+            end
+            Weights=Poles(:,end);
+            Poles=Poles(:,1:end-1)./Weights;
+
+            % translate to ax
+            if size(ax,1) == 1 && size(ax,2) == 2
+                Poles=Poles(:,1:2)+ax;
+            elseif size(ax,1) == 3 && size(ax,2) == 3
+                X_dir=ax(2,:);X_dir=X_dir/norm(X_dir);
+                Y_dir=ax(3,:);Y_dir=Y_dir/norm(Y_dir);
+                Z_dir=cross(X_dir,Y_dir);
+                Poles=Poles*[X_dir;Y_dir;Z_dir];
+                Poles=Poles+ax(1,:);
+            else
+                error('GeomApp.circle: error of ax input')
+            end
+
+            crv=Curve(Poles,2,Mults,Knots,Weights);
+
+            function rz=vecrotz(angle)
+                sn = sin(angle);
+                cn = cos(angle);
+                rz = [cn -sn 0 0; sn cn 0 0; 0 0 1 0; 0 0 0 1];
+            end
+        end
+    end
+
+    methods(Static)
+        function ovlp=checkBoxOverlap(ent_1,ent_2,geom_torl)
+            % check if two bounding box is ovelap
+            %
+            if nargin < 3, geom_torl=[];end
+            if isempty(geom_torl), geom_torl=1e-6;end
+            
+            bou_box_1=ent_1.bound_box;
+            bou_box_2=ent_2.bound_box;
+
+            bou_box_1(1,:)=bou_box_1(1,:)-geom_torl;
+            bou_box_1(2,:)=bou_box_1(2,:)+geom_torl;
+
+            bou_box_2(1,:)=bou_box_2(1,:)-geom_torl;
+            bou_box_2(2,:)=bou_box_2(2,:)+geom_torl;
+
+            ovlp=true;
+            if all(bou_box_1(2,:) < bou_box_2(1,:)) || all(bou_box_2(2,:) < bou_box_1(1,:))
+                ovlp=false;
             end
         end
     end

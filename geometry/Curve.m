@@ -1,4 +1,4 @@
-classdef Curve < handle
+classdef Curve < handle & matlab.mixin.Copyable
     % Non-Uniform Rational B-Splines Curve
     % define reference to step standard
     %
@@ -6,7 +6,7 @@ classdef Curve < handle
         name='';
         Degree=[]; % degree
         Poles=[]; % control_points_list
-        edge_form='.UNSPECIFIED.'; % edge_form
+        curve_form='.UNSPECIFIED.'; % curve_form
         Periodic='.F.'; % closed_curve (boolean)
         self_intersect='.F. '; % self_intersect (boolean)
         Weights=[]; % weights_data
@@ -38,9 +38,7 @@ classdef Curve < handle
             % Curve
             %
             % notice:
-            % if input Degree is empty,...
-            % Degree default is pole_num-1,...
-            % which is Bezier curve.
+            % Degree default is pole_num-1 which will be Bezier curve
             %
             if nargin < 5
                 Weights=[];
@@ -67,7 +65,7 @@ classdef Curve < handle
             elseif isempty(Mults) && ~isempty(Knots)
                 error('Curve: need Mults inpt');
             end
-            if isempty(Weights), Weights=ones(1,pole_num);end;Weights=Weights(:);
+            if ~isempty(Weights), Weights=Weights(:);end
             u_list=baseKnotVec(Mults,Knots);
 
             if pole_num < (Degree+1)
@@ -91,15 +89,19 @@ classdef Curve < handle
             % calculate point on Non-Uniform Rational B-Splines Curve
             %
             U_x=U_x(:);
-            Ctrls=[self.Poles.*self.Weights,self.Weights];
+            if isempty(self.Weights), Ctrls=self.Poles;
+            else, Ctrls=[self.Poles.*self.Weights,self.Weights]; end
 
             % evaluate along the u direction
             Points=calBSpline(Ctrls,self.Degree,self.u_list,U_x);
             
-            Weights=Points(:,end);
-            Points=Points(:,1:end-1);
-            if nargout < 2
-                Points=Points./Weights;
+            if isempty(self.Weights), Weights=[];
+            else
+                Weights=Points(:,end);
+                Points=Points(:,1:end-1);
+                if nargout < 2
+                    Points=Points./Weights;
+                end
             end
 
             function Points=calBSpline(Ctrls,Degree,u_list,U_x)
@@ -130,27 +132,33 @@ classdef Curve < handle
             % end
         end
         
-        function [Points,dPoints_dU]=calGradient(self,U_x)
+        function [Points,dPoints_dU,dPoints_dU2]=calGradient(self,U_x)
             % calculate gradient of Curve
             %
-            if isempty(self.deriv_curve)
-                % generate derivate curve
-                Ctrls=[self.Poles.*self.Weights,self.Weights];
-                [Ctrls_deriv,Deg_deriv,Mults_deriv]=GeomApp.calGradient(Ctrls,self.Degree,self.Mults,self.Knots);
-
-                % modify Poles and Weights
-                self.deriv_curve=Curve(Ctrls_deriv,Deg_deriv,Mults_deriv,self.Knots);
-            end
+            deriv_time=nargout-1;
+            self.preGradient(deriv_time);
 
             % calculate initial curve point and weight
             [Points,Weits]=self.calPoint(U_x);
-            Points=Points./Weits;
+            if ~isempty(Weits), Points=Points./Weits;end
 
             % calculate first derivative
-            [Points_deriv,~]=self.deriv_curve.calPoint(U_x);
-            Weits_deriv=Points_deriv(:,end);
-            Points_deriv=Points_deriv(:,1:end-1);
-            dPoints_dU=(Points_deriv-Weits_deriv.*Points)./Weits;
+            [Points_deriv,Weits_deriv]=self.deriv_curve.calPoint(U_x);
+            if isempty(Weits)
+                dPoints_dU=Points_deriv;
+            else
+                Weits_deriv=Points_deriv(:,end);
+                Points_deriv=Points_deriv(:,1:end-1);
+                dPoints_dU=(Points_deriv-Weits_deriv.*Points)./Weits;
+            end
+
+            if nargout >= 3
+                % calculate second derivative
+                [Points_deriv2,~]=self.deriv_curve.deriv_curve.calPoint(U_x);
+                Weits_deriv2=Points_deriv2(:,end);
+                Points_deriv2=Points_deriv2(:,1:end-1);
+                dPoints_dU2=(Points_deriv2-(2*Points_deriv.*Weits_deriv+Points.*Weits_deriv2)./Weits+2*Points.*Weits_deriv.^2./Weits.^2)./Weits;
+            end
         end
 
         function ln_hdl=displayGeom(self,axe_hdl,crv_option,u_param)
@@ -221,9 +229,10 @@ classdef Curve < handle
             %
             self.Poles=self.Poles(end:-1:1,:);
             self.Mults=self.Mults(end:-1:1);
-            self.Knots=max(self.Knots)-self.Knots(end:-1:1);
+            min_k=min(self.Knots);max_k=max(self.Knots);dk=max_k-min_k;
+            self.Knots=dk-(self.Knots(end:-1:1)-min_k)+min_k;
             self.Weights=self.Weights(end:-1:1,:);
-            self.u_list=max(self.u_list)-self.u_list(end:-1:1);
+            self.u_list=baseKnotVec(self.Mults,self.Knots);
         end
 
         function self=addDegree(self,Degree_target)
@@ -232,13 +241,17 @@ classdef Curve < handle
             if Degree_target <= self.Degree, return;end
 
             % modify Degree, Mults and Ctrls
-            Ctrls=[self.Poles.*self.Weights,self.Weights];
+            if isempty(self.Weights), Ctrls=[self.Poles];
+            else, Ctrls=[self.Poles.*self.Weights,self.Weights];end
             [Ctrls,self.Degree,self.Mults]=GeomApp.addDegree(Ctrls,self.Degree,self.Mults,self.Knots,Degree_target);
             self.u_list=baseKnotVec(self.Mults,self.Knots);
 
             % modify Poles and Weights
-            self.Poles=Ctrls(:,1:end-1)./Ctrls(:,end);
-            self.Weights=Ctrls(:,end);
+            if isempty(self.Weights), self.Poles=Ctrls;
+            else
+                self.Poles=Ctrls(:,1:end-1)./Ctrls(:,end);
+                self.Weights=Ctrls(:,end);
+            end
         end
 
         function self=insertKnot(self,U_ins)
@@ -247,7 +260,8 @@ classdef Curve < handle
             if isempty(U_ins), return;end
 
             % modify u_list, Mults, Knots and Ctrls
-            Ctrls=[self.Poles.*self.Weights,self.Weights];
+            if isempty(self.Weights), Ctrls=[self.Poles];
+            else, Ctrls=[self.Poles.*self.Weights,self.Weights];end
             [Ctrls,~,self.u_list]=GeomApp.insertKnot(Ctrls,self.Degree,self.u_list,U_ins);
             self.Knots=unique(self.u_list);
             self.Mults=ones(size(self.Knots));
@@ -256,10 +270,67 @@ classdef Curve < handle
             end
 
             % modify Poles and Weights
-            self.Poles=Ctrls(:,1:end-1)./Ctrls(:,end);
-            self.Weights=Ctrls(:,end);
+            if isempty(self.Weights), self.Poles=Ctrls;
+            else
+                self.Poles=Ctrls(:,1:end-1)./Ctrls(:,end);
+                self.Weights=Ctrls(:,end);
+            end
         end
     
+        function [crv_1,crv_2]=splitCurve(self,u_b)
+            % split curve at ub
+            %
+            if u_b <= min(self.Knots) || u_b >= max(self.Knots)
+                error('Curve.splitCurve: ub is out of boundary of curve');
+            end
+
+            % insert ub to modify poles
+            rep_tim=sum(find(self.u_list == u_b));
+            self.insertKnot(repmat(u_b,1,self.Degree-rep_tim));
+
+            % locate u place
+            u_num=find(self.u_list == u_b,1,'last');
+            pole_num=u_num-self.Degree;
+            k_num=find(self.Knots == u_b,1,'last');
+
+            % generate new curve
+            Poles_1=self.Poles(1:pole_num,:);
+            Degree_1=self.Degree;
+            Mults_1=self.Mults(1:k_num);Mults_1(end)=Mults_1(end)+1;
+            Knots_1=self.Knots(1:k_num);
+            Knots_1=(Knots_1-min(Knots_1))/(max(Knots_1)-min(Knots_1));
+            if isempty(self.Weights), Weights_1=[];
+            else, Weights_1=self.Weights(1:pole_num,:);end
+            crv_1=Curve(Poles_1,Degree_1,Mults_1,Knots_1,Weights_1);
+
+            Poles_2=self.Poles(pole_num:end,:);
+            Degree_2=self.Degree;
+            Mults_2=self.Mults(k_num:end);Mults_2(1)=Mults_2(1)+1;
+            Knots_2=self.Knots(k_num:end);
+            Knots_2=(Knots_2-min(Knots_2))/(max(Knots_2)-min(Knots_2));
+            if isempty(self.Weights), Weights_2=[];
+            else, Weights_2=self.Weights(pole_num:end,:);end
+            crv_2=Curve(Poles_2,Degree_2,Mults_2,Knots_2,Weights_2);
+        end
+
+        function self=preGradient(self,deriv_time)
+            % generate derivate BSpline for calculate gradient
+            %
+            if deriv_time > 0
+                if isempty(self.deriv_curve)
+                    % generate derivate curve
+                    if isempty(self.Weights), Ctrls=[self.Poles];
+                    else, Ctrls=[self.Poles.*self.Weights,self.Weights];end
+                    [Ctrls_deriv,Deg_deriv,Mults_deriv]=GeomApp.calGradient(Ctrls,self.Degree,self.Mults,self.Knots);
+
+                    % modify Poles and Weights
+                    self.deriv_curve=Curve(Ctrls_deriv,Deg_deriv,Mults_deriv,self.Knots);
+                end
+
+                self.deriv_curve.preGradient(deriv_time-1);
+            end
+        end
+
         function self=translate(self,tran_vctr)
             self.Poles=self.Poles+tran_vctr;
         end
@@ -294,6 +365,7 @@ classdef Curve < handle
                     geom_torl=[];
                 end
             end
+            if isempty(geom_torl), geom_torl=100*eps;end
 
             % find point to start
             if isempty(U)
@@ -310,16 +382,16 @@ classdef Curve < handle
                 RU_RU=sum(dPoints_dU.^2,2);
                 RU_D=sum(dPoints_dU.*dPoint,2);
 
-                dU=RU_D./RU_RU;
+                dU=RU_D./(RU_RU);
                 dU(isnan(dU) | isinf(dU))=0;
 
                 U(idx)=U(idx)+dU;
-                U=max(U,0);U=min(U,1);
+                U=max(U,min(self.Knots));U=min(U,max(self.Knots));
 
-                idx=find(sum(abs(dPoint),2) > geom_torl);
+                idx=find(abs(RU_D) > geom_torl & abs(dU) > geom_torl);
 
                 % Points_inv=self.calPoint(U);
-                % scatter(Points_inv(:,1),Points_inv(:,2));
+                % scatter3(Points_inv(:,1),Points_inv(:,2),Points_inv(:,3));
 
                 iter=iter+1;
                 if isempty(idx) || iter >= iter_max
@@ -337,6 +409,7 @@ classdef Curve < handle
 
             % generate rough mesh to initialize pre coord
             U_base=((0:(param-1))+(1:param))/2/param;
+            U_base=U_base.*(max(self.Knots)-min(self.Knots))+min(self.Knots);
             Point_base=self.calPoint(U_base);
             U=zeros(num,1);
             for p_idx=1:num

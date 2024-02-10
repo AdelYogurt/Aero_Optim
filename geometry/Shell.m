@@ -1,11 +1,10 @@
-classdef Shell < handle
+classdef Shell < handle & matlab.mixin.Copyable
     % Topology Entity Shell
     %
     properties
         name=''; % name of shell
         face_list=Face.empty(); % face list
-        edge_list=Edge.empty(); % edge list
-        vertex_list=[]; % vertex list
+        wire_list=Wire.empty(); % wire list of boundary
         closed=false; % if shell is closed
     end
 
@@ -24,6 +23,11 @@ classdef Shell < handle
             if nargin < 3, geom_torl=[];end
             if isempty(geom_torl), geom_torl=1e-6;end
             self.name=name;
+            self.face_list=fce_list;
+
+            if isempty(fce_list)
+                return;
+            end
 
             % check dimension of each face
             fce_num=length(fce_list);
@@ -33,8 +37,7 @@ classdef Shell < handle
                     error('Shell: dimension of each face is not equal');
                 end
             end
-            self.face_list=fce_list;
-
+            
             % generate bounding box
             bound_box=fce_list(1).bound_box;
             for fce_idx=2:fce_num
@@ -55,53 +58,51 @@ classdef Shell < handle
 
             fce_num=length(fce_list);
             if fce_num > 1
-                % check whether face is connect
-                edg_list=[];vtx_list=[];
+                % find connect face
+                ctnt_mat=false(fce_num,fce_num);
+                ctnt_topo=cell(fce_num,fce_num);
+                for fce_bas_idx=1:fce_num-1
+                    fce_bas=fce_list(fce_bas_idx);
+                    for fce_ref_idx=fce_bas_idx+1:length(fce_list)
+                        fce_ref=fce_list(fce_ref_idx);
+
+                        % check face connect
+                        [ctnt,topo_fca]=fce_bas.checkFaceContinuity(fce_ref,geom_torl);
+                        
+                        ctnt_mat(fce_bas_idx,fce_ref_idx)=ctnt;
+                        ctnt_topo(fce_bas_idx,fce_ref_idx)={topo_fca};
+                    end
+                end
+
+                % load all wire
+                fce_num=length(fce_list);
+                wir_list=[];
                 for fce_idx=1:fce_num
-                    edg_list=[edg_list;fce_list(fce_idx).wire_list(1).edge_list];
-                    vtx_list=[vtx_list;fce_list(fce_idx).wire_list(1).vertex_list];
+                    fce=fce_list(fce_idx);
+                    wir_list=[wir_list;fce.wire_list];
                 end
 
-                % generate association between edge and vertex
-                vtx_num=size(vtx_list,1);
-                vtx_topo=repmat(struct('edge',[],'face',[]),vtx_num,1);
-
-                edg_num=size(edg_list,1);
-                edg_topo=repmat(struct('face',[],'map',[]),edg_num,1);
+                topo_shl.continuity=ctnt_mat;
+                topo_shl.face=ctnt_topo;
             else
-                edg_list=[];
-                vtx_list=[];
-
-                % load all edge and vertex
+                % load wire_list
                 wir_list=fce_list(1).wire_list;
-                for bou_idx=1:length(wir_list)
-                    edg_list=[edg_list;wir_list(bou_idx).edge_list];
-                    vtx_list=[vtx_list;wir_list(bou_idx).vertex_list];
-                end
-
-                % generate association between edge and vertex
-                vtx_num=size(vtx_list,1);
-                vtx_topo=repmat(struct('edge',1,'face',1),vtx_num,1);
-
-                edg_num=size(edg_list,1);
-                edg_topo=repmat(struct('face',1,'map',[0,1]),edg_num,1);
+                topo_shl.continuity=[];
+                topo_shl.face=[];
             end
 
             % check if shell is closed
-            if length([edg_topo.face])/edg_num == 2
-                clsd=true;
-            else
+%             if length([edg_topo.face])/edg_num == 2
+%                 clsd=true;
+%             else
                 clsd=false;
-            end
+%             end
 
             self.face_list=fce_list;
-            self.edge_list=edg_list;
-            self.vertex_list=vtx_list;
+            self.wire_list=wir_list;
             self.closed=clsd;
 
-            topo.vertex=vtx_topo;
-            topo.edge=edg_topo;
-            self.topology=topo;
+            self.topology=topo_shl;
         end
 
         function self=addFace(self,fce)
@@ -124,77 +125,63 @@ classdef Shell < handle
             end
         end
 
-        function fce_list=calGeom(self,u_param,v_param)
+        function [Pnts_list,UV_list,Elems_list,Pnts_bous_list,U_bous_list]=calGeom(self,u_param)
             % calculate point on all face
             %
-            if nargin < 3
-                v_param=[];
-                if nargin < 2
-                    u_param=[];
-                end
+            if nargin < 2
+                u_param=[];
             end
 
-            if length(u_param) == 1 && u_param ~= fix(u_param)
-                % auto capture Points
+            % using bound box to auto calculate capture precision
+            if isempty(u_param), u_param=2^-6*mean(self.bound_box(2,:)-self.bound_box(1,:));end
 
-            else
-                % manual capture Points
-                fce_list=[];fce_num=length(self.face_list);
-                for fce_idx=1:fce_num
-                    fce=self.face_list(fce_idx);
-                    fce_list=[fce_list;{fce.calGeom(u_param,v_param)}];
-                end
+            fce_num=length(self.face_list);
+            Pnts_list=cell(fce_num,1);
+            UV_list=cell(fce_num,1);
+            Elems_list=cell(fce_num,1);
+            Pnts_bous_list=cell(fce_num,1);
+            U_bous_list=cell(fce_num,1);
+            for fce_idx=1:fce_num
+                [Pnts,UV,Elems,Pnts_bous,U_bous]=self.face_list(fce_idx).calGeom(u_param);
+                Pnts_list{fce_idx}=Pnts;
+                UV_list{fce_idx}=UV;
+                Elems_list{fce_idx}=Elems;
+                Pnts_bous_list{fce_idx}=Pnts_bous;
+                U_bous_list{fce_idx}=U_bous;
             end
         end
 
-        function [srf_hdl_list,ln_hdl_list,sctr_hdl]=displayModel(self,axe_hdl,u_param,v_param)
+        function [srf_hdl_list,ln_hdl_list,sctr_hdl]=displayModel(self,axe_hdl,u_param)
             % display shell on axes
             %
-            if nargin < 4
-                v_param=[];
-                if nargin < 3
-                    u_param=[];
-                    if nargin < 2
-                        axe_hdl=[];
-                    end
+            if nargin < 3
+                u_param=[];
+                if nargin < 2
+                    axe_hdl=[];
                 end
             end
-            if isempty(axe_hdl),axe_hdl=axes(figure());end
+            if isempty(axe_hdl),axe_hdl=gca();end
 
+            % calculate point on face
+            [Pnts_list,~,Elems_list,Pnts_bous_list,~]=calGeom(self,u_param);
+
+            % plot edge
             fce_num=length(self.face_list);
+            vtx_list=[];
             for fce_idx=1:fce_num
-                [Points,U,V]=self.face_list(fce_idx).calGeom(u_param,v_param);
-                srf_hdl_list(fce_idx)=surfacePoints(axe_hdl,Points,self.dimension);
+                Pnts=Pnts_list{fce_idx};
+                Elems=Elems_list{fce_idx};
+                Pnts_bous=Pnts_bous_list{fce_idx};
 
-                % plot outer boundary
-                wir=self.face_list(fce_idx).wire_list(1);
-                if length(wir.edge_list) == 4
-                    Points=wir.edge_list(1).calPoint(U(1,:));
-                    ln_hdl_list{1}(1)=linePoints(axe_hdl,Points,self.dimension);
-                    Points=wir.edge_list(2).calPoint(V(:,1));
-                    ln_hdl_list{1}(2)=linePoints(axe_hdl,Points,self.dimension);
-                    Points=wir.edge_list(3).calPoint(U(1,end:-1:1));
-                    ln_hdl_list{1}(3)=linePoints(axe_hdl,Points,self.dimension);
-                    Points=wir.edge_list(4).calPoint(V(end:-1:1,1));
-                    ln_hdl_list{1}(4)=linePoints(axe_hdl,Points,self.dimension);
-                else
-                    for edg_idx=1:length(wir.edge_list)
-                        Points=self.face_list(fce_idx).wire_list(edg_idx).calGeom(u_param);
-                        ln_hdl_list{1}(edg_idx)=linePoints(axe_hdl,Points,self.dimension);
-                    end
+                pth_hdl(fce_idx)=patchPoints(axe_hdl,Elems,Pnts);
+                Pnts_bou=[];bou_num=length(Pnts_bous);
+                for bou_idx=1:bou_num
+                    Pnts_bou=[Pnts_bou;Pnts_bous{bou_idx}];
+                    vtx_list=[vtx_list;Pnts_bous{bou_idx}(1,:)];
                 end
-
-                % plot inner boundary
-                bou_num=length(self.face_list(fce_idx).wire_list);
-                for bou_idx=2:bou_num
-                    wir=self.face_list(fce_idx).wire_list(bou_idx);
-                    for edg_idx=1:length(wir.edge_list)
-                        Points=self.face_list(fce_idx).wire_list(edg_idx).calGeom(u_param);
-                        ln_hdl_list{bou_idx}(edg_idx)=linePoints(axe_hdl,Points,self.dimension);
-                    end
-                end
+                ln_hdl_list(bou_idx)=linePoints(axe_hdl,Pnts_bou,self.dimension);
             end
-            sctr_hdl=scatterPoints(axe_hdl,self.vertex_list,self.dimension);
+            sctr_hdl=scatterPoints(axe_hdl,vtx_list,self.dimension);
 
             if self.dimension == 2
             else
@@ -226,18 +213,14 @@ classdef Shell < handle
                 hold off;
             end
 
-            function srf_hdl=surfacePoints(axe_hdl,Points,dimension)
+            function pth_hdl=patchPoints(axe_hdl,Elems,Pnts)
                 % surface point on different dimension
                 %
                 srf_option=struct('LineStyle','none');
                 hold on;
-                if dimension == 2
-                    srf_hdl=surf(axe_hdl,Points(:,:,1),Points(:,:,2),srf_option);
-                else
-                    srf_hdl=surf(axe_hdl,Points(:,:,1),Points(:,:,2),Points(:,:,3),srf_option);
-                    zlabel('z');
-                    view(3);
-                end
+                pth_hdl=patch(axe_hdl,'faces',Elems,'vertices',Pnts,'facevertexcdata',Pnts(:,3),...
+                    'facecolor',get(axe_hdl,'DefaultSurfaceFaceColor'), ...
+                    'edgecolor',get(axe_hdl,'DefaultSurfaceEdgeColor'),srf_option);
                 hold off;
             end
         end

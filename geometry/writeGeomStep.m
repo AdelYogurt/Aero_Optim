@@ -40,12 +40,12 @@ for geom_idx=1:geom_num
     if isa(geom,'Edge') || isa(geom,'Wire')
         % write wire
         if isa(geom,'Edge'), geom=Wire(geom.name,geom);end
-        [str_new,obj_idx,model_idx]=stepLoop(geom,obj_idx);
+        [str_new,obj_idx,model_idx]=writeLoop(geom,obj_idx);
         WIRE=[WIRE,model_idx];
     elseif isa(geom,'Face') || isa(geom,'Shell')
         % write shell
         if isa(geom,'Face'), geom=Shell(geom.name,geom);end
-        [str_new,obj_idx,model_idx]=stepShell(geom,obj_idx);
+        [str_new,obj_idx,model_idx]=writeShell(geom,obj_idx);
         SHELL=[SHELL,model_idx];
     else
         error('writeGeomStep: unknown topology entity');
@@ -139,7 +139,7 @@ end
 
 %% topology step
 
-function [str,obj_idx,VERTEX_POINT]=stepVertex(vtx,obj_idx)
+function [str,obj_idx,VERTEX_POINT]=writeVertex(vtx,obj_idx)
 % generate vertex step str
 %
 % notice:
@@ -148,7 +148,7 @@ function [str,obj_idx,VERTEX_POINT]=stepVertex(vtx,obj_idx)
 
 % write point
 CARTESIAN_POINT=obj_idx;
-[str_pnt,obj_idx]=stepPoint(vtx,obj_idx);
+[str_pnt,obj_idx]=writePoint(vtx,obj_idx);
 Pnt_idx=CARTESIAN_POINT-1+(1:size(vtx,1));
 
 VERTEX_POINT=obj_idx-1+(1:size(vtx,1));
@@ -160,7 +160,7 @@ obj_idx=obj_idx+size(vtx,1);
 str=[str_pnt,str_vtx];
 end
 
-function [str,obj_idx,ORIENTED_EDGE]=stepEdge(edg,obj_idx)
+function [str,obj_idx,ORIENTED_EDGE]=writeEdge(edg,obj_idx)
 % generate edge step str
 %
 
@@ -175,11 +175,11 @@ if isempty(name), name='NONE';end
 vtx_list=vtx_list(topo.vertex,:);
 
 % write curve
-[str_crv,obj_idx]=stepCurve(crv,obj_idx);
+[str_crv,obj_idx]=writeCurve(crv,obj_idx);
 CURVE=obj_idx-1;
 
 % write vertex
-[str_vtx,obj_idx,VERTEX_POINT]=stepVertex(vtx_list,obj_idx);
+[str_vtx,obj_idx,VERTEX_POINT]=writeVertex(vtx_list,obj_idx);
 
 % write edge
 EDGE_CURVE=obj_idx;
@@ -188,14 +188,14 @@ obj_idx=obj_idx+1;
 
 % write oriented edg
 ORIENTED_EDGE=obj_idx;
-str_ori=sprintf('#%d = ORIENTED_EDGE ( ''%s'', *, *, #%d, .F. ) ;\n',ORIENTED_EDGE,name,EDGE_CURVE);
+str_ori=sprintf('#%d = ORIENTED_EDGE ( ''%s'', *, *, #%d, .T. ) ;\n',ORIENTED_EDGE,name,EDGE_CURVE);
 obj_idx=obj_idx+1;
 
 % generate all
 str=[str_crv,str_vtx,str_edg,str_ori];
 end
 
-function [str,obj_idx,EDGE_LOOP]=stepLoop(wir,obj_idx)
+function [str,obj_idx,EDGE_LOOP]=writeLoop(wir,obj_idx)
 % generate loop step str
 %
 
@@ -211,7 +211,7 @@ if isempty(name), name='NONE';end
 str_edg='';edg_num=length(edg_list);
 ORIENTED_EDGE=zeros(1,edg_num);
 for edg_idx=1:edg_num
-    [str,obj_idx,ORIENTED_EDGE(edg_idx)]=stepEdge(edg_list(edg_idx),obj_idx);
+    [str,obj_idx,ORIENTED_EDGE(edg_idx)]=writeEdge(edg_list(edg_idx),obj_idx);
     str_edg=[str_edg,str,'\n'];
 end
 
@@ -225,7 +225,7 @@ obj_idx=obj_idx+1;
 str=[str_edg,str_lop];
 end
 
-function [str,obj_idx,ADVANCED_FACE]=stepFace(fce,obj_idx)
+function [str,obj_idx,ADVANCED_FACE]=writeFace(fce,obj_idx)
 % generate face step str
 %
 
@@ -239,14 +239,14 @@ wire_list=fce.wire_list;
 if isempty(name), name='NONE';end
 
 % write surface
-[str_srf,obj_idx]=stepSurface(srf,obj_idx);
+[str_srf,obj_idx]=writeSurface(srf,obj_idx);
 SURFACE=obj_idx-1;
 
 % write edge loop
 str_lop='';wir_num=length(wire_list);
 EDGE_LOOP=zeros(1,wir_num);
 for wir_idx=1:wir_num
-    [str,obj_idx,EDGE_LOOP(wir_idx)]=stepLoop(wire_list(wir_idx),obj_idx);
+    [str,obj_idx,EDGE_LOOP(wir_idx)]=writeLoop(wire_list(wir_idx),obj_idx);
     str_lop=[str_lop;str];
 end
 
@@ -273,14 +273,14 @@ end
 ADVANCED_FACE=obj_idx;
 BOUND=[FACE_OUTER_BOUND,FACE_BOUND];
 format_out=['( ','#%d',repmat(', #%d',1,wir_num-1),' )'];
-str_fce=[sprintf('#%d = ADVANCED_FACE ( ''%s'', ',ADVANCED_FACE,name),sprintf(format_out,BOUND),sprintf(', #%d, .F. ) ;\n',SURFACE)];
+str_fce=[sprintf('#%d = ADVANCED_FACE ( ''%s'', ',ADVANCED_FACE,name),sprintf(format_out,BOUND),sprintf(', #%d, .T. ) ;\n',SURFACE)];
 obj_idx=obj_idx+1;
 
 % generate all
 str=[str_srf,str_lop,str_otr_bou,str_bou,str_fce];
 end
 
-function [str,obj_idx,SHELL]=stepShell(shl,obj_idx)
+function [str,obj_idx,SHELL]=writeShell(shl,obj_idx)
 % write surface into step file
 %
 
@@ -297,7 +297,7 @@ if isempty(name), name='NONE';end
 str_fce='';fce_num=length(fce_list);
 ADVANCED_FACE=zeros(1,fce_num);
 for fce_idx=1:fce_num
-    [str,obj_idx,ADVANCED_FACE(fce_idx)]=stepEdge(fce_list(fce_idx),obj_idx);
+    [str,obj_idx,ADVANCED_FACE(fce_idx)]=writeFace(fce_list(fce_idx),obj_idx);
     str_fce=[str_fce,str,'\n'];
 end
 
@@ -312,12 +312,12 @@ end
 obj_idx=obj_idx+1;
 
 % generate all
-str=[str_face,str_shell];
+str=[str_fce,str_shell];
 end
 
 %% geometry step
 
-function [str,obj_idx]=stepPoint(pnt,obj_idx)
+function [str,obj_idx]=writePoint(pnt,obj_idx)
 % generate point step str
 %
 % notice:
@@ -328,7 +328,7 @@ str=sprintf('#%d = CARTESIAN_POINT ( ''NONE'', ( %.16f, %.16f, %.16f ) ) ;\n',ou
 obj_idx=obj_idx+size(pnt,1);
 end
 
-function [str,obj_idx]=stepCurve(crv,obj_idx)
+function [str,obj_idx]=writeCurve(crv,obj_idx)
 % generate curve step str
 %
 if ~isa(crv,'Curve')
@@ -344,10 +344,10 @@ Weights=crv.Weights;
 
 % write point
 CARTESIAN_POINT=obj_idx;
-[str,obj_idx]=stepPoint(Poles,obj_idx);
+[str,obj_idx]=writePoint(Poles,obj_idx);
 Pnt_idx=CARTESIAN_POINT-1+(1:size(Poles,1));
 
-if all(Weights == 1)
+if isempty(Weights)
     % unrational
     str=[str,num2str(obj_idx,'#%d ='),' B_SPLINE_CURVE_WITH_KNOTS',...
         ' ( ',...
@@ -383,7 +383,7 @@ end
 str=sprintf(str);
 end
 
-function [str,obj_idx]=stepSurface(srf,obj_idx)
+function [str,obj_idx]=writeSurface(srf,obj_idx)
 % generate surface step str
 %
 if ~isa(srf,'Surface')
@@ -404,10 +404,10 @@ Weights=srf.Weights;
 [v_num,u_num,~]=size(Poles);
 CARTESIAN_POINT=obj_idx;
 Poles=reshape(Poles,v_num*u_num,3);
-[str,obj_idx]=stepPoint(Poles,obj_idx);
+[str,obj_idx]=writePoint(Poles,obj_idx);
 Pnt_idx=CARTESIAN_POINT-1+(1:v_num*u_num);
 
-if all(Weights == 1)
+if isempty(Weights)
     % unrational
     str=[str,num2str(obj_idx,'#%d ='),' B_SPLINE_SURFACE_WITH_KNOTS',...
         ' ( ',...
@@ -430,7 +430,6 @@ else
 
     % B_SPLINE_SURFACE
     str=[str,'B_SPLINE_SURFACE ( ',...
-        '''NONE''',', ',...
         num2str(UDegree,'%d'),', ',num2str(VDegree,'%d'),', \n'];
     str=[str,'('];
     format_out=['( ','#%d',repmat(', #%d',1,v_num-1),' ),\n'];

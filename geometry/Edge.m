@@ -1,11 +1,11 @@
-classdef Edge < handle
+classdef Edge < handle & matlab.mixin.Copyable
     % Topology Entity Edge with Bound
     %
     properties
         name=''; % name of edge
         curve; % Curve handle
         vertex_list=[]; % vertex list of boundary
-        outer_bound=[]; % boundary of outer
+        bound=[]; % boundary of outer
     end
 
     properties
@@ -24,28 +24,39 @@ classdef Edge < handle
             self.name=name;
             self.curve=crv;
 
+            if isempty(crv)
+                return;
+            end
+
+            if isa(crv,'Curve'), region=[min(crv.Knots),max(crv.Knots)];
+            elseif isa(crv,'CurveCST'), region=[0,1];end
             if isempty(vtx_list)
-                if isa(crv,'Curve'), otr_bou=[min(crv.Knots),max(crv.Knots)];
-                elseif isa(crv,'CurveCST'), otr_bou=[0,1];end
-                vtx_list=crv.calPoint(otr_bou);
+                bou=region;
+                vtx_list=crv.calPoint(bou);
             else
                 % project vertex list to get outer_bound
-                if size(vtx_list,2) ~= 2
+                if size(vtx_list,1) ~= 2
                     error('Edge: only can have a pair of vertex');
                 end
-                [~,otr_bou]=crv.projectPoint(vtx_list);
-                if otr_bou(2) < otr_bou(1)
-                    otr_bou=otr_bou(end:-1:1);
+                bou=crv.projectPoint(vtx_list);
+                if bou(2) < bou(1)
+                    bou=bou(end:-1:1);
                     vtx_list=vtx_list(end:-1:1,:);
                 end
+                bou(1)=max(bou(1),region(1));
+                bou(2)=min(bou(2),region(2));
             end
             self.vertex_list=vtx_list;
-            self.outer_bound=otr_bou;
+            self.bound=bou;
+
+            if self.bound(1) < min(crv.Knots) || self.bound(2) > max(crv.Knots)
+                disp('?');
+            end
 
             topo.vertex=[1,2];
             self.topology=topo;
 
-            U_x=linspace(otr_bou(1),otr_bou(2),101);
+            U_x=linspace(bou(1),bou(2),101);
             Pnts=crv.calPoint(U_x);
             self.bound_box=[min(Pnts,[],1);max(Pnts,[],1)];
             self.dimension=size(Pnts,2);
@@ -54,15 +65,72 @@ classdef Edge < handle
         function self=reverse(self)
             % revese direction of edge
             %
-            self.curve.reverse;
+            self.curve.reverse();
             self.vertex_list=flipud(self.vertex_list);
-            
+
             if isa(self.curve,'Curve'), bou_max=max(self.curve.Knots);
             elseif isa(self.curve,'CurveCST'), bou_max=1;end
-            self.outer_bound=bou_max-self.outer_bound(end:-1:1);
+            self.bound=bou_max-self.bound(end:-1:1);
+        end
+
+        function [edg_1,edg_2]=splitEdge(self,u_b)
+            % split curve at ub
+            %
+            if u_b <= self.bound(1) || u_b >= self.bound(2)
+                error('Edge.splitEdge: ub is out of boundary of curve');
+            end
+
+            % split curve
+            vtx_b=self.curve.calPoint(u_b);
+            [crv_1,crv_2]=self.curve.splitCurve(u_b);
+
+            % generate new edge
+            vtx_list_1=[self.vertex_list(1,:);vtx_b];
+            edg_1=Edge(self.name,crv_1,vtx_list_1);
+
+            vtx_list_2=[vtx_b;self.vertex_list(2,:)];
+            edg_2=Edge(self.name,crv_2,vtx_list_2);
+        end
+
+        function [ovlp,self_u_proj,edg_u_proj]=checkOverlap(self,edg,geom_torl)
+            % check if two edge is overlap
+            %
+            % output:
+            % ovlp: whether edge is overlap
+            % self_u_proj: u of self vertex project to edg
+            % edg_u_proj: u of edg vertex project to self
+            %
+            if nargin < 3, geom_torl=[];end
+            if isempty(geom_torl), geom_torl=1e-6;end
+
+            ovlp=false;self_u_proj=[];edg_u_proj=[];
+            % check if bounding box is overlap
+            if ~GeomApp.checkBoxOverlap(self,edg,geom_torl)
+                % if no, pass
+                return;
+            end
+
+            if norm(self.vertex_list-edg.vertex_list) < geom_torl
+                Pnts_self=self.calGeom(21);Pnts_ref=edg.calGeom(21);
+                if norm(Pnts_self-Pnts_ref) < geom_torl
+                    ovlp=true;self_u_proj=[0,1];edg_u_proj=[0,1];
+                    return;
+                end
+            elseif norm(self.vertex_list-flipud(edg.vertex_list)) < geom_torl
+                Pnts_self=self.calGeom(21);Pnts_ref=edg.calGeom(21);
+                if norm(Pnts_self-flipud(Pnts_ref)) < geom_torl
+                    ovlp=true;self_u_proj=[1,0];edg_u_proj=[1,0];
+                    return;
+                end
+            end
+            
+            % project vertex to curve, if distanc too far, mean no overlap
+
         end
 
         function point=calPoint(self,u_x)
+            % warp of Curve.calPoint
+            %
             point=self.curve.calPoint(u_x);
         end
 
@@ -75,14 +143,16 @@ classdef Edge < handle
             end
 
             % using bound box to auto calculate capture precision
-            if isempty(u_param), u_param=2^-5*mean(self.bound_box(2,:)-self.bound_box(1,:));end
+            if isempty(u_param), u_param=2^-6*mean(self.bound_box(2,:)-self.bound_box(1,:));end
 
-            low_bou=self.outer_bound(1);
-            up_bou=self.outer_bound(2);
+            if isa(self.curve,'Curve'), region=[min(self.curve.Knots),max(self.curve.Knots)];
+            elseif isa(self.curve,'CurveCST'), region=[0,1];end
+
+            low_bou=max(self.bound(1),region(1));
+            up_bou=min(self.bound(2),region(2));
             if length(u_param) == 1 && u_param ~= fix(u_param)
                 % auto capture Points
-                value_torl=u_param;min_level=1;max_level=16;
-                dim=self.dimension;
+                value_torl=u_param;min_level=2;max_level=16;
 
                 [U,Points,~]=GeomApp.meshAdapt1D(@(x) self.curve.calPoint(x),low_bou,up_bou,value_torl,min_level,max_level);
                 [U,map]=sort(U);

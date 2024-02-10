@@ -153,7 +153,7 @@ classdef SurfaceCST < handle
             Points=self.axisLocalToGlobal(Points,U_x,V_x);
         end
         
-        function [Points,dPoints_dU,dPoints_dV]=calGradient(self,U_x,V_x,step)
+        function [Points,dPoints_dUV]=calGradient(self,U_x,V_x,step)
             % use differ to calculate gradient
             %
             if nargin < 4 || isempty(step),step=100*eps;end
@@ -190,6 +190,8 @@ classdef SurfaceCST < handle
             dPoints_dV=reshape(dPoints_dV,v_num,u_num,dim);
 
             Points=reshape(Points,v_num,u_num,dim);
+
+            dPoints_dUV={dPoints_dU,dPoints_dV};
         end
 
         function srf=convertSpline(self)
@@ -573,6 +575,7 @@ classdef SurfaceCST < handle
                     geom_torl=[];
                 end
             end
+            if isempty(geom_torl), geom_torl=100*eps;end
 
             % find point to start
             if isempty(U) && isempty(V)
@@ -587,7 +590,9 @@ classdef SurfaceCST < handle
             iter=0;iter_max=50;
             done=false;idx=1:v_num*u_num;
             while ~done
-                [Points,dPoints_dU,dPoints_dV]=self.calGradient(U(idx),V(idx));
+                [Points,dPoints_dUV]=self.calGradient(U(idx),V(idx));
+                dPoints_dU=dPoints_dUV{1};
+                dPoints_dV=dPoints_dUV{2};
                 dPoint=reshape(Points_init(idx,:),length(idx),1,[])-Points;
 
                 RU_RU=sum(dPoints_dU.^2,3);
@@ -606,10 +611,10 @@ classdef SurfaceCST < handle
                 U=max(U,0);U=min(U,1);
                 V=max(V,0);V=min(V,1);
 
-                idx=find(sum(abs(dPoint),3) > geom_torl);
+                idx=find(abs(RU_D) > geom_torl);
 
-                % Points_inv=self.calPoint(U,V);
-                % scatter3(Points_inv(:,:,1),Points_inv(:,:,2),Points_inv(:,:,3));
+                % Points_inv=self.calPoint(U);
+                % scatter3(Points_inv(:,1),Points_inv(:,2),Points_inv(:,3));
 
                 iter=iter+1;
                 if isempty(idx) || iter >= iter_max

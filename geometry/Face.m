@@ -1,12 +1,11 @@
-classdef Face < handle
+classdef Face < handle & matlab.mixin.Copyable
     % Topology Entity Face with Bound
     %
     properties
         name=''; % name of face
         surface; % Surface handle
         wire_list=Wire.empty(); % wire list of boundary
-        outer_bound=Curve.empty(); % boundary of outer and inner
-        bound={}; % boundary of inner
+        bound=Curve.empty(); % boundary of outer and inner
     end
 
     properties
@@ -25,6 +24,10 @@ classdef Face < handle
             self.name=name;
             self.surface=srf;
 
+            if isempty(srf)
+                return;
+            end
+            
             if isa(srf,'Surface'), region=[min(srf.UKnots),min(srf.VKnots);max(srf.UKnots),max(srf.VKnots)];
             elseif isa(srf,'SurfaceCST'), region=[0,0;1,1];end
             if isempty(wire_list)
@@ -33,28 +36,56 @@ classdef Face < handle
                 edg_2=Edge('',srf.getBoundCurve('1v'));
                 edg_3=Edge('',srf.getBoundCurve('u1').reverse);
                 edg_4=Edge('',srf.getBoundCurve('0v').reverse);
-                self.wire_list=Wire('',[edg_1;edg_2;edg_3;edg_4]);
+                wire_list=Wire('',[edg_1;edg_2;edg_3;edg_4]);
 
                 [U_point,V_point]=meshgrid([region(1,1),region(2,1)],[region(1,2),region(2,2)]);
                 U_point=U_point';V_point=V_point';
                 point=[U_point(:),V_point(:)];
-                otr_bou=[
+                bou=[
                     Curve([point(1,:);point(2,:)]);
                     Curve([point(2,:);point(4,:)]);
                     Curve([point(4,:);point(3,:)]);
                     Curve([point(3,:);point(1,:)])];
-                bou={};
                 topo.edge={[1,2,3,4]};
             else
-                % fit point on boundary to get outer bound
+                geom_torl=1e-6;
+                
+                % fit point on boundary to get outer or inner bound
                 wir_num=length(wire_list);
-                topo.edge={};
+                topo.edge={};bou=[];
 
-                % if exist inner boundary
-                if wir_num > 1
+                region=[];
+                for wir_idx=1:wir_num
+                    % project edge to surface
+                    wir=wire_list(wir_idx);
+                    edg_num=length(wir.edge_list);
+
+                    if wir_idx > 1
+                        disp('');
+                    end
+
+                    % add edge topology
+                    topo.edge{wir_idx}=(1:edg_num)+length(bou);
+                    for edg_idx=1:edg_num
+                        % project point to surface
+                        edg=wir.edge_list(edg_idx);
+                        Pnts=edg.calGeom();
+                        [U_proj,V_proj]=srf.projectPoint(reshape(Pnts,[],1,size(Pnts,2)));
+                        idx=find(vecnorm(squeeze(srf.calPoint(U_proj,V_proj))-Pnts,2,2) < geom_torl);
+                        UV_proj=[U_proj,V_proj];
+
+                        % interplote to get boundary curve 
+                        bou=[bou;GeomApp.interpPointToCurve(UV_proj(idx,:),edg.curve.Degree)];
+
+                        if isempty(region)
+                            region=[min(UV_proj,[],1);max(UV_proj,[],1)];
+                        else
+                            region=[min([region;UV_proj],[],1);max([region;UV_proj],[],1)];
+                        end
+                    end
                 end
             end
-            self.outer_bound=otr_bou;
+            self.wire_list=wire_list;
             self.bound=bou;
             
             self.topology=topo;
@@ -68,30 +99,67 @@ classdef Face < handle
         end
 
         function point=calPoint(self,u_x,v_x)
+            % warp of Surface.calPoint
+            %
             point=self.surface.calPoint(u_x,v_x);
         end
 
-        function [Points,UV,Elements,Points_bound_list,U_bound_list]=calGeom(self,u_param)
+        function [ctnt,topo_fca]=checkFaceContinuity(self,fce,geom_torl)
+            % find out if connect between face
+            %
+            if nargin < 3, geom_torl=[];end
+            if isempty(geom_torl), geom_torl=1e-6;end
+
+            % check if bounding box overlap
+            if ~GeomApp.checkBoxOverlap(self,fce,geom_torl)
+                % if no, pass
+                ctnt=false;topo_fca={};
+                return;
+            end
+
+            % check each wire if overlap
+            ctnt=false;
+            ovlp_mat=false(length(self.wire_list),length(fce.wire_list));
+            ovlp_topo=cell(length(self.wire_list),length(fce.wire_list));
+            for wir_ba_idx=1:length(self.wire_list)
+                wir_ba=self.wire_list(wir_ba_idx);
+                for wir_idx=1:length(fce.wire_list)
+                    wir=fce.wire_list(wir_idx);
+                    % check wire overlap
+                    [ovlp,topo_wir]=wir_ba.checkOverlap(wir,geom_torl);
+                    ctnt=ctnt | ovlp;
+                    ovlp_mat(wir_ba_idx,wir_idx)=ovlp;
+                    ovlp_topo(wir_ba_idx,wir_idx)={topo_wir};
+                end
+            end
+            topo_fca.overlap=ovlp_mat;
+            topo_fca.wire=ovlp_topo;
+        end
+
+        function [Pnts,UV,Elems,Pnts_bous,U_bous]=calGeom(self,u_param)
             % generate point matrix on face by u_param
             % if u_param is float, adapt calculate point on curve to mean u_param
             %
             if nargin < 2
                 u_param=[];
             end
-            geom_torl=1e-6;
 
             % using bound box to auto calculate capture precision
-            if isempty(u_param), u_param=2^-5*mean(self.bound_box(2,:)-self.bound_box(1,:));end
+            if isempty(u_param), u_param=2^-6*mean(self.bound_box(2,:)-self.bound_box(1,:));end
+
+            srf=self.surface;
+            if isa(srf,'Surface'), region=[min(srf.UKnots),min(srf.VKnots);max(srf.UKnots),max(srf.VKnots)];
+            elseif isa(srf,'SurfaceCST'), region=[0,0;1,1];end
 
             % load outer bound curve pole to get region
-            Poles_otr_bou=cell(1,length(self.outer_bound));
+            Poles_otr_bou=cell(1,length(self.bound));
             poly_otr_bou=[];
-            for crv_idx=1:length(self.outer_bound)
-                Poles_otr_bou{crv_idx}=self.outer_bound(crv_idx).Poles;
-                poly_otr_bou=[poly_otr_bou;self.outer_bound(crv_idx).Poles];
+            for crv_idx=1:length(self.bound)
+                Poles_otr_bou{crv_idx}=self.bound(crv_idx).Poles;
+                poly_otr_bou=[poly_otr_bou;self.bound(crv_idx).Poles];
             end
-            low_bou=min(poly_otr_bou,[],1);
-            up_bou=max(poly_otr_bou,[],1);
+            low_bou=min(poly_otr_bou,[],1);low_bou=max(low_bou,region(1,:));
+            up_bou=max(poly_otr_bou,[],1);up_bou=min(up_bou,region(2,:));
 
             if length(u_param) == 1 && u_param ~= fix(u_param)
                 % auto capture Points
@@ -108,64 +176,23 @@ classdef Face < handle
 
                 % calculate local coordinate matrix
                 [u_param,v_param]=meshgrid(u_param(:),v_param(:));
-                UV_srf=cat(3,u_param,v_param);
+                UV_srf=[u_param(:),v_param(:)];
                 Points_srf=self.calPoint(u_param,v_param);
-
-                if length(self.wire_list) == 1 && length(self.outer_bound) == 4
-                    % check if just cutting plane
-                    Poles=Poles_otr_bou{1};
-                    if all(abs(Poles(:,1)-low_bou(1)) < geom_torl)
-                        just_cut=true;check_order=[2,3,4,1];
-                    elseif all(abs(Poles(:,1)-up_bou(1)) < geom_torl)
-                        just_cut=true;check_order=[4,1,2,3];
-                    elseif all(abs(Poles(:,2)-low_bou(2)) < geom_torl)
-                        just_cut=true;check_order=[1,2,3,4];
-                    elseif all(abs(Poles(:,2)-up_bou(2)) < geom_torl)
-                        just_cut=true;check_order=[3,4,1,2];
-                    else
-                        just_cut=false;
-                    end
-
-                    if just_cut
-                        Poles_otr_bou=Poles_otr_bou(check_order);
-                        % check each poles
-                        if all(abs(Poles_otr_bou{1}(:,2)-low_bou(2)) < geom_torl) && ...
-                            all(abs(Poles_otr_bou{2}(:,1)-up_bou(1)) < geom_torl) && ...
-                            all(abs(Poles_otr_bou{3}(:,2)-up_bou(2)) < geom_torl) && ...
-                            all(abs(Poles_otr_bou{4}(:,1)-low_bou(1)) < geom_torl)
-                            Elements=[];
-                            Points_bound_list={
-                                reshape(Points_srf(1,:,:),[],self.dimension);
-                                reshape(Points_srf(:,1,:),[],self.dimension);
-                                reshape(Points_srf(end,end:-1:1,:),[],self.dimension);
-                                reshape(Points_srf(end:-1:1,1,:),[],self.dimension)};
-                            U_bound_list={
-                                reshape(UV_srf(1,:,:),[],self.dimension);
-                                reshape(UV_srf(:,1,:),[],self.dimension);
-                                reshape(UV_srf(end,end:-1:1,:),[],self.dimension);
-                                reshape(UV_srf(end:-1:1,1,:),[],self.dimension)};
-                            return;
-                        end
-                    else
-                        % convert into list for generta triangle element
-                        UV_srf=reshape(UV_srf,[],2);
-                        Points_srf=reshape(Points_srf,[],self.dimension);
-                    end
-                end
+                Points_srf=reshape(Points_srf,[],self.dimension);
             end
 
-            Points_bound_list=[];
-            U_bound_list=[];
+            Pnts_bous=[];
+            U_bous=[];
 
             % calculate outer bound
             wir_num=length(self.wire_list);
             [Pnts_otr_bou,U_otr_bou]=self.wire_list(1).calGeom(u_param);
-            Points_bound_list=[Points_bound_list;Pnts_otr_bou];
-            U_bound_list=[U_bound_list;U_otr_bou];
+            Pnts_bous=[Pnts_bous;Pnts_otr_bou];
+            U_bous=[U_bous;U_otr_bou];
             
-            Pnts_otr_bou=connectCellToMat(Pnts_otr_bou);poly_otr_bou=[];
-            for crv_idx=1:length(self.outer_bound)
-                poly_otr_bou=[poly_otr_bou;self.outer_bound(crv_idx).calPoint(U_otr_bou{crv_idx})];
+            Pnts_otr_bou=cell2mat(Pnts_otr_bou);poly_otr_bou=[];
+            for crv_idx=1:length(U_otr_bou)
+                poly_otr_bou=[poly_otr_bou;self.bound(crv_idx).calPoint(U_otr_bou{crv_idx})];
             end
 
             if wir_num > 1
@@ -177,19 +204,19 @@ classdef Face < handle
 
                 % calculate each loop
                 for wir_idx=2:wir_num
-                    [Pnts_bou,U_bou]=self.wire_list(wir_idx-1).calGeom(u_param);
-                    Points_bound_list=[Points_bound_list;Pnts_bou];
-                    U_bound_list=[U_bound_list;U_bou];
+                    [Pnts_bou,U_bou]=self.wire_list(wir_idx).calGeom(u_param);
+                    Pnts_bous=[Pnts_bous;Pnts_bou];
+                    U_bous=[U_bous;U_bou];
 
                     crv_inner_idx=topo_edg{wir_idx};
                     poly_bou=[];
                     for crv_idx=1:length(crv_inner_idx)
-                        poly_bou=[poly_bou;self.bound(crv_inner_idx(crv_idx)).calPoint(U_otr_bou{crv_idx})];
+                        poly_bou=[poly_bou;self.bound(crv_inner_idx(crv_idx)).calPoint(U_bou{crv_idx})];
                     end
 
-                    Pnts_bou=connectCellToMat(Pnts_bou);
+                    Pnts_bou=cell2mat(Pnts_bou);
                     Pnts_bou_list{wir_idx-1}=Pnts_bou;
-                    Pnts_bou_list{wir_idx-1}=U_bou;
+                    U_bou_list{wir_idx-1}=U_bou;
                     poly_bou_list{wir_idx-1}=poly_bou;
                 end
             else
@@ -216,32 +243,24 @@ classdef Face < handle
             end
 
             UV=[poly_bou_all;poly_otr_bou;UV_srf(Bool_region,:)];
-            Points=[Pnts_bou_all;Pnts_otr_bou;Points_srf(Bool_region,:)];
+            Pnts=[Pnts_bou_all;Pnts_otr_bou;Points_srf(Bool_region,:)];
 
             % delete duplicate data
-            [~,I,~]=unique(UV,'first','rows');I=sort(I);
-            UV=UV(I,:);
-            Points=Points(I,:);
+            [~,idx,~]=unique(UV,'first','rows');idx=sort(idx);
+            UV=UV(idx,:);
+            Pnts=Pnts(idx,:);
 
             % delaunay triangle
             if isempty(poly_bou_all)
-                Elements=delaunay(UV);
+                Elems=delaunay(UV);
             else
                 Con_DT=[(1:(size(poly_bou_all,1)-1))',(2:size(poly_bou_all,1))';size(poly_bou_all,1),1];
                 DT=delaunayTriangulation(UV,Con_DT);
-                Elements=DT.ConnectivityList(~isInterior(DT),:);
-            end
-
-            function M=connectCellToMat(C)
-                % connect matrix in cell to matrix
-                M=[];
-                for C_idx=1:length(C)
-                    M=[M;C{C_idx}];
-                end
+                Elems=DT.ConnectivityList(~isInterior(DT),:);
             end
         end
 
-        function [srf_hdl,ln_hdl_list,sctr_hdl]=displayModel(self,axe_hdl,u_param)
+        function [pth_hdl,ln_hdl_list,sctr_hdl]=displayModel(self,axe_hdl,u_param)
             % display surface on axes
             %
             if nargin < 3
@@ -254,13 +273,13 @@ classdef Face < handle
             srf_option=struct('LineStyle','none');
 
             % calculate point on surface
-            [Pnts,~,Elems,Pnts_bou_list,~]=self.calGeom(u_param);
+            [Pnts,~,Elems,Pnts_bous,~]=self.calGeom(u_param);
 
             % plot outer boundary
-            bou_num=length(Pnts_bou_list);
+            bou_num=length(Pnts_bous);
             vtx_list=zeros(bou_num,self.dimension);
             for bou_idx=1:bou_num
-                Pnts_bou=Pnts_bou_list{bou_idx};
+                Pnts_bou=Pnts_bous{bou_idx};
                 vtx_list(bou_idx,:)=Pnts_bou(1,:);
                 ln_hdl_list(bou_idx)=linePoints(axe_hdl,Pnts_bou,self.dimension);
             end
@@ -268,27 +287,16 @@ classdef Face < handle
 
             % plot face
             hold on;
-            if isempty(Elems)
-                % output is matrix
-                if self.dimension == 2
-                    srf_hdl=surf(axe_hdl,Pnts(:,:,1),Pnts(:,:,2),srf_option);
-                else
-                    srf_hdl=surf(axe_hdl,Pnts(:,:,1),Pnts(:,:,2),Pnts(:,:,3),srf_option);
-                    zlabel('z');
-                    view(3);
-                end
+            if self.dimension == 2
+                pth_hdl=patch(axe_hdl,'faces',Elems,'vertices',Pnts,'facevertexcdata',Pnts(:,3),...
+                    'facecolor',get(axe_hdl,'DefaultSurfaceFaceColor'), ...
+                    'edgecolor',get(axe_hdl,'DefaultSurfaceEdgeColor'),srf_option);
             else
-                % output is triangle element
-                if self.dimension == 2
-                    srf_hdl=trisurf(axe_hdl,Elems,Pnts(:,1),Pnts(:,2),srf_option);
-                else
-                    srf_hdl=patch(axe_hdl,'faces',Elems,'vertices',Pnts,'facevertexcdata',Pnts(:,3),...
-                        'facecolor',get(axe_hdl,'DefaultSurfaceFaceColor'), ...
-                        'edgecolor',get(axe_hdl,'DefaultSurfaceEdgeColor'),srf_option);
-%                     srf_hdl=trisurf(axe_hdl,Elems,Pnts(:,1),Pnts(:,2),Pnts(:,3),srf_option);
-                    zlabel('z');
-                    view(3);
-                end
+                pth_hdl=patch(axe_hdl,'faces',Elems,'vertices',Pnts,'facevertexcdata',Pnts(:,3),...
+                    'facecolor',get(axe_hdl,'DefaultSurfaceFaceColor'), ...
+                    'edgecolor',get(axe_hdl,'DefaultSurfaceEdgeColor'),srf_option);
+                zlabel('z');
+                view(3);
             end
             hold off;
             xlabel('x');

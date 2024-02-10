@@ -1,4 +1,4 @@
-classdef CurveCST < handle
+classdef CurveCST < handle & matlab.mixin.Copyable
     % Class-Shape Transformation (CST) Curve
     %
     % notice:
@@ -569,10 +569,10 @@ classdef CurveCST < handle
                 U(idx)=U(idx)+dU;
                 U=max(U,0);U=min(U,1);
 
-                idx=find(sum(abs(dPoint),2) > geom_torl);
+                idx=find(abs(RU_D) > geom_torl);
 
                 % Points_inv=self.calPoint(U);
-                % scatter(Points_inv(:,1),Points_inv(:,2));
+                % scatter3(Points_inv(:,1),Points_inv(:,2),Points_inv(:,3));
 
                 iter=iter+1;
                 if isempty(idx) || iter >= iter_max

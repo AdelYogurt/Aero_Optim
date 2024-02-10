@@ -1,4 +1,4 @@
-classdef Wire < handle
+classdef Wire < handle & matlab.mixin.Copyable
     % Topology Entity Wire
     %
     properties
@@ -22,8 +22,12 @@ classdef Wire < handle
             %
             if nargin < 3, geom_torl=[];end
             if isempty(geom_torl), geom_torl=1e-6;end
-            edg_list=edg_list(:);
             self.name=name;
+            edg_list=edg_list(:);
+
+            if isempty(edg_list)
+                return;
+            end
 
             % check dimension of each edge
             edg_num=length(edg_list);
@@ -158,6 +162,59 @@ classdef Wire < handle
             end
         end
 
+        function self=splitWire(self,edg_idx,u_b)
+            % split curve at ub
+            %
+
+            % split curve
+            vtx_b=self.edge_list(edg_idx).calPoint(u_b);
+            [edg_1,edg_2]=self.edge_list(edg_idx).splitEdge(u_b);
+
+            % modify wire
+            self.vertex_list=[self.vertex_list(1:edg_idx,:);vtx_b;self.vertex_list(edg_idx+1:end,:)];
+            self.edge_list=[self.edge_list(1:edg_idx-1,:);edg_1;edg_2;self.edge_list(edg_idx+1:end,:)];
+        end
+
+        function [ovlp,topo_wir]=checkOverlap(self,wir,geom_torl)
+            % check if two edge is overlap
+            %
+            % output:
+            % ovlp: whether have overlap edge
+            % topo_edg: cell matrix, overlap check of each pair edge
+            %
+            if nargin < 3, geom_torl=[];end
+            if isempty(geom_torl), geom_torl=1e-6;end
+
+            % check if bounding box is overlap
+            if ~GeomApp.checkBoxOverlap(self,wir,geom_torl)
+                % if no, pass
+                ovlp=false;topo_wir={};
+                return;
+            end
+
+            % check each edge if overlap
+            ovlp=false;
+            ovlp_mat=false(length(self.edge_list),length(wir.edge_list));
+            U_bas=cell(length(self.edge_list),length(wir.edge_list));
+            U_ref=cell(length(self.edge_list),length(wir.edge_list));
+            for edg_bas_idx=1:length(self.edge_list)
+                edg_bas=self.edge_list(edg_bas_idx);
+                for edg_ref_idx=1:length(wir.edge_list)
+                    edg_ref=wir.edge_list(edg_ref_idx);
+                    
+                    % check edge overlap
+                    [ovlp_edg,self_u_proj,edg_u_proj]=edg_bas.checkOverlap(edg_ref,geom_torl);
+                    ovlp=ovlp | ovlp_edg;
+                    ovlp_mat(edg_bas_idx,edg_ref_idx)=ovlp_edg;
+                    U_bas(edg_bas_idx,edg_ref_idx)={self_u_proj};
+                    U_ref(edg_bas_idx,edg_ref_idx)={edg_u_proj};
+                end
+            end
+            topo_wir.overlap=ovlp_mat;
+            topo_wir.U_base=U_bas;
+            topo_wir.U_ref=U_ref;
+        end
+
         function self=reverse(self)
             % reverse wire direction
             %
@@ -176,7 +233,7 @@ classdef Wire < handle
             end
 
             % using bound box to auto calculate capture precision
-            if isempty(u_param), u_param=2^-5*mean(self.bound_box(2,:)-self.bound_box(1,:));end
+            if isempty(u_param), u_param=2^-6*mean(self.bound_box(2,:)-self.bound_box(1,:));end
 
             edg_num=length(self.edge_list);
             Points_list=cell(edg_num,1);
@@ -199,7 +256,7 @@ classdef Wire < handle
             end
             if isempty(axe_hdl),axe_hdl=gca();end
 
-            % calculate point on curve
+            % calculate point on edge
             [Points_list]=self.calGeom(u_param);
 
             % plot edge

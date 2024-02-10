@@ -7,9 +7,9 @@ classdef Surface < handle
         UDegree; % u_degree
         VDegree; % v_degree
         Poles; % control_points_list
-        face_form='.UNSPECIFIED.'; % face_form
-        UPeriodic='.F.'; % closed_surface (boolean)
-        VPeriodic='.F.'; % closed_surface (boolean)
+        surface_form='.UNSPECIFIED.'; % surface_form
+        UPeriodic='.F.'; % u_closed (boolean)
+        VPeriodic='.F.'; % v_closed (boolean)
         self_intersect='.F.'; % self_intersect (boolean)
         Weights; % weights_data
 
@@ -46,6 +46,8 @@ classdef Surface < handle
             % Surface
             %
             % notice:
+            % Degree default is pole_num-1 which will be Bezier surface
+            % 
             % colume of X, Y, Z is LaWGS format
             % colume of node_X, node_Y, node_Z will by reseve calculate
             % colume direction is u(x), rank direction is v(y)
@@ -81,7 +83,6 @@ classdef Surface < handle
             if isempty(VMults),VMults=[VDegree+1,ones(1,v_pole_num-VDegree-1),VDegree+1];end;VMults=VMults(:)';
             if isempty(UKnots),UKnots=linspace(0,1,u_pole_num-UDegree+1);end;UKnots=UKnots(:)';
             if isempty(VKnots),VKnots=linspace(0,1,v_pole_num-VDegree+1);end;VKnots=VKnots(:)';
-            if isempty(Weights), Weights=ones(v_pole_num,u_pole_num);end
             u_list=baseKnotVec(UMults,UKnots);
             v_list=baseKnotVec(VMults,VKnots);
 
@@ -116,26 +117,30 @@ classdef Surface < handle
             if any(size(U_x) ~= size(V_x))
                 error('Surface.calPoint: U_x and V_x have different size')
             end
-            [v_pole_num,u_pole_num,dim]=size(self.Poles);
-            Ctrls=cat(3,self.Poles.*self.Weights,self.Weights);
+            if isempty(self.Weights), Ctrls=self.Poles;
+            else, Ctrls=cat(3,self.Poles.*self.Weights,self.Weights); end
+            [v_pole_num,u_pole_num,dim]=size(Ctrls);
 
             % evaluate along the v direction
-            Ctrls_V=reshape(Ctrls,v_pole_num,(dim+1)*u_pole_num);
+            Ctrls_V=reshape(Ctrls,v_pole_num,dim*u_pole_num);
             Points_V=calBSpline(Ctrls_V,self.VDegree,self.v_list,V_x(:));
-            Points_V=reshape(Points_V,[uv_num,u_pole_num,(dim+1)]);
+            Points_V=reshape(Points_V,[uv_num,u_pole_num,dim]);
 
             % evaluate along the u direction
-            Points=zeros(uv_num,(dim+1));
+            Points=zeros(uv_num,dim);
             for uv_idx=1:uv_num
-                Ctrls_U=reshape(Points_V(uv_idx,:,:),[u_pole_num,(dim+1)]);
+                Ctrls_U=reshape(Points_V(uv_idx,:,:),[u_pole_num,dim]);
                 Points(uv_idx,:)=calBSpline(Ctrls_U,self.UDegree,self.u_list,U_x(uv_idx));
             end
-            Points=reshape(Points,[v_num,u_num,(dim+1)]);
+            Points=reshape(Points,[v_num,u_num,dim]);
 
-            Weights=Points(:,:,end);
-            Points=Points(:,:,1:end-1);
-            if nargout < 2
-                Points=Points./Weights;
+            if isempty(self.Weights), Weights=[];
+            else
+                Weights=Points(:,:,end);
+                Points=Points(:,:,1:end-1);
+                if nargout < 2
+                    Points=Points./Weights;
+                end
             end
 
             function Points=calBSpline(Ctrls,Degree,u_list,U_x)
@@ -186,52 +191,36 @@ classdef Surface < handle
             % end
         end
 
-        function [Points,dPoints_dU,dPoints_dV]=calGradient(self,U_x,V_x)
+        function [Points,dPoints_dUV]=calGradient(self,U_x,V_x)
             % calculate gradient of Surface
             %
-            if isempty(self.Vderiv_surface)
-                % generate derivate surface
-                [v_pole_num,u_pole_num,dim]=size(self.Poles);
-                Ctrls=cat(3,self.Poles.*self.Weights,self.Weights);
-
-                Ctrls=permute(Ctrls,[1,2,3]);
-                Ctrls=reshape(Ctrls,v_pole_num,(dim+1)*u_pole_num);
-                [Ctrls_deriv,VDeg_deriv,VMults_deriv]=GeomApp.calGradient(Ctrls,self.VDegree,self.VMults,self.VKnots);
-                v_pole_num=size(Ctrls_deriv,1);
-                Ctrls_deriv=reshape(Ctrls_deriv,[v_pole_num,u_pole_num,(dim+1)]);
-                Ctrls_deriv=permute(Ctrls_deriv,[1,2,3]);
-
-                self.Vderiv_surface=Surface(Ctrls_deriv,self.UDegree,VDeg_deriv,self.UMults,VMults_deriv,self.UKnots,self.VKnots);
-            end
-
-            if isempty(self.Uderiv_surface)
-                % generate derivate surface
-                [v_pole_num,u_pole_num,dim]=size(self.Poles);
-                Ctrls=cat(3,self.Poles.*self.Weights,self.Weights);
-
-                Ctrls=permute(Ctrls,[2,1,3]);
-                Ctrls=reshape(Ctrls,u_pole_num,(dim+1)*v_pole_num);
-                [Ctrls_deriv,UDeg_deriv,UMults_deriv]=GeomApp.calGradient(Ctrls,self.UDegree,self.UMults,self.UKnots);
-                u_pole_num=size(Ctrls_deriv,1);
-                Ctrls_deriv=reshape(Ctrls_deriv,[u_pole_num,v_pole_num,(dim+1)]);
-                Ctrls_deriv=permute(Ctrls_deriv,[2,1,3]);
-
-                self.Uderiv_surface=Surface(Ctrls_deriv,UDeg_deriv,self.VDegree,UMults_deriv,self.UMults,self.UKnots,self.VKnots);
-            end
+            deriv_time=nargout-1;
+            self.preGradient(deriv_time);
 
             % calculate initial curve point and weight
             [Points,Weits]=self.calPoint(U_x,V_x);
-            Points=Points./Weits;
+            if ~isempty(Weits), Points=Points./Weits;end
 
             % calculate first derivative
             [UPoints_deriv,~]=self.Uderiv_surface.calPoint(U_x,V_x);
-            UWeits_deriv=UPoints_deriv(:,:,end);
-            UPoints_deriv=UPoints_deriv(:,:,1:end-1);
-            dPoints_dU=(UPoints_deriv-UWeits_deriv.*Points)./Weits;
+            if isempty(Weits)
+                dPoints_dU=UPoints_deriv;
+            else
+                UWeits_deriv=UPoints_deriv(:,:,end);
+                UPoints_deriv=UPoints_deriv(:,:,1:end-1);
+                dPoints_dU=(UPoints_deriv-UWeits_deriv.*Points)./Weits;
+            end
+
             [VPoints_deriv,~]=self.Vderiv_surface.calPoint(U_x,V_x);
-            VWeits_deriv=VPoints_deriv(:,:,end);
-            VPoints_deriv=VPoints_deriv(:,:,1:end-1);
-            dPoints_dV=(VPoints_deriv-VWeits_deriv.*Points)./Weits;
+            if isempty(Weits)
+                dPoints_dV=VPoints_deriv;
+            else
+                VWeits_deriv=VPoints_deriv(:,:,end);
+                VPoints_deriv=VPoints_deriv(:,:,1:end-1);
+                dPoints_dV=(VPoints_deriv-VWeits_deriv.*Points)./Weits;
+            end
+
+            dPoints_dUV={dPoints_dU,dPoints_dV};
         end
 
         function srf_hdl=displayGeom(self,axe_hdl,srf_option,u_param,v_param)
@@ -310,9 +299,10 @@ classdef Surface < handle
             %
             self.Poles=self.Poles(:,end:-1:1,:);
             self.UMults=self.UMults(end:-1:1);
-            self.UKnots=max(self.UKnots)-self.UKnots(end:-1:1);
+            min_k=min(self.UKnots);max_k=max(self.UKnots);dk=max_k-min_k;
+            self.UKnots=dk-(self.UKnots(end:-1:1)-min_k)+min_k;
             self.Weights=self.Weights(:,end:-1:1,:);
-            self.u_list=max(self.u_list)-self.u_list(end:-1:1);
+            self.u_list=baseKnotVec(self.UMults,self.UKnots);
         end
 
         function self=reverseV(self)
@@ -320,9 +310,10 @@ classdef Surface < handle
             %
             self.Poles=self.Poles(end:-1:1,:,:);
             self.VMults=self.VMults(end:-1:1);
-            self.VKnots=max(self.VKnots)-self.VKnots(end:-1:1);
+            min_k=min(self.VKnots);max_k=max(self.VKnots);dk=max_k-min_k;
+            self.VKnots=dk-(self.VKnots(end:-1:1)-min_k)+min_k;
             self.Weights=self.Weights(end:-1:1,:,:);
-            self.v_list=max(self.v_list)-self.v_list(end:-1:1);
+            self.v_list=baseKnotVec(self.VMults,self.VKnots);
         end
 
         function addDegree(self,Udeg_tar,Vdeg_tar)
@@ -330,30 +321,31 @@ classdef Surface < handle
             %
             if Vdeg_tar <= self.VDegree && Udeg_tar <= self.UDegree, return;end
 
-            [v_pole_num,u_pole_num,dim]=size(self.Poles);
-            Ctrls=cat(3,self.Poles.*self.Weights,self.Weights);
+            if isempty(self.Weights), Ctrls=[self.Poles];
+            else, Ctrls=cat(3,self.Poles.*self.Weights,self.Weights);end
+            [v_pole_num,u_pole_num,dim]=size(Ctrls);
 
             % modify VDegree, VMults and Ctrls
             if self.VDegree < Vdeg_tar
                 Ctrls=permute(Ctrls,[1,2,3]);
-                Ctrls=reshape(Ctrls,v_pole_num,(dim+1)*u_pole_num);
+                Ctrls=reshape(Ctrls,v_pole_num,dim*u_pole_num);
                 [Ctrls,self.VDegree,self.VMults]=GeomApp.addDegree(Ctrls,self.VDegree,self.VMults,self.VKnots,Vdeg_tar);
                 self.v_list=baseKnotVec(self.VMults,self.VKnots);
 
                 v_pole_num=size(Ctrls,1);
-                Ctrls=reshape(Ctrls,[v_pole_num,u_pole_num,(dim+1)]);
+                Ctrls=reshape(Ctrls,[v_pole_num,u_pole_num,dim]);
                 Ctrls=permute(Ctrls,[1,2,3]);
             end
 
             % modify UDegree, UMults and Ctrls
             if self.UDegree < Udeg_tar
                 Ctrls=permute(Ctrls,[2,1,3]);
-                Ctrls=reshape(Ctrls,u_pole_num,(dim+1)*v_pole_num);
+                Ctrls=reshape(Ctrls,u_pole_num,dim*v_pole_num);
                 [Ctrls,self.VDegree,self.UMults]=GeomApp.addDegree(Ctrls,self.UDegree,self.UMults,self.UKnots,Udeg_tar);
                 self.u_list=baseKnotVec(self.UMults,self.UKnots);
 
                 u_pole_num=size(Ctrls,1);
-                Ctrls=reshape(Ctrls,[u_pole_num,v_pole_num,(dim+1)]);
+                Ctrls=reshape(Ctrls,[u_pole_num,v_pole_num,dim]);
                 Ctrls=permute(Ctrls,[2,1,3]);
             end
 
@@ -366,13 +358,14 @@ classdef Surface < handle
             % insert knot to surface
             %
             if isempty(U_ins) && isempty(V_ins), return;end
-            [v_pole_num,u_pole_num,dim]=size(self.Poles);
-            Ctrls=[self.Poles.*self.Weights,self.Weights];
+            if isempty(self.Weights), Ctrls=[self.Poles];
+            else, Ctrls=cat(3,self.Poles.*self.Weights,self.Weights);end
+            [v_pole_num,u_pole_num,dim]=size(Ctrls);
 
             % insert knots along the v direction
             if ~isempty(V_ins)
                 Ctrls=permute(Ctrls,[1,2,3]);
-                Ctrls=reshape(Ctrls,v_pole_num,(dim+1)*u_pole_num);
+                Ctrls=reshape(Ctrls,v_pole_num,dim*u_pole_num);
                 [Ctrls,~,self.v_list]=GeomApp.insertKnot(Ctrls,self.VDegree,self.v_list,V_ins);
                 self.VKnots=unique(self.v_list);
                 self.VMults=ones(size(self.VKnots));
@@ -381,14 +374,14 @@ classdef Surface < handle
                 end
 
                 v_pole_num=size(Ctrls,1);
-                Ctrls=reshape(Ctrls,[v_pole_num,u_pole_num,(dim+1)]);
+                Ctrls=reshape(Ctrls,[v_pole_num,u_pole_num,dim]);
                 Ctrls=permute(Ctrls,[1,2,3]);
             end
 
             % insert knots along the u direction
             if ~isempty(U_ins)
                 Ctrls=permute(Ctrls,[2,1,3]);
-                Ctrls=reshape(Ctrls,u_pole_num,(dim+1)*v_pole_num);
+                Ctrls=reshape(Ctrls,u_pole_num,dim*v_pole_num);
                 [Ctrls,~,self.u_list]=GeomApp.insertKnot(Ctrls,self.UDegree,self.u_list,U_ins);
                 self.UKnots=unique(self.u_list);
                 self.UMults=ones(size(self.UKnots));
@@ -397,13 +390,54 @@ classdef Surface < handle
                 end
 
                 u_pole_num=size(Ctrls,1);
-                Ctrls=reshape(Ctrls,[u_pole_num,v_pole_num,(dim+1)]);
+                Ctrls=reshape(Ctrls,[u_pole_num,v_pole_num,dim]);
                 Ctrls=permute(Ctrls,[2,1,3]);
             end
 
             % modify Poles and Weights
-            self.Poles=Ctrls(:,:,1:end-1)./Ctrls(:,:,end);
-            self.Weights=Ctrls(:,:,end);
+            if isempty(self.Weights), self.Poles=Ctrls;
+            else
+                self.Poles=Ctrls(:,:,1:end-1)./Ctrls(:,:,end);
+                self.Weights=Ctrls(:,:,end);
+            end
+        end
+
+        function self=preGradient(self,deriv_time)
+            % generate derivate BSpline for calculate gradient
+            %
+            if deriv_time > 0
+                if isempty(self.Vderiv_surface)
+                    % generate derivate surface
+                    if isempty(self.Weights), Ctrls=[self.Poles];
+                    else, Ctrls=cat(3,self.Poles.*self.Weights,self.Weights);end
+                    [v_pole_num,u_pole_num,dim]=size(Ctrls);
+
+                    Ctrls=permute(Ctrls,[1,2,3]);
+                    Ctrls=reshape(Ctrls,v_pole_num,dim*u_pole_num);
+                    [Ctrls_deriv,VDeg_deriv,VMults_deriv]=GeomApp.calGradient(Ctrls,self.VDegree,self.VMults,self.VKnots);
+                    v_pole_num=size(Ctrls_deriv,1);
+                    Ctrls_deriv=reshape(Ctrls_deriv,[v_pole_num,u_pole_num,dim]);
+                    Ctrls_deriv=permute(Ctrls_deriv,[1,2,3]);
+
+                    self.Vderiv_surface=Surface(Ctrls_deriv,self.UDegree,VDeg_deriv,self.UMults,VMults_deriv,self.UKnots,self.VKnots);
+                end
+
+                if isempty(self.Uderiv_surface)
+                    % generate derivate surface
+                    if isempty(self.Weights), Ctrls=[self.Poles];
+                    else, Ctrls=cat(3,self.Poles.*self.Weights,self.Weights);end
+                    [v_pole_num,u_pole_num,dim]=size(Ctrls);
+
+                    Ctrls=permute(Ctrls,[2,1,3]);
+                    Ctrls=reshape(Ctrls,u_pole_num,dim*v_pole_num);
+                    [Ctrls_deriv,UDeg_deriv,UMults_deriv]=GeomApp.calGradient(Ctrls,self.UDegree,self.UMults,self.UKnots);
+                    u_pole_num=size(Ctrls_deriv,1);
+                    Ctrls_deriv=reshape(Ctrls_deriv,[u_pole_num,v_pole_num,dim]);
+                    Ctrls_deriv=permute(Ctrls_deriv,[2,1,3]);
+
+                    self.Uderiv_surface=Surface(Ctrls_deriv,UDeg_deriv,self.VDegree,UMults_deriv,self.VMults,self.UKnots,self.VKnots);
+                end
+            end
         end
 
         function self=translate(self,tran_vctr)
@@ -418,13 +452,31 @@ classdef Surface < handle
         function crv=getBoundCurve(self,type)
             switch type
                 case 'u0' % 1
-                    crv=Curve(reshape(self.Poles(1,:,:),size(self.Poles,2),[]),self.UDegree,self.UMults,self.UKnots,self.Weights(1,:));
+                    if isempty(self.Weights)
+                        crv=Curve(reshape(self.Poles(1,:,:),size(self.Poles,2),[]),self.UDegree,self.UMults,self.UKnots);
+                    else
+                        crv=Curve(reshape(self.Poles(1,:,:),size(self.Poles,2),[]),self.UDegree,self.UMults,self.UKnots,self.Weights(1,:));
+                    end
                 case 'u1' % 3.reverse
-                    crv=Curve(reshape(self.Poles(end,:,:),size(self.Poles,2),[]),self.UDegree,self.UMults,self.UKnots,self.Weights(end,:));
+                    if isempty(self.Weights)
+                        crv=Curve(reshape(self.Poles(end,:,:),size(self.Poles,2),[]),self.UDegree,self.UMults,self.UKnots);
+                    else
+                        crv=Curve(reshape(self.Poles(end,:,:),size(self.Poles,2),[]),self.UDegree,self.UMults,self.UKnots,self.Weights(end,:));
+                    end
                 case '0v' % 4.reverse
-                    crv=Curve(reshape(self.Poles(:,1,:),size(self.Poles,1),[]),self.VDegree,self.VMults,self.VKnots,self.Weights(:,1));
+                    if isempty(self.Weights)
+                        crv=Curve(reshape(self.Poles(:,1,:),size(self.Poles,1),[]),self.VDegree,self.VMults,self.VKnots);
+                    else
+                        crv=Curve(reshape(self.Poles(:,1,:),size(self.Poles,1),[]),self.VDegree,self.VMults,self.VKnots,self.Weights(:,1));
+                    end
                 case '1v' % 2
-                    crv=Curve(reshape(self.Poles(:,end,:),size(self.Poles,1),[]),self.VDegree,self.VMults,self.VKnots,self.Weights(:,end));
+                    if isempty(self.Weights)
+                        crv=Curve(reshape(self.Poles(:,end,:),size(self.Poles,1),[]),self.VDegree,self.VMults,self.VKnots);
+                    else
+                        crv=Curve(reshape(self.Poles(:,end,:),size(self.Poles,1),[]),self.VDegree,self.VMults,self.VKnots,self.Weights(:,end));
+                    end
+                otherwise
+                    error('Curve.getBoundCurve: unknown bound curve type')
             end
         end
     end
@@ -437,7 +489,7 @@ classdef Surface < handle
             if isempty(geom_torl), geom_torl=sqrt(eps);end
 
             % find point to start
-            [U,V]=findNearest(self,Points,20);
+            [U,V]=findNearest(self,Points,size(Points,1)*2);
 
             % use project function to adjust parameter
             [U,V]=self.projectPoint(Points,geom_torl,U,V);
@@ -453,21 +505,24 @@ classdef Surface < handle
                     geom_torl=[];
                 end
             end
+            if isempty(geom_torl), geom_torl=100*eps;end
 
             % find point to start
             if isempty(U) && isempty(V)
-                [U,V]=findNearest(self,Points_init,20);
+                [U,V]=findNearest(self,Points_init,size(Points_init,1)*2);
             end
 
             [v_num,u_num,~]=size(Points_init);
             num=u_num*v_num;
             Points_init=reshape(Points_init,num,[]);U=U(:);V=V(:);
-
+            
             % iteration
             iter=0;iter_max=50;
             done=false;idx=1:v_num*u_num;
             while ~done
-                [Points,dPoints_dU,dPoints_dV]=self.calGradient(U(idx),V(idx));
+                [Points,dPoints_dUV]=self.calGradient(U(idx),V(idx));
+                dPoints_dU=dPoints_dUV{1};
+                dPoints_dV=dPoints_dUV{2};
                 dPoint=reshape(Points_init(idx,:),length(idx),1,[])-Points;
 
                 RU_RU=sum(dPoints_dU.^2,3);
@@ -483,16 +538,17 @@ classdef Surface < handle
 
                 U(idx)=U(idx)+dU;
                 V(idx)=V(idx)+dV;
-                U=max(U,0);U=min(U,1);
-                V=max(V,0);V=min(V,1);
+                U=max(U,min(self.UKnots));U=min(U,max(self.UKnots));
+                V=max(V,min(self.VKnots));V=min(V,max(self.VKnots));
 
-                idx=find(sum(abs(dPoint),3) > geom_torl);
+                idx=find((abs(RU_D) > geom_torl | abs(RV_D) > geom_torl) &...
+                    (abs(dU) > geom_torl | abs(dV) > geom_torl));
 
                 % Points_inv=self.calPoint(U,V);
-                % scatter3(Points_inv(:,:,1),Points_inv(:,:,2),Points_inv(:,:,3));
+                % scatter3(Points_inv(:,1),Points_inv(:,2),Points_inv(:,3));
 
                 iter=iter+1;
-                if sempty(idx) || iter >= iter_max
+                if isempty(idx) || iter >= iter_max
                     done=true;
                 end
             end
@@ -510,7 +566,9 @@ classdef Surface < handle
 
             % generate rough mesh to initialize pre coord
             sample_grid=((0:(param-1))+(1:param))/2/param;
-            [U_base,V_base]=meshgrid(sample_grid,sample_grid);
+            U_base=sample_grid.*(max(self.UKnots)-min(self.UKnots))+min(self.UKnots);
+            V_base=sample_grid.*(max(self.VKnots)-min(self.VKnots))+min(self.VKnots);
+            [U_base,V_base]=meshgrid(U_base,V_base);
             Point_base=self.calPoint(U_base,V_base);
             U=zeros(v_num,u_num);
             V=zeros(v_num,u_num);
