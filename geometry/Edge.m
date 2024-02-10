@@ -39,9 +39,11 @@ classdef Edge < handle & matlab.mixin.Copyable
                     error('Edge: only can have a pair of vertex');
                 end
                 bou=crv.projectPoint(vtx_list);
-                if bou(2) < bou(1)
+                if bou(2) < bou(1) && ~crv.Periodic
                     bou=bou(end:-1:1);
                     vtx_list=vtx_list(end:-1:1,:);
+                elseif bou(2) < bou(1) && crv.Periodic
+                    bou(1)=0;
                 end
                 bou(1)=max(bou(1),region(1));
                 bou(2)=min(bou(2),region(2));

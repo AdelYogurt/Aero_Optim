@@ -516,6 +516,9 @@ classdef Surface < handle
             num=u_num*v_num;
             Points_init=reshape(Points_init,num,[]);U=U(:);V=V(:);
             
+            % Points_inv=self.calPoint(U,V);
+            % scatter3(Points_inv(:,1),Points_inv(:,2),Points_inv(:,3));
+
             % iteration
             iter=0;iter_max=50;
             done=false;idx=1:v_num*u_num;

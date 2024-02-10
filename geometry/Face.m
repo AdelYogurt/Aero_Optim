@@ -71,11 +71,11 @@ classdef Face < handle & matlab.mixin.Copyable
                         edg=wir.edge_list(edg_idx);
                         Pnts=edg.calGeom();
                         [U_proj,V_proj]=srf.projectPoint(reshape(Pnts,[],1,size(Pnts,2)));
-                        idx=find(vecnorm(squeeze(srf.calPoint(U_proj,V_proj))-Pnts,2,2) < geom_torl);
+                        % idx=find(vecnorm(squeeze(srf.calPoint(U_proj,V_proj))-Pnts,2,2) < geom_torl);
                         UV_proj=[U_proj,V_proj];
 
                         % interplote to get boundary curve 
-                        bou=[bou;GeomApp.interpPointToCurve(UV_proj(idx,:),edg.curve.Degree)];
+                        bou=[bou;GeomApp.interpPointToCurve(UV_proj(:,:),edg.curve.Degree)];
 
                         if isempty(region)
                             region=[min(UV_proj,[],1);max(UV_proj,[],1)];
@@ -181,6 +181,10 @@ classdef Face < handle & matlab.mixin.Copyable
                 Points_srf=reshape(Points_srf,[],self.dimension);
             end
 
+            % remove boundary point
+            idx=find(UV_srf(:,1) == low_bou(1) | UV_srf(:,1) == up_bou(1) | UV_srf(:,2) == low_bou(2) | UV_srf(:,2) == up_bou(2));
+            UV_srf(idx,:)=[];Points_srf(idx,:)=[];
+
             Pnts_bous=[];
             U_bous=[];
 
@@ -254,10 +258,14 @@ classdef Face < handle & matlab.mixin.Copyable
             if isempty(poly_bou_all)
                 Elems=delaunay(UV);
             else
-                Con_DT=[(1:(size(poly_bou_all,1)-1))',(2:size(poly_bou_all,1))';size(poly_bou_all,1),1];
+                inr_num=size(poly_bou_all,1);
+                Con_DT=[(1:(inr_num-1))',(2:inr_num)';inr_num,1];
                 DT=delaunayTriangulation(UV,Con_DT);
                 Elems=DT.ConnectivityList(~isInterior(DT),:);
             end
+
+            center=(UV(Elems(:,1),:)+UV(Elems(:,2),:)+UV(Elems(:,3),:))/3;
+            Elems=Elems(inpolygon(center(:,1),center(:,2),poly_otr_bou(:,1),poly_otr_bou(:,2)),:);
         end
 
         function [pth_hdl,ln_hdl_list,sctr_hdl]=displayModel(self,axe_hdl,u_param)

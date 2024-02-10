@@ -34,11 +34,18 @@ for str_idx=1:data_num
     str=Dstr{str_idx};
 
     % check and solid shell
-    idx=[strfind(str,'SHELL_BASED_SURFACE_MODEL'),...
-        strfind(str,'MANIFOLD_SOLID_BREP')];
-    if ~isempty(idx)
+    if contains(str,'SHELL_BASED_SURFACE_MODEL')
         idx=find(str == ',',1,"first");
         str=str(idx+2:end-2);
+        shl_didx=textscan(str,'#%d','Delimiter',',');
+        shl_didx=cell2mat(shl_didx);
+        Shl_didx=[Shl_didx;shl_didx];
+        continue;
+    end
+
+    if contains(str,'MANIFOLD_SOLID_BREP')
+        idx=find(str == ',',1,"first");
+        str=str(idx+1:end-1);
         shl_didx=textscan(str,'#%d','Delimiter',',');
         shl_didx=cell2mat(shl_didx);
         Shl_didx=[Shl_didx;shl_didx];
@@ -81,8 +88,8 @@ fce_num=length(Fce_didx);
 fce_list=repmat(Face('',[]),fce_num,1);
 for fce_idx=1:fce_num
     fce_didx=Fce_didx(fce_idx);
-    shl=readFace(Didx,Dstr,fce_didx);
-    fce_list(fce_idx)=shl;
+    fce=readFace(Didx,Dstr,fce_didx);
+    fce_list(fce_idx)=fce;
 end
 
 shl=Shell(shl_name,fce_list);
@@ -247,45 +254,124 @@ str=Dstr{srf_didx};
 
 if str(1) == '('
     % if is list
+    str=str(2:end-1);
     if contains(str,'RATIONAL_B_SPLINE_SURFACE')
+        % read B_SPLINE_SURFACE
+        sidx=strfind(str,'B_SPLINE_SURFACE');
+        sidx=sidx(str(sidx+length('B_SPLINE_SURFACE')) == '(' &...
+            str(sidx-1) ~= '_')+length('B_SPLINE_SURFACE');
+        eidx=matchParenthesis(str,sidx);
+        str_pole=str(sidx+1:eidx-1);
 
+        % read B_SPLINE_SURFACE_WITH_KNOTS
+        sidx=strfind(str,'B_SPLINE_SURFACE_WITH_KNOTS')+length('B_SPLINE_SURFACE_WITH_KNOTS');
+        eidx=matchParenthesis(str,sidx);
+        str_knot=str(sidx+1:eidx-1);
+
+        % read RATIONAL_B_SPLINE_CURVE
+        sidx=strfind(str,'RATIONAL_B_SPLINE_SURFACE')+length('RATIONAL_B_SPLINE_SURFACE');
+        eidx=matchParenthesis(str,sidx);
+        str_weight=str(sidx+1:eidx-1);
+
+        % read UDegree, VDegree
+        idx=find(str_pole == ',',2,"first");
+        Degree=textscan(str_pole(1:(idx(2)-1)),'%f%f','Delimiter',',');
+        UDegree=Degree{1};VDegree=Degree{2};
+        str_pole=str_pole(idx(2)+1:end);
+
+        % read Poles index
+        idx=matchParenthesis(str_pole,1);
+        data_pole=str_pole(2:(idx-2));
+        data_pole=strsplit(data_pole,'),');
+        Pnt_didx=[];
+        for u_idx=1:length(data_pole)
+            pnt_didx=textscan(data_pole{u_idx}(2:end),'#%d','Delimiter',',');
+            Pnt_didx=[Pnt_didx,cell2mat(pnt_didx)];
+        end
+        str_pole=str_pole(idx+1:end);
+
+        % read curve_form, u_closed, v_closed, self_intersect
+        srf_data=textscan(str_pole,'%s%s%s%s','Delimiter',',');
+        surface_form=srf_data{1};
+        u_closed=srf_data{2};
+        if contains(u_closed,'T'), u_closed=true;
+        elseif contains(u_closed,'F'), u_closed=false;end
+        v_closed=srf_data{3};
+        if contains(v_closed,'T'), v_closed=true;
+        elseif contains(v_closed,'F'), v_closed=false;end
+        self_intersect=srf_data{4};
+
+        % read Poles
+        [v_num,u_num]=size(Pnt_didx);
+        Poles=readPoint(Didx,Dstr,Pnt_didx(:));
+        Poles=reshape(Poles,v_num,u_num,[]);
+
+        % read UMults
+        idx=find(str_knot == ')',1,"first")+1;
+        UMults=textscan(str_knot(2:(idx-2)),'%f','Delimiter',',');
+        UMults=cell2mat(UMults);
+        str_knot=str_knot(idx+1:end);
+
+        % read VMults
+        idx=find(str_knot == ')',1,"first")+1;
+        VMults=textscan(str_knot(2:(idx-2)),'%f','Delimiter',',');
+        VMults=cell2mat(VMults);
+        str_knot=str_knot(idx+1:end);
+
+        % read UKnots
+        idx=find(str_knot == ')',1,"first")+1;
+        UKnots=textscan(str_knot(2:(idx-2)),'%f','Delimiter',',');
+        UKnots=cell2mat(UKnots);UKnots=(UKnots-min(UKnots))/(max(UKnots)-min(UKnots));
+        str_knot=str_knot(idx+1:end);
+
+        % read VKnots
+        idx=find(str_knot == ')',1,"first")+1;
+        VKnots=textscan(str_knot(2:(idx-2)),'%f','Delimiter',',');
+        VKnots=cell2mat(VKnots);VKnots=(VKnots-min(VKnots))/(max(VKnots)-min(VKnots));
+
+        % read Weights
+        idx=matchParenthesis(str_weight,1);
+        data_weight=str_weight(2:(idx-2));
+        data_weight=strsplit(data_weight,'),');
+        Weights=[];
+        for u_idx=1:length(data_weight)
+            weight=textscan(data_weight{u_idx}(2:end),'%f','Delimiter',',');
+            Weights=[Weights,cell2mat(weight)];
+        end
+
+        knot_spec=[];
     else
-        error('readCurve: unsupport surface type');
+        error('readSurface: unsupport surface type');
     end
 else
     if contains(str,'B_SPLINE_SURFACE_WITH_KNOTS')
-        idx=find(str == ',',3,"first");
         % read UDegree, VDegree
+        idx=find(str == ',',3,"first");
         Degree=textscan(str((idx(1)+1):(idx(3)-1)),'%f%f','Delimiter',',');
         UDegree=Degree{1};VDegree=Degree{2};
         str=str(idx(3)+1:end);
 
         % read Poles index
-        idx=2;stack=1;
-        while idx < length(str) && stack 
-            if str(idx) == '('
-                stack=stack+1;
-            end
-            if str(idx) == ')'
-                stack=stack-1;
-            end
-            idx=idx+1;
-        end
-        str_pole=str(2:(idx-3));
-        str_pole=strsplit(str_pole,'),');
+        idx=matchParenthesis(str,1);
+        data_pole=str(2:(idx-2));
+        data_pole=strsplit(data_pole,'),');
         Pnt_didx=[];
-        for u_idx=1:length(str_pole)
-            pnt_didx=textscan(str_pole{u_idx}(2:end),'#%d','Delimiter',',');
+        for u_idx=1:length(data_pole)
+            pnt_didx=textscan(data_pole{u_idx}(2:end),'#%d','Delimiter',',');
             Pnt_didx=[Pnt_didx,cell2mat(pnt_didx)];
         end
-        str=str(idx+1:end);
+        str=str(idx+2:end);
 
         % read curve_form, u_closed, v_closed, self_intersect
         idx=find(str == ',',4,"first");
         srf_data=textscan(str(1:(idx(4)-1)),'%s%s%s%s','Delimiter',',');
         surface_form=srf_data{1};
         u_closed=srf_data{2};
+        if contains(u_closed,'T'), u_closed=true;
+        elseif contains(u_closed,'F'), u_closed=false;end
         v_closed=srf_data{3};
+        if contains(v_closed,'T'), v_closed=true;
+        elseif contains(v_closed,'F'), v_closed=false;end
         self_intersect=srf_data{4};
         str=str(idx(4)+1:end);
 
@@ -320,6 +406,8 @@ else
         [v_num,u_num]=size(Pnt_didx);
         Poles=readPoint(Didx,Dstr,Pnt_didx(:));
         Poles=reshape(Poles,v_num,u_num,[]);
+        
+        Weights=[];
     elseif contains(str,'PLANE')
         edg_list=wir_list(1).edge_list;
         % process edge_list
@@ -349,14 +437,41 @@ else
 
         srf=GeomApp.boundCurveToSurface(crv_u0,crv_u1,crv_0v,crv_1v);
         return;
-    elseif contains(str,'SPHERICAL_SURFACE')
+    elseif contains(str,'SPHERICAL_SURFACE') || contains(str,'CYLINDRICAL_SURFACE')
+        edg_list=wir_list(1).edge_list;
+        % process edge_list
+        if length(edg_list) > 4
+            srf=[];
+            return;
+        end
 
+        % if edge num equal to 4, edge order is 0v, u1, 1v, u0
+        switch length(edg_list)
+            case 2
+                crv_u0=edg_list(1).curve;
+                crv_1v=[];
+                crv_u1=copy(edg_list(2).curve).reverse();
+                crv_0v=[];
+            case 3
+                crv_u0=edg_list(1).curve;
+                crv_1v=edg_list(2).curve;
+                crv_u1=copy(edg_list(3).curve).reverse();
+                crv_0v=[];
+            case 4
+                crv_u0=edg_list(1).curve;
+                crv_1v=edg_list(2).curve;
+                crv_u1=copy(edg_list(3).curve).reverse();
+                crv_0v=copy(edg_list(4).curve).reverse();
+        end
+
+        srf=GeomApp.boundCurveToSurface(crv_u0,crv_u1,crv_0v,crv_1v);
+        return;
     else
         error('readSurface: unsupport surface type');
     end
 end
 
-srf=Surface(Poles,UDegree,VDegree,UMults,VMults,UKnots,VKnots);
+srf=Surface(Poles,UDegree,VDegree,UMults,VMults,UKnots,VKnots,Weights);
 
 srf.surface_form=surface_form;
 srf.UPeriodic=u_closed;
@@ -373,14 +488,70 @@ str=Dstr{crv_didx};
 if str(1) == '('
     % if is list
     if contains(str,'RATIONAL_B_SPLINE_CURVE')
-        
+        % read B_SPLINE_SURFACE
+        sidx=strfind(str,'B_SPLINE_CURVE');
+        sidx=sidx(str(sidx+length('B_SPLINE_CURVE')) == '(' &...
+            str(sidx-1) ~= '_')+length('B_SPLINE_CURVE');
+        eidx=matchParenthesis(str,sidx);
+        str_pole=str(sidx+1:eidx-1);
+
+        % read B_SPLINE_SURFACE_WITH_KNOTS
+        sidx=strfind(str,'B_SPLINE_CURVE_WITH_KNOTS')+length('B_SPLINE_CURVE_WITH_KNOTS');
+        eidx=matchParenthesis(str,sidx);
+        str_knot=str(sidx+1:eidx-1);
+
+        % read RATIONAL_B_SPLINE_CURVE
+        sidx=strfind(str,'RATIONAL_B_SPLINE_CURVE')+length('RATIONAL_B_SPLINE_CURVE');
+        eidx=matchParenthesis(str,sidx);
+        str_weight=str(sidx+1:eidx-1);
+
+        % read Degree
+        idx=find(str_pole == ',',1,"first");
+        Degree=textscan(str_pole(1:(idx(1)-1)),'%f');
+        Degree=cell2mat(Degree);
+        str_pole=str_pole(idx(1)+1:end);
+
+        % read Poles index
+        idx=find(str_pole == ')',1,"first")+1;
+        Pnt_didx=textscan(str_pole(2:(idx-2)),'#%d','Delimiter',',');
+        Pnt_didx=cell2mat(Pnt_didx);
+        str_pole=str_pole(idx+1:end);
+
+        % read Poles
+        Poles=readPoint(Didx,Dstr,Pnt_didx);
+
+        % read curve_form, closed_curve, self_intersect
+        crv_data=textscan(str_pole,'%s%s%s','Delimiter',',');
+        curve_form=crv_data{1};
+        closed_curve=crv_data{2};
+        if contains(closed_curve,'T'), closed_curve=true;
+        elseif contains(closed_curve,'F'), closed_curve=false;end
+        self_intersect=crv_data{3};
+
+        % read Mults
+        idx=find(str_knot == ')',1,"first")+1;
+        Mults=textscan(str_knot(2:(idx-2)),'%f','Delimiter',',');
+        Mults=cell2mat(Mults);
+        str_knot=str_knot(idx+1:end);
+
+        % read Knots
+        idx=find(str_knot == ')',1,"first")+1;
+        Knots=textscan(str_knot(2:(idx-2)),'%f','Delimiter',',');
+        Knots=cell2mat(Knots);Knots=(Knots-min(Knots))/(max(Knots)-min(Knots));
+
+        % read Weights
+        idx=find(str_weight == ')',1,"first")+1;
+        Weights=textscan(str_weight(2:(idx-2)),'%f','Delimiter',',');
+        Weights=cell2mat(Weights);
+
+        knot_spec=[];
     else
         error('readCurve: unsupport curve type');
     end
 else
     if contains(str,'B_SPLINE_CURVE')
-        idx=find(str == ',',2,"first");
         % read Degree
+        idx=find(str == ',',2,"first");
         Degree=textscan(str((idx(1)+1):(idx(2)-1)),'%f');
         Degree=cell2mat(Degree);
         str=str(idx(2)+1:end);
@@ -396,6 +567,8 @@ else
         crv_data=textscan(str(1:(idx(3)-1)),'%s%s%s','Delimiter',',');
         curve_form=crv_data{1};
         closed_curve=crv_data{2};
+        if contains(closed_curve,'T'), closed_curve=true;
+        elseif contains(closed_curve,'F'), closed_curve=false;end
         self_intersect=crv_data{3};
         str=str(idx(3)+1:end);
 
@@ -416,6 +589,8 @@ else
 
         % read Poles
         Poles=readPoint(Didx,Dstr,Pnt_didx);
+
+        Weights=[];
     elseif contains(str,'LINE')
         crv=Curve(vtx_list);
         return;
@@ -429,15 +604,19 @@ else
 
         % read axis
         ax=readAxis(Didx,Dstr,ax_didx);
+        zdir=ax(2,:);
+        xdir=ax(3,:);
+        ydir=cross(zdir,xdir);
 
-        crv=GeomApp.circle(radius,[],[],ax);
+        crv=GeomApp.circle(radius,[],[],[ax(1,:);xdir;ydir]);
+        crv.Periodic=true;
         return;
     else
         error('readCurve: unsupport curve type');
     end
 end
 
-crv=Curve(Poles,Degree,Mults,Knots);
+crv=Curve(Poles,Degree,Mults,Knots,Weights);
 crv.curve_form=curve_form;
 crv.Periodic=closed_curve;
 crv.self_intersect=self_intersect;
@@ -465,4 +644,21 @@ str=strjoin(str,'\n');
 str(str == '(' | str == ')')='';
 Pnt=textscan(str,'%s%f%f%f','Delimiter',{',','\n'});
 Pnt=cell2mat(Pnt(:,2:4));
+end
+
+%% unit
+
+function eidx=matchParenthesis(str,eidx)
+% str(eidx) must be (
+% 
+stack=1;
+while eidx < length(str) && stack
+    eidx=eidx+1;
+    if str(eidx) == '('
+        stack=stack+1;
+    end
+    if str(eidx) == ')'
+        stack=stack-1;
+    end
+end
 end
